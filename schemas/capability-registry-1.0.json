@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/capability-registry/1.0",
+  "title": "Capability Registry",
+  "type": "object",
+  "required": ["schema_version", "capabilities"],
+  "properties": {
+    "schema_version": {"const": "capability-registry/1.0"},
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["allowed_tools", "network", "max_time_seconds", "requires_approval"],
+        "properties": {
+          "allowed_tools": {"type": "array", "items": {"type": "string"}},
+          "network": {"type": "boolean"},
+          "max_time_seconds": {"type": "integer", "minimum": 1},
+          "requires_approval": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

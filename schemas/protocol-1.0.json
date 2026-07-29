@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/protocol/1.0",
+  "title": "Study Protocol",
+  "type": "object",
+  "required": ["schema_version", "protocol_id", "program_id", "title", "analysis_plan", "status"],
+  "properties": {
+    "schema_version": {"const": "study-protocol/1.0"},
+    "protocol_id": {"type": "string", "pattern": "^PT-"},
+    "program_id": {"type": "string", "pattern": "^RP-"},
+    "title": {"type": "string", "minLength": 1},
+    "analysis_plan": {"type": "string", "minLength": 1},
+    "status": {"enum": ["DRAFT", "FROZEN", "SUPERSEDED"]},
+    "sealed_at": {"type": "string", "format": "date-time"},
+    "seal_receipt": {"type": "string", "pattern": "^RC-"}
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "FROZEN"}}},
+    "then": {"required": ["sealed_at", "seal_receipt"]}
+  }]
+}

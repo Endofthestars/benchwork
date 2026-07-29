@@ -1,0 +1,9 @@
+{
+  "schema_version": "research-program/1.0",
+  "program_id": "RP-001",
+  "slug": "robust-agent-memory",
+  "status": "IDEA",
+  "problem": {
+    "statement": "Determine when long-context agent memory retrieval remains reliable."
+  }
+}

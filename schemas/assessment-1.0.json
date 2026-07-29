@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/assessment/1.0",
+  "title": "Assessment",
+  "type": "object",
+  "required": ["schema_version", "assessment_id", "program_id", "result_bundle", "status"],
+  "properties": {
+    "schema_version": {"const": "assessment/1.0"},
+    "assessment_id": {"type": "string", "pattern": "^AS-"},
+    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "result_bundle": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"},
+    "status": {"enum": ["DRAFT", "REVIEW_REQUIRED", "COMPLETE"]}
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/research-program/1.0",
+  "title": "Research Program",
+  "type": "object",
+  "required": ["schema_version", "program_id", "slug", "status", "problem"],
+  "properties": {
+    "schema_version": {"const": "research-program/1.0"},
+    "program_id": {"type": "string", "pattern": "^RP-"},
+    "slug": {"type": "string"},
+    "status": {"enum": ["IDEA", "EVIDENCE_READY", "GAP_SUPPORTED", "RQ_FROZEN", "DESIGN_FROZEN", "IMPLEMENTED", "PILOTED", "RUNNING", "RESULT_READY", "EVALUATED"]},
+    "problem": {"type": "object"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/chronicle-event/1.0",
+  "title": "Chronicle Event",
+  "type": "object",
+  "required": ["schema_version", "event_id", "type", "object_id", "occurred_at", "previous_sigil", "payload", "receipt"],
+  "properties": {
+    "schema_version": {"const": "chronicle-event/1.0"},
+    "event_id": {"type": "string", "pattern": "^EV-"},
+    "type": {"type": "string"},
+    "object_id": {"type": "string"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "previous_sigil": {"type": ["string", "null"]},
+    "payload": {"type": "object"},
+    "receipt": {
+      "type": "object",
+      "required": ["receipt_id", "event_id", "sigil", "previous_sigil", "accepted_at"],
+      "properties": {
+        "receipt_id": {"type": "string", "pattern": "^RC-"},
+        "event_id": {"type": "string", "pattern": "^EV-"},
+        "sigil": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "previous_sigil": {"type": ["string", "null"]},
+        "accepted_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/experiment/1.0",
+  "title": "Experiment",
+  "type": "object",
+  "required": ["schema_version", "experiment_id", "program_id", "protocol_id", "question", "status"],
+  "properties": {
+    "schema_version": {"const": "experiment/1.0"},
+    "experiment_id": {"type": "string", "pattern": "^EX-"},
+    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "protocol_id": {"$ref": "common-definitions-1.0.json#/$defs/protocol_id"},
+    "hypothesis_id": {"type": "string", "pattern": "^HY-"},
+    "question": {"type": "string", "minLength": 1},
+    "status": {"enum": ["PLANNED", "IMPLEMENTING", "PILOTING", "RUNNING", "COMPLETE", "CANCELLED"]}
+  }
+}

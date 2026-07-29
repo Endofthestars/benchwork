@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/evidence/1.0",
+  "title": "Evidence Record",
+  "type": "object",
+  "required": ["schema_version", "evidence_id", "program_id", "source", "verification"],
+  "properties": {
+    "schema_version": {"const": "evidence/1.0"},
+    "evidence_id": {"type": "string", "pattern": "^EV-"},
+    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "source": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"},
+    "claim_relations": {
+      "type": "array",
+      "items": {"type": "object", "required": ["claim_id", "relation"], "properties": {"claim_id": {"type": "string", "pattern": "^CL-"}, "relation": {"enum": ["SUPPORTS", "CONTRADICTS", "LIMITS", "REPRODUCES", "UNRESOLVED"]}}}
+    },
+    "verification": {
+      "type": "object",
+      "required": ["source_resolved", "content_inspected", "claim_relation_verified", "locally_reproduced"],
+      "properties": {
+        "source_resolved": {"type": "boolean"},
+        "content_inspected": {"type": "boolean"},
+        "claim_relation_verified": {"type": "boolean"},
+        "locally_reproduced": {"type": "boolean"}
+      }
+    }
+  }
+}

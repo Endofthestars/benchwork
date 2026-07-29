@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/common-definitions/1.0",
+  "title": "Benchwork Common Definitions",
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "program_id": {"type": "string", "pattern": "^RP-"},
+    "protocol_id": {"type": "string", "pattern": "^PT-"},
+    "artifact_ref": {
+      "type": "object",
+      "required": ["uri", "sigil"],
+      "properties": {
+        "uri": {"type": "string", "minLength": 1},
+        "sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}

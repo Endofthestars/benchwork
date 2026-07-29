@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/run/1.0",
+  "title": "Experimental Run",
+  "type": "object",
+  "required": ["schema_version", "run_id", "program_id", "protocol_id", "experiment_id", "status", "analysis_included"],
+  "properties": {
+    "schema_version": {"const": "run/1.0"},
+    "run_id": {"type": "string", "pattern": "^RUN-"},
+    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "protocol_id": {"$ref": "common-definitions-1.0.json#/$defs/protocol_id"},
+    "experiment_id": {"type": "string", "pattern": "^EX-"},
+    "status": {"enum": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"]},
+    "analysis_included": {"type": "boolean"},
+    "artifacts": {"type": "array", "items": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"}}
+  }
+}

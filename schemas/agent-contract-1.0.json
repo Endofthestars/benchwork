@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-contract/1.0",
+  "title": "Agent Task Capsule and Result",
+  "type": "object",
+  "$defs": {
+    "task_capsule": {
+      "type": "object",
+      "required": ["schema_version", "task_id", "capability", "input_sigil", "circle"],
+      "properties": {
+        "schema_version": {"const": "task-capsule/1.0"},
+        "task_id": {"type": "string", "pattern": "^TK-"},
+        "capability": {"type": "string", "pattern": "^bench\\."},
+        "input_sigil": {"$ref": "common-definitions-1.0.json#/$defs/sigil"},
+        "circle": {
+          "type": "object",
+          "required": ["tools", "time_budget_seconds", "network"],
+          "properties": {
+            "tools": {"type": "array", "items": {"type": "string"}},
+            "time_budget_seconds": {"type": "integer", "minimum": 1},
+            "network": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "agent_result": {
+      "type": "object",
+      "required": ["schema_version", "task_id", "input_sigil", "artifacts", "status"],
+      "properties": {
+        "schema_version": {"const": "agent-result/1.0"},
+        "task_id": {"type": "string", "pattern": "^TK-"},
+        "input_sigil": {"$ref": "common-definitions-1.0.json#/$defs/sigil"},
+        "artifacts": {"type": "array", "items": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"}},
+        "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]}
+      }
+    }
+  }
+}
