@@ -1,4 +1,4 @@
-"""Command-line interface for the first Athanor milestone."""
+"""Command-line interface for Benchwork's canonical research transitions."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from .athanor import Athanor, AthanorError
+from .athanor import Athanor, AthanorError, content_sigil
 from .circle import CapsuleStore, CapabilityRegistry, Ward
 from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
 from .rites import RiteRegistry
@@ -97,6 +97,34 @@ def _parser() -> argparse.ArgumentParser:
         help="typed artifact reference; repeatable",
     )
 
+    experiment = subparsers.add_parser("experiment", help="manage Protocol-bound Experiments")
+    experiment_commands = experiment.add_subparsers(dest="experiment_command", required=True)
+    experiment_create = experiment_commands.add_parser("create", help="create an Experiment")
+    experiment_create.add_argument("experiment_id")
+    experiment_create.add_argument("--program", required=True)
+    experiment_create.add_argument("--protocol", required=True)
+    experiment_create.add_argument("--question", required=True)
+    experiment_create.add_argument("--hypothesis")
+
+    run = subparsers.add_parser("run", help="record immutable experimental Runs")
+    run_commands = run.add_subparsers(dest="run_command", required=True)
+    run_record = run_commands.add_parser("record", help="record a Run and its observed metrics")
+    run_record.add_argument("run_id")
+    run_record.add_argument("--experiment", required=True)
+    run_record.add_argument(
+        "--status",
+        required=True,
+        choices=("QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"),
+    )
+    run_record.add_argument("--include", action="store_true", help="include this Run in primary analysis")
+    run_record.add_argument("--seed", type=int)
+    run_record.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
+    run_record.add_argument("--artifact", action="append", default=[], metavar="URI|SHA256")
+
+    analyze = subparsers.add_parser("analyze", help="compute a deterministic Alembic Result Bundle")
+    analyze.add_argument("--program", required=True)
+    analyze.add_argument("--protocol", required=True)
+
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
     trace.add_argument("object_id")
     return parser
@@ -183,6 +211,55 @@ def main(argv: Sequence[str] | None = None) -> int:
                 artifacts.append({"kind": kind, "uri": uri, "sigil": digest})
             receipt = athanor.advance_working(args.working_id, args.reason, artifacts)
             _print_receipt(f"Working {args.working_id} advanced", receipt.receipt_id, receipt.sigil)
+        elif args.command == "experiment":
+            receipt = athanor.create_experiment(
+                args.experiment_id,
+                args.program,
+                args.protocol,
+                args.question,
+                args.hypothesis,
+            )
+            _print_receipt(f"Experiment {args.experiment_id} created", receipt.receipt_id, receipt.sigil)
+        elif args.command == "run":
+            metrics: dict[str, float] = {}
+            for value in args.metric:
+                try:
+                    name, raw_number = value.split("=", 1)
+                    if name in metrics:
+                        raise AthanorError(f"duplicate metric: {name}")
+                    metrics[name] = float(raw_number)
+                except ValueError as error:
+                    raise AthanorError("metric must use NAME=NUMBER") from error
+            artifacts = []
+            for value in args.artifact:
+                try:
+                    uri, digest = value.split("|", 1)
+                except ValueError as error:
+                    raise AthanorError("Run artifact must use URI|SHA256") from error
+                artifacts.append({"uri": uri, "sigil": digest})
+            receipt = athanor.record_run(
+                args.run_id,
+                args.experiment,
+                args.status,
+                args.include,
+                metrics,
+                args.seed,
+                artifacts,
+            )
+            run_sigil = content_sigil(athanor.runs()[args.run_id])
+            _print_receipt(
+                f"Run {args.run_id} recorded\nRun {run_sigil}",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "analyze":
+            bundle, bundle_sigil, receipt, path = athanor.compute_analysis(args.program, args.protocol)
+            relative_path = path.relative_to(root)
+            _print_receipt(
+                f"Result Bundle {bundle['bundle_id']} written to {relative_path}\nBundle {bundle_sigil}",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":

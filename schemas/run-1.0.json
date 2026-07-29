@@ -3,7 +3,8 @@
   "$id": "https://benchwork.dev/schemas/run/1.0",
   "title": "Experimental Run",
   "type": "object",
-  "required": ["schema_version", "run_id", "program_id", "protocol_id", "experiment_id", "status", "analysis_included"],
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "program_id", "protocol_id", "experiment_id", "status", "analysis_included", "seed", "metrics", "artifacts"],
   "properties": {
     "schema_version": {"const": "run/1.0"},
     "run_id": {"type": "string", "pattern": "^RUN-"},
@@ -12,6 +13,23 @@
     "experiment_id": {"type": "string", "pattern": "^EX-"},
     "status": {"enum": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"]},
     "analysis_included": {"type": "boolean"},
+    "seed": {"type": ["integer", "null"]},
+    "metrics": {
+      "type": "object",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {"type": "number"}
+    },
     "artifacts": {"type": "array", "items": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"}}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"analysis_included": {"const": true}}},
+      "then": {
+        "properties": {
+          "status": {"const": "COMPLETED"},
+          "metrics": {"minProperties": 1}
+        }
+      }
+    }
+  ]
 }

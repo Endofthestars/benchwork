@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from contextlib import contextmanager
@@ -30,7 +31,7 @@ SIGIL = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def content_sigil(value: Any) -> str:
@@ -194,6 +195,9 @@ class Athanor:
         protocols: dict[str, dict[str, Any]] = {}
         approvals: dict[str, dict[str, Any]] = {}
         workings: dict[str, dict[str, Any]] = {}
+        experiments: dict[str, dict[str, Any]] = {}
+        runs: dict[str, dict[str, Any]] = {}
+        result_bundles: dict[str, dict[str, Any]] = {}
         for event in events:
             payload = event["payload"]
             object_id = event["object_id"]
@@ -281,6 +285,64 @@ class Athanor:
                         "artifacts": payload["artifacts"],
                     }
                 )
+            elif event["type"] == "experiment.created":
+                protocol = protocols.get(payload["protocol_id"])
+                if (
+                    object_id in experiments
+                    or protocol is None
+                    or protocol["status"] != "FROZEN"
+                    or protocol["program_id"] != payload["program_id"]
+                ):
+                    raise AthanorError(f"invalid Experiment creation: {object_id}")
+                experiments[object_id] = {
+                    "schema_version": "experiment/1.0",
+                    "experiment_id": object_id,
+                    "program_id": payload["program_id"],
+                    "protocol_id": payload["protocol_id"],
+                    "hypothesis_id": payload["hypothesis_id"],
+                    "question": payload["question"],
+                    "status": "PLANNED",
+                }
+            elif event["type"] == "run.recorded":
+                experiment = experiments.get(payload["experiment_id"])
+                if (
+                    object_id in runs
+                    or experiment is None
+                    or experiment["program_id"] != payload["program_id"]
+                    or experiment["protocol_id"] != payload["protocol_id"]
+                ):
+                    raise AthanorError(f"invalid Run record: {object_id}")
+                if payload["analysis_included"] and payload["status"] != "COMPLETED":
+                    raise AthanorError(f"non-completed Run cannot be included: {object_id}")
+                runs[object_id] = {
+                    "schema_version": "run/1.0",
+                    "run_id": object_id,
+                    "program_id": payload["program_id"],
+                    "protocol_id": payload["protocol_id"],
+                    "experiment_id": payload["experiment_id"],
+                    "status": payload["status"],
+                    "analysis_included": payload["analysis_included"],
+                    "seed": payload["seed"],
+                    "metrics": payload["metrics"],
+                    "artifacts": payload["artifacts"],
+                }
+            elif event["type"] == "analysis.computed":
+                from .alembic import build_result_bundle
+
+                bundle = payload["bundle"]
+                expected = build_result_bundle(
+                    object_id,
+                    bundle["program_id"],
+                    bundle["protocol_id"],
+                    list(runs.values()),
+                )
+                if (
+                    object_id in result_bundles
+                    or bundle != expected
+                    or payload["bundle_sigil"] != content_sigil(bundle)
+                ):
+                    raise AthanorError(f"invalid Result Bundle: {object_id}")
+                result_bundles[object_id] = bundle
             else:
                 raise AthanorError(f"unsupported Chronicle event type: {event['type']}")
         from .schema_validation import validate_instance
@@ -291,7 +353,21 @@ class Athanor:
             validate_instance("protocol-1.0.json", protocol)
         for working in workings.values():
             validate_instance("working-1.0.json", working)
-        return {"programs": programs, "protocols": protocols, "approvals": approvals, "workings": workings}
+        for experiment in experiments.values():
+            validate_instance("experiment-1.0.json", experiment)
+        for run in runs.values():
+            validate_instance("run-1.0.json", run)
+        for bundle in result_bundles.values():
+            validate_instance("result-bundle-1.0.json", bundle)
+        return {
+            "programs": programs,
+            "protocols": protocols,
+            "approvals": approvals,
+            "workings": workings,
+            "experiments": experiments,
+            "runs": runs,
+            "result_bundles": result_bundles,
+        }
 
     def replay(self) -> dict[str, Any]:
         return self._project(self.chronicle.events())
@@ -307,6 +383,15 @@ class Athanor:
 
     def workings(self) -> dict[str, dict[str, Any]]:
         return self.replay()["workings"]
+
+    def experiments(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["experiments"]
+
+    def runs(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["runs"]
+
+    def result_bundles(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["result_bundles"]
 
     def create_program(self, slug: str, title: str, problem: dict[str, Any] | None = None) -> tuple[str, Receipt]:
         if not SLUG.fullmatch(slug) or not title.strip():
@@ -427,6 +512,128 @@ class Athanor:
             }
 
         return self.chronicle.transact(build)[1]
+
+    def create_experiment(
+        self,
+        experiment_id: str,
+        program_id: str,
+        protocol_id: str,
+        question: str,
+        hypothesis_id: str | None = None,
+    ) -> Receipt:
+        if not IDENTIFIER.fullmatch(experiment_id) or not experiment_id.startswith("EX-"):
+            raise AthanorError("Experiment ID must use the form EX-<identifier>")
+        if hypothesis_id is not None and (
+            not IDENTIFIER.fullmatch(hypothesis_id) or not hypothesis_id.startswith("HY-")
+        ):
+            raise AthanorError("Hypothesis ID must use the form HY-<identifier>")
+        if not question.strip():
+            raise AthanorError("Experiment requires a non-empty question")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            protocol = state["protocols"].get(protocol_id)
+            if protocol is None or protocol["status"] != "FROZEN":
+                raise AthanorError(f"Experiment requires a frozen Protocol: {protocol_id}")
+            if protocol["program_id"] != program_id:
+                raise AthanorError(f"Experiment Program does not match Protocol: {program_id}")
+            if experiment_id in state["experiments"]:
+                raise AthanorError(f"Experiment already exists: {experiment_id}")
+            return "experiment.created", experiment_id, {
+                "program_id": program_id,
+                "protocol_id": protocol_id,
+                "hypothesis_id": hypothesis_id,
+                "question": question,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def record_run(
+        self,
+        run_id: str,
+        experiment_id: str,
+        status: str,
+        analysis_included: bool,
+        metrics: dict[str, float | int] | None = None,
+        seed: int | None = None,
+        artifacts: list[dict[str, str]] | None = None,
+    ) -> Receipt:
+        statuses = {"QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"}
+        if not IDENTIFIER.fullmatch(run_id) or not run_id.startswith("RUN-"):
+            raise AthanorError("Run ID must use the form RUN-<identifier>")
+        if status not in statuses:
+            raise AthanorError(f"unknown Run status: {status}")
+        if analysis_included and status != "COMPLETED":
+            raise AthanorError("only a completed Run can be included in analysis")
+        if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
+            raise AthanorError("Run seed must be an integer or null")
+        if metrics is not None and not isinstance(metrics, dict):
+            raise AthanorError("Run metrics must be a name-to-number object")
+        normalized_metrics = metrics or {}
+        if analysis_included and not normalized_metrics:
+            raise AthanorError("an included Run requires at least one metric")
+        if any(
+            not isinstance(name, str)
+            or not name.strip()
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for name, value in normalized_metrics.items()
+        ):
+            raise AthanorError("Run metrics require non-empty names and finite numeric values")
+        normalized_artifacts = artifacts or []
+        if any(
+            not isinstance(artifact, dict)
+            or set(artifact) != {"uri", "sigil"}
+            or not isinstance(artifact["uri"], str)
+            or not artifact["uri"]
+            or not isinstance(artifact["sigil"], str)
+            or not SIGIL.fullmatch(artifact["sigil"])
+            for artifact in normalized_artifacts
+        ):
+            raise AthanorError("Run artifacts must be content-addressed URI references")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            experiment = state["experiments"].get(experiment_id)
+            if experiment is None:
+                raise AthanorError(f"unknown Experiment: {experiment_id}")
+            if run_id in state["runs"]:
+                raise AthanorError(f"Run already exists: {run_id}")
+            return "run.recorded", run_id, {
+                "program_id": experiment["program_id"],
+                "protocol_id": experiment["protocol_id"],
+                "experiment_id": experiment_id,
+                "status": status,
+                "analysis_included": analysis_included,
+                "seed": seed,
+                "metrics": normalized_metrics,
+                "artifacts": normalized_artifacts,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def compute_analysis(
+        self, program_id: str, protocol_id: str
+    ) -> tuple[dict[str, Any], str, Receipt, Path]:
+        from .alembic import build_result_bundle, export_result_bundle
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            protocol = state["protocols"].get(protocol_id)
+            if protocol is None or protocol["program_id"] != program_id:
+                raise AthanorError(f"Protocol {protocol_id} does not belong to Program {program_id}")
+            bundle_id = f"RB-{len(state['result_bundles']) + 1:03d}"
+            bundle = build_result_bundle(bundle_id, program_id, protocol_id, list(state["runs"].values()))
+            return "analysis.computed", bundle_id, {
+                "bundle": bundle,
+                "bundle_sigil": content_sigil(bundle),
+            }
+
+        event, receipt = self.chronicle.transact(build)
+        bundle = event["payload"]["bundle"]
+        path = export_result_bundle(self.root, bundle)
+        return bundle, event["payload"]["bundle_sigil"], receipt, path
 
     def trace(self, object_id: str) -> list[dict[str, Any]]:
         return [event for event in self.chronicle.events() if event["object_id"] == object_id]

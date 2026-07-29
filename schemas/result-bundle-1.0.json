@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/result-bundle/1.0",
+  "title": "Alembic Result Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bundle_id", "program_id", "protocol_id", "runs", "included_run_ids", "excluded_run_ids", "metrics"],
+  "properties": {
+    "schema_version": {"const": "result-bundle/1.0"},
+    "bundle_id": {"type": "string", "pattern": "^RB-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
+    "runs": {
+      "type": "array",
+      "items": {"$ref": "https://benchwork.dev/schemas/run/1.0"}
+    },
+    "included_run_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^RUN-"}
+    },
+    "excluded_run_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^RUN-"}
+    },
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["n", "mean", "sample_stddev", "ci95_lower", "ci95_upper"],
+        "properties": {
+          "n": {"type": "integer", "minimum": 1},
+          "mean": {"type": "number"},
+          "sample_stddev": {"type": ["number", "null"], "minimum": 0},
+          "ci95_lower": {"type": ["number", "null"]},
+          "ci95_upper": {"type": ["number", "null"]}
+        }
+      }
+    }
+  }
+}
