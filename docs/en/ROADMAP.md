@@ -1,3 +1,8 @@
+---
+language: en
+canonical: true
+---
+
 # Roadmap
 
 ## M0: Foundation
@@ -7,7 +12,7 @@ Completed: repository structure, RFC-0000, public terminology, and project gover
 ## M1: Athanor
 
 Completed: a local Chronicle with chained receipts, replayed projections,
-Protocol drafting and sealing, and a dependency-free CLI. The published Schema
+Protocol drafting and sealing, and a Schema-validated CLI. The published Schema
 contracts define scientific objects before provider integration begins.
 
 ## M2: Circle
@@ -18,14 +23,19 @@ Results remain proposals until accepted by Athanor.
 
 ## M3: Twin Gate
 
-In progress: symmetric Codex and Claude Code Host adapters, both operating
+Completed: symmetric Codex and Claude Code Host adapters, both operating
 through the same Capability contracts and local canonical state.
 
 ## M4: First Rite
 
-In progress: `computational-study@0.1.0` and its protocol-bound Working state
+Completed: `computational-study@0.1.0` and its protocol-bound Working state
 machine.
 
-## M5-M6
+## M5: Alembic
 
-Add Alembic result analysis and a pinned Grimoire extension ecosystem.
+In progress: canonical Run provenance and deterministic `result-bundle/1.0`
+analysis artifacts.
+
+## M6: Open Grimoire
+
+Add a pinned Grimoire extension ecosystem.

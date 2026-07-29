@@ -1,56 +1,235 @@
 # Benchwork
 
-An auditable workbench for agent-assisted computational research.
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-`Benchwork` is the product, `Arcana` is its design language, and `Athanor` is
-the deterministic kernel. Agent services may propose work; canonical research
-state is stored locally as an append-only Chronicle and validated by Athanor.
+**An auditable workbench for agent-assisted computational research.**
+
+Benchwork turns research activity into explicit, reviewable state. Agents and
+tools may propose work, but only the deterministic Athanor kernel can accept a
+canonical transition. Accepted events are written to a local, append-only
+Chronicle with chained SHA-256 Sigils and receipts.
+
+> Project status: `0.1.0.dev0`. Milestones M0–M4 are implemented; M5
+> (deterministic analysis through Alembic) is in progress.
+
+## Why Benchwork
+
+Computational research rarely fails because it lacks one more chat interface.
+It fails when intent, evidence, code, runs, analysis, and decisions drift apart.
+Benchwork gives those elements stable identities and a recorded lifecycle:
 
 ```text
-Idea -> Evidence -> Protocol -> Implementation -> Experiment
-     -> Deterministic Analysis -> Scientific Review -> Decision
+Idea → Evidence → Claim → Hypothesis → Protocol
+     → Implementation → Experiment → Analysis → Review → Decision
 ```
 
-## First milestone
+The system separates two kinds of work:
 
-This repository initializes the Athanor foundation:
+- **proposals**, produced by researchers, Agents, Hosts, and tools; and
+- **canonical state**, validated by Athanor and preserved in Chronicle.
 
-- an append-only Chronicle at `.benchwork/chronicle.jsonl`;
-- SHA-256 Sigil receipts for accepted events;
-- Research Program projections derived from Chronicle events;
-- a guarded `DRAFT -> FROZEN` Protocol lifecycle with an analysis plan; and
-- Circle Task Capsules and Ward checks before any provider may act; and
-- a small dependency-free `bwork` CLI.
+Conversations remain useful interfaces, but they never become the source of
+scientific state.
 
-No Agent or provider adapter is canonical in this milestone. Conversations are
-interfaces, never the source of scientific state.
+## What works today
+
+- **Athanor** validates and serializes canonical state transitions.
+- **Chronicle** stores an append-only JSONL event chain with an independently
+  checked head.
+- **Sigils and Receipts** bind accepted events to SHA-256 content digests.
+- **Research Programs and Protocols** support a guarded
+  `DRAFT → FROZEN` lifecycle.
+- **Capabilities, Task Capsules, Circles, and Ward** bound tools, network
+  access, time, and approval before delegation.
+- **Codex and Claude Code Hosts** produce equivalent, provider-neutral task
+  proposals.
+- **Rites and Workings** pin workflow definitions and record protocol-bound
+  stage transitions.
+- **Versioned JSON Schemas** define the public contracts for research objects,
+  events, tasks, runs, assessments, decisions, and result bundles.
+
+Alembic's deterministic `result-bundle/1.0` computation is the next active
+milestone. Benchwork does not yet provide a canonical remote Agent backend,
+automatic experiment execution, or the public Grimoire extension ecosystem.
+
+## Integrity model
+
+Benchwork fails closed when it detects an invalid schema, broken event chain,
+tail truncation, altered Task Capsule, approval mismatch, unregistered Rite, or
+invalid Working transition.
+
+The current integrity model protects against accidents and detectable drift.
+SHA-256 Sigils are content digests, not digital signatures. They do not defend
+against a malicious writer who can replace the entire Chronicle, its head, and
+all receipts.
+
+For the complete boundary, see
+[Integrity Repair](docs/en/architecture/INTEGRITY_REPAIR.md).
+
+## Requirements
+
+- Python 3.11 or newer
+- `pip`
+
+## Installation
+
+For development, install the repository in editable mode:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e .
+```
+
+The package installs the `bwork` command and the versioned JSON Schemas used for
+runtime validation.
 
 ## Quick start
 
+Run these commands from a directory where Benchwork may create a local
+`.benchwork/` state directory:
+
 ```bash
-python -m pip install -e .
 bwork init
-bwork program create robust-agent-memory --title "Reliable agent memory"
-bwork protocol draft PT-001 --program RP-001 --title "Memory study" --analysis-plan "Compute effect sizes by seed."
+
+bwork program create robust-agent-memory \
+  --title "Reliable agent memory" \
+  --problem "Measure retrieval reliability under long context."
+
+bwork protocol draft PT-001 \
+  --program RP-001 \
+  --title "Memory retrieval study" \
+  --analysis-plan "Compute effect sizes and uncertainty across seeds."
+
 bwork protocol seal PT-001
-bwork task create bench.code.modify --input-sigil sha256:0000000000000000000000000000000000000000000000000000000000000000 --tool read --tool write --time-budget 300
-bwork ward check TK-... # waits for explicit approval
-bwork approval grant TK-... --reason "Reviewed the requested code boundary."
-bwork host propose codex bench.code.inspect --input-sigil sha256:... --tool read --time-budget 300
-bwork working start computational-study@0.1.0 --program RP-001 --protocol PT-001
-bwork working advance WK-001 --reason "Implementation reviewed."
+
+bwork working start computational-study@0.1.0 \
+  --program RP-001 \
+  --protocol PT-001
+
 bwork status
+bwork doctor
 bwork trace PT-001
 ```
 
-## Layout
+In a new project, the commands above create `RP-001`, freeze `PT-001`, and
+start `WK-001` at the `IMPLEMENTATION` stage.
 
-- `docs/rfcs/RFC-0000-arcana.md`: the accepted language and design bible.
-- `src/benchwork`: Athanor kernel and CLI.
-- `schemas`: public, versioned JSON Schemas.
-- `hosts`: symmetric Codex and Claude Code Host adapter guidance.
-- `docs/architecture/FIRST_RITE.md`: the first protocol-bound Working lifecycle.
-- `examples`: a minimal research-program artifact.
+Every Working transition must provide the artifact required by the pinned Rite:
 
-See [the architecture note](docs/architecture/ATHANOR.md) for invariants and
-[RFC-0000](docs/rfcs/RFC-0000-arcana.md) for terminology.
+```bash
+bwork working advance WK-001 \
+  --reason "Implementation reviewed." \
+  --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
+```
+
+The zero digest is only a syntactically valid documentation placeholder.
+Production records should use the SHA-256 digest of the referenced artifact.
+
+## Capability and approval flow
+
+A Task Capsule declares its Capability, input Sigil, allowed tools, network
+access, and time budget. Ward compares that Circle with the local Capability
+contract:
+
+```text
+Task request
+    ↓
+Task Capsule + Circle
+    ↓
+Ward ── REJECTED
+    ├── WAITING_FOR_APPROVAL → human approval Receipt → PASS
+    └── PASS
+```
+
+Useful discovery commands:
+
+```bash
+bwork capability list
+bwork host list
+bwork rite list
+bwork --help
+```
+
+## Command map
+
+| Command | Purpose |
+|---|---|
+| `bwork init` | Initialize Chronicle, Capability contracts, and Rites |
+| `bwork status` | Rebuild and print canonical state |
+| `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
+| `bwork program` | Create Research Programs |
+| `bwork protocol` | Draft and Seal Protocols |
+| `bwork capability` | Inspect installed Capability contracts |
+| `bwork task` | Create and inspect bounded Task Capsules |
+| `bwork ward` | Evaluate a Task Capsule against policy |
+| `bwork approval` | Record explicit human approval |
+| `bwork host` | Create Codex or Claude Code Host proposals |
+| `bwork rite` | Inspect pinned workflow definitions |
+| `bwork working` | Start, inspect, and advance Rite executions |
+| `bwork trace` | Show Chronicle events for an object |
+
+Use `bwork <command> --help` for command-specific arguments.
+
+## Local state
+
+`bwork init` creates project-local state:
+
+```text
+.benchwork/
+├── chronicle.jsonl
+├── chronicle.head
+├── chronicle.lock
+├── capabilities.json
+├── rites.json
+└── capsules/
+```
+
+Chronicle is canonical. Task Capsules are immutable, inspectable proposals
+stored outside the canonical ledger until an accepted transition refers to
+them.
+
+## Documentation
+
+| Topic | English | 简体中文 |
+|---|---|---|
+| Documentation index | [English](docs/en/README.md) | [简体中文](docs/zh-CN/README.md) |
+| Arcana language and design | [RFC-0000](docs/en/rfcs/RFC-0000-arcana.md) | [RFC-0000](docs/zh-CN/rfcs/RFC-0000-arcana.md) |
+| Athanor invariants | [Architecture note](docs/en/architecture/ATHANOR.md) | — |
+| Circle and Ward | [Architecture note](docs/en/architecture/CIRCLE.md) | — |
+| Host symmetry | [Twin Gate](docs/en/architecture/TWIN_GATE.md) | — |
+| Working lifecycle | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
+| Analysis boundary | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
+| Localization | [Policy](docs/LOCALIZATION.md) | — |
+
+English is the canonical documentation source. Missing translations fall back
+to English; untranslated English pages are not copied into locale directories.
+
+## Repository layout
+
+```text
+src/benchwork/     Athanor kernel, CLI, Ward, Hosts, and Rites
+schemas/           Public versioned JSON Schema contracts
+tests/             Deterministic unit and integrity tests
+docs/en/           Canonical English documentation
+docs/zh-CN/        Simplified Chinese translations
+hosts/             Host-specific integration guidance
+examples/          Minimal research artifacts
+```
+
+## Development
+
+Run the test suite:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Changes to canonical transitions should include tests for replay, schema
+validation, integrity failure, and concurrency where applicable. Documentation
+changes should preserve locale paths and follow
+[the localization policy](docs/LOCALIZATION.md).
+
+## License
+
+Benchwork is available under the [MIT License](LICENSE).

@@ -9,6 +9,7 @@ from typing import Sequence
 
 from .athanor import Athanor, AthanorError, content_sigil
 from .circle import CapsuleStore, CapabilityRegistry, Ward
+from .grimoire import rite_definition_sigil
 from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
 from .rites import RiteRegistry
 
@@ -77,6 +78,16 @@ def _parser() -> argparse.ArgumentParser:
     rite = subparsers.add_parser("rite", help="inspect versioned workflow definitions")
     rite_commands = rite.add_subparsers(dest="rite_command", required=True)
     rite_commands.add_parser("list", help="list installed Rites")
+
+    grimoire = subparsers.add_parser("grimoire", help="manage pinned data-only extensions")
+    grimoire_commands = grimoire.add_subparsers(dest="grimoire_command", required=True)
+    grimoire_commands.add_parser("list", help="list installed Grimoires")
+    grimoire_install = grimoire_commands.add_parser("install", help="install a local Grimoire directory")
+    grimoire_install.add_argument("source", type=Path)
+    grimoire_show = grimoire_commands.add_parser("show", help="show an installed Grimoire")
+    grimoire_show.add_argument("grimoire_ref")
+    grimoire_sigil = grimoire_commands.add_parser("sigil", help="compute a canonical Rite definition Sigil")
+    grimoire_sigil.add_argument("rite_file", type=Path)
 
     working = subparsers.add_parser("working", help="manage Rite executions")
     working_commands = working.add_subparsers(dest="working_command", required=True)
@@ -191,6 +202,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if proposal.ward.status == "PASS" else 2
         elif args.command == "rite":
             print(json.dumps(rites.rites(), indent=2))
+        elif args.command == "grimoire" and args.grimoire_command == "install":
+            grimoire_ref, manifest_sigil, installed = rites.install_grimoire(args.source)
+            disposition = "installed" if installed else "already installed"
+            print(f"Grimoire {grimoire_ref} {disposition}\nManifest {manifest_sigil}")
+        elif args.command == "grimoire" and args.grimoire_command == "show":
+            try:
+                grimoire = rites.grimoires()[args.grimoire_ref]
+            except KeyError as error:
+                raise AthanorError(f"unknown Grimoire: {args.grimoire_ref}") from error
+            print(json.dumps(grimoire, indent=2))
+        elif args.command == "grimoire" and args.grimoire_command == "sigil":
+            print(rite_definition_sigil(args.rite_file))
+        elif args.command == "grimoire":
+            print(json.dumps(rites.grimoires(), indent=2))
         elif args.command == "working" and args.working_command == "start":
             rites.get(args.rite_id)
             working_id, receipt = athanor.create_working(args.rite_id, args.program, args.protocol)

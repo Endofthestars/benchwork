@@ -3,9 +3,13 @@
   "$id": "https://benchwork.dev/schemas/rite-registry/1.0",
   "title": "Rite Registry",
   "type": "object",
+  "additionalProperties": false,
   "required": ["schema_version", "rites"],
   "properties": {
     "schema_version": {"const": "rite-registry/1.0"},
-    "rites": {"type": "object"}
+    "rites": {
+      "type": "object",
+      "additionalProperties": {"$ref": "https://benchwork.dev/schemas/rite-definition/1.0"}
+    }
   }
 }

@@ -6,9 +6,17 @@ version: 0.2
 status: accepted
 owner: Endofthestars
 date: 2026-07-29
+archived: true
+superseded_by:
+  - ../en/rfcs/RFC-0000-arcana.md
+  - ../zh-CN/rfcs/RFC-0000-arcana.md
 ---
 
 # RFC-0000: The Arcana of Benchwork
+
+> **Archive notice:** This mixed-language edition is retained for history.
+> Use the maintained [English](../en/rfcs/RFC-0000-arcana.md) or
+> [简体中文](../zh-CN/rfcs/RFC-0000-arcana.md) edition.
 
 > **严谨如仪式，证据皆留痕。**  
 > *Every working is observed, shaped, and traceable.*

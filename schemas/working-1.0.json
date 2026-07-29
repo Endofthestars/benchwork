@@ -12,7 +12,7 @@
     "rite": {"type": "object"},
     "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
     "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
-    "stage": {"enum": ["IMPLEMENTATION", "PILOT", "RUN", "ANALYSIS", "REVIEW", "DECISION"]},
+    "stage": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
     "history": {"type": "array", "minItems": 1}
   },
   "additionalProperties": false

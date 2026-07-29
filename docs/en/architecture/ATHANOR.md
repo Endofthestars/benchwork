@@ -1,3 +1,8 @@
+---
+language: en
+canonical: true
+---
+
 # Athanor Foundation
 
 ## Authority boundary

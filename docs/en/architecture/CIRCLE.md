@@ -1,3 +1,8 @@
+---
+language: en
+canonical: true
+---
+
 # Circle and Ward
 
 ## Capability first

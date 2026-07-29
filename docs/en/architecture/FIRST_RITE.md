@@ -1,3 +1,8 @@
+---
+language: en
+canonical: true
+---
+
 # First Rite: Computational Study
 
 `computational-study@0.1.0` is the first versioned Benchwork Rite. It creates a

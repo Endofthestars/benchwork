@@ -1,3 +1,8 @@
+---
+language: en
+canonical: true
+---
+
 # Twin Gate
 
 M3 establishes Codex and Claude Code as symmetric Host adapters. A Host is an

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/grimoire-registry/1.0",
+  "title": "Installed Grimoire Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "grimoires"],
+  "properties": {
+    "schema_version": {"const": "grimoire-registry/1.0"},
+    "grimoires": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["manifest", "manifest_sigil", "rites"],
+        "properties": {
+          "manifest": {"$ref": "https://benchwork.dev/schemas/grimoire-manifest/1.0"},
+          "manifest_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+          "rites": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["definition", "sigil"],
+              "properties": {
+                "definition": {"$ref": "https://benchwork.dev/schemas/rite-definition/1.0"},
+                "sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

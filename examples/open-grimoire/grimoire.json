@@ -1,0 +1,13 @@
+{
+  "schema_version": "grimoire-manifest/1.0",
+  "grimoire_id": "endofthestars/example-methods",
+  "version": "0.1.0",
+  "benchwork_api": "0.1",
+  "rites": [
+    {
+      "rite_id": "ablation-study@0.1.0",
+      "path": "rites/ablation-study.json",
+      "sigil": "sha256:b41d89649b477f71298484c9389166dd58e8ea796015bdb90fd19b4b98dce790"
+    }
+  ]
+}

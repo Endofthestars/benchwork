@@ -1,0 +1,27 @@
+{
+  "schema_version": "rite/1.0",
+  "rite_id": "ablation-study@0.1.0",
+  "description": "A compact, review-gated ablation workflow.",
+  "stages": [
+    {
+      "name": "PREPARE",
+      "exit_artifact": "implementation-plan"
+    },
+    {
+      "name": "RUN",
+      "exit_artifact": "run-record"
+    },
+    {
+      "name": "ANALYSIS",
+      "exit_artifact": "result-bundle"
+    },
+    {
+      "name": "REVIEW",
+      "exit_artifact": "assessment"
+    },
+    {
+      "name": "DECISION",
+      "exit_artifact": "decision"
+    }
+  ]
+}
