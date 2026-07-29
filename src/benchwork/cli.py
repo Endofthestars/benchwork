@@ -9,6 +9,7 @@ from typing import Sequence
 
 from .athanor import Athanor, AthanorError
 from .circle import CapsuleStore, CapabilityRegistry, Ward
+from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -59,6 +60,17 @@ def _parser() -> argparse.ArgumentParser:
     approval_grant = approval_commands.add_parser("grant", help="grant a Task Capsule approval")
     approval_grant.add_argument("task_id")
     approval_grant.add_argument("--reason", required=True)
+
+    host = subparsers.add_parser("host", help="create provider-neutral host proposals")
+    host_commands = host.add_subparsers(dest="host_command", required=True)
+    host_commands.add_parser("list", help="list supported host adapters")
+    propose = host_commands.add_parser("propose", help="create and check a Host Task Capsule")
+    propose.add_argument("host", choices=HOSTS)
+    propose.add_argument("capability")
+    propose.add_argument("--input-sigil", required=True)
+    propose.add_argument("--tool", action="append", default=[])
+    propose.add_argument("--time-budget", type=int, required=True)
+    propose.add_argument("--network", action="store_true")
 
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
     trace.add_argument("object_id")
@@ -112,6 +124,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise AthanorError(f"unknown Task Capsule: {args.task_id}")
             receipt = athanor.grant_approval(args.task_id, args.reason)
             _print_receipt(f"Approval granted for {args.task_id}", receipt.receipt_id, receipt.sigil)
+        elif args.command == "host" and args.host_command == "list":
+            print(json.dumps({"hosts": HOSTS}, indent=2))
+        elif args.command == "host":
+            adapter_class = CodexHostAdapter if args.host == "codex" else ClaudeCodeHostAdapter
+            proposal = adapter_class(athanor, registry, capsules).propose(
+                args.capability, args.input_sigil, args.tool, args.time_budget, args.network
+            )
+            print(json.dumps(proposal.as_dict(), indent=2))
+            return 0 if proposal.ward.status == "PASS" else 2
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":

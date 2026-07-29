@@ -36,6 +36,7 @@ bwork protocol seal PT-001
 bwork task create bench.code.modify --input-sigil sha256:0000000000000000000000000000000000000000000000000000000000000000 --tool read --tool write --time-budget 300
 bwork ward check TK-... # waits for explicit approval
 bwork approval grant TK-... --reason "Reviewed the requested code boundary."
+bwork host propose codex bench.code.inspect --input-sigil sha256:... --tool read --time-budget 300
 bwork status
 bwork trace PT-001
 ```
@@ -45,6 +46,7 @@ bwork trace PT-001
 - `docs/rfcs/RFC-0000-arcana.md`: the accepted language and design bible.
 - `src/benchwork`: Athanor kernel and CLI.
 - `schemas`: public, versioned JSON Schemas.
+- `hosts`: symmetric Codex and Claude Code Host adapter guidance.
 - `examples`: a minimal research-program artifact.
 
 See [the architecture note](docs/architecture/ATHANOR.md) for invariants and

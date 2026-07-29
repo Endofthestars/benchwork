@@ -90,13 +90,14 @@ class CapsuleStore:
     def __init__(self, root: Path) -> None:
         self.path = root / ".benchwork" / "capsules"
 
-    def create(self, capability: str, input_sigil: str, circle: dict[str, Any]) -> dict[str, Any]:
+    def create(self, capability: str, input_sigil: str, circle: dict[str, Any], host: str = "cli") -> dict[str, Any]:
         if not SIGIL.fullmatch(input_sigil):
             raise AthanorError("Task Capsule input Sigil must be a sha256 digest")
         task_id = f"TK-{uuid4().hex[:12].upper()}"
         capsule = {
             "schema_version": "task-capsule/1.0",
             "task_id": task_id,
+            "host": host,
             "capability": capability,
             "input_sigil": input_sigil,
             "circle": circle,
@@ -135,12 +136,16 @@ class Ward:
         self.approvals = approvals
 
     def evaluate(self, capsule: dict[str, Any]) -> WardDecision:
-        required = {"schema_version", "task_id", "capability", "input_sigil", "circle"}
+        required = {"schema_version", "task_id", "host", "capability", "input_sigil", "circle"}
         if not required.issubset(capsule):
             return WardDecision("REJECTED", ["Task Capsule is missing required fields"])
         if capsule["schema_version"] != "task-capsule/1.0":
             return WardDecision("REJECTED", ["unsupported Task Capsule version"])
-        if not TASK_ID.fullmatch(capsule["task_id"]) or not SIGIL.fullmatch(capsule["input_sigil"]):
+        if (
+            not TASK_ID.fullmatch(capsule["task_id"])
+            or not SIGIL.fullmatch(capsule["input_sigil"])
+            or capsule["host"] not in {"cli", "codex", "claude-code"}
+        ):
             return WardDecision("REJECTED", ["Task Capsule identifiers are invalid"])
 
         contract = self.registry.get(capsule["capability"])

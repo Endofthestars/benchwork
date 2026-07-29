@@ -12,14 +12,14 @@ contracts define scientific objects before provider integration begins.
 
 ## M2: Circle
 
-In progress: local Capability registration, Task Capsule validation, Circle
+Completed: local Capability registration, Task Capsule validation, Circle
 boundaries, Ward evaluation, and canonical human approval receipts. Agent
 Results remain proposals until accepted by Athanor.
 
 ## M3: Twin Gate
 
-Add symmetric Codex and Claude Host adapters, both operating through the same
-Capability contracts and local canonical state.
+In progress: symmetric Codex and Claude Code Host adapters, both operating
+through the same Capability contracts and local canonical state.
 
 ## M4-M6
 
