@@ -11,11 +11,18 @@
     "title": {"type": "string", "minLength": 1},
     "analysis_plan": {"type": "string", "minLength": 1},
     "status": {"enum": ["DRAFT", "FROZEN", "SUPERSEDED"]},
-    "sealed_at": {"type": "string", "format": "date-time"},
-    "seal_receipt": {"type": "string", "pattern": "^RC-"}
+    "sealed_at": {"type": ["string", "null"], "format": "date-time"},
+    "seal_receipt": {"type": ["string", "null"], "pattern": "^RC-"}
   },
   "allOf": [{
     "if": {"properties": {"status": {"const": "FROZEN"}}},
-    "then": {"required": ["sealed_at", "seal_receipt"]}
-  }]
+    "then": {
+      "required": ["sealed_at", "seal_receipt"],
+      "properties": {
+        "sealed_at": {"type": "string", "format": "date-time"},
+        "seal_receipt": {"type": "string", "pattern": "^RC-"}
+      }
+    }
+  }],
+  "additionalProperties": false
 }

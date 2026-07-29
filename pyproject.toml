@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [{name = "Endofthestars"}]
+dependencies = ["jsonschema>=4.18"]
 
 [project.scripts]
 bwork = "benchwork.cli:main"
@@ -19,3 +20,6 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.data-files]
+"share/benchwork/schemas" = ["schemas/*.json"]

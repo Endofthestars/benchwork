@@ -7,8 +7,8 @@
   "properties": {
     "schema_version": {"const": "experiment/1.0"},
     "experiment_id": {"type": "string", "pattern": "^EX-"},
-    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
-    "protocol_id": {"$ref": "common-definitions-1.0.json#/$defs/protocol_id"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
     "hypothesis_id": {"type": "string", "pattern": "^HY-"},
     "question": {"type": "string", "minLength": 1},
     "status": {"enum": ["PLANNED", "IMPLEMENTING", "PILOTING", "RUNNING", "COMPLETE", "CANCELLED"]}

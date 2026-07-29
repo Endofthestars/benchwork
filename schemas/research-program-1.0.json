@@ -3,12 +3,15 @@
   "$id": "https://benchwork.dev/schemas/research-program/1.0",
   "title": "Research Program",
   "type": "object",
-  "required": ["schema_version", "program_id", "slug", "status", "problem"],
+  "required": ["schema_version", "program_id", "slug", "title", "status", "problem"],
   "properties": {
     "schema_version": {"const": "research-program/1.0"},
     "program_id": {"type": "string", "pattern": "^RP-"},
     "slug": {"type": "string"},
+    "title": {"type": "string", "minLength": 1},
     "status": {"enum": ["IDEA", "EVIDENCE_READY", "GAP_SUPPORTED", "RQ_FROZEN", "DESIGN_FROZEN", "IMPLEMENTED", "PILOTED", "RUNNING", "RESULT_READY", "EVALUATED"]},
-    "problem": {"type": "object"}
-  }
+    "problem": {"type": "object"},
+    "protocols": {"type": "array", "items": {"type": "string", "pattern": "^PT-"}}
+  },
+  "additionalProperties": false
 }

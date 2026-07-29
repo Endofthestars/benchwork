@@ -2,17 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://benchwork.dev/schemas/agent-contract/1.0",
   "title": "Agent Task Capsule and Result",
-  "type": "object",
+  "oneOf": [
+    {"$ref": "#/$defs/task_capsule"},
+    {"$ref": "#/$defs/agent_result"}
+  ],
   "$defs": {
     "task_capsule": {
       "type": "object",
-      "required": ["schema_version", "task_id", "host", "capability", "input_sigil", "circle"],
+      "required": ["schema_version", "task_id", "host", "capability", "input_sigil", "circle", "capsule_sigil"],
       "properties": {
         "schema_version": {"const": "task-capsule/1.0"},
         "task_id": {"type": "string", "pattern": "^TK-"},
         "host": {"enum": ["cli", "codex", "claude-code"]},
         "capability": {"type": "string", "pattern": "^bench\\."},
-        "input_sigil": {"$ref": "common-definitions-1.0.json#/$defs/sigil"},
+        "input_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+        "capsule_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
         "circle": {
           "type": "object",
           "required": ["tools", "time_budget_seconds", "network"],
@@ -20,9 +24,11 @@
             "tools": {"type": "array", "items": {"type": "string"}},
             "time_budget_seconds": {"type": "integer", "minimum": 1},
             "network": {"type": "boolean"}
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "agent_result": {
       "type": "object",
@@ -30,10 +36,11 @@
       "properties": {
         "schema_version": {"const": "agent-result/1.0"},
         "task_id": {"type": "string", "pattern": "^TK-"},
-        "input_sigil": {"$ref": "common-definitions-1.0.json#/$defs/sigil"},
-        "artifacts": {"type": "array", "items": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"}},
+        "input_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+        "artifacts": {"type": "array", "items": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"}},
         "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]}
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

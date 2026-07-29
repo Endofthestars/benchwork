@@ -7,7 +7,7 @@
   "properties": {
     "schema_version": {"const": "claim/1.0"},
     "claim_id": {"type": "string", "pattern": "^CL-"},
-    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
     "type": {"enum": ["empirical", "theoretical", "methodological", "operational"]},
     "statement": {"type": "string", "minLength": 1},
     "status": {"enum": ["PROPOSED", "SUPPORTED", "CONTESTED", "REJECTED", "UNRESOLVED"]},

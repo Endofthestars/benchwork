@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .athanor import AthanorError
+from .athanor import AthanorError, content_sigil
 
 
 TASK_ID = re.compile(r"^TK-[A-Z0-9]+$")
@@ -102,6 +102,7 @@ class CapsuleStore:
             "input_sigil": input_sigil,
             "circle": circle,
         }
+        capsule["capsule_sigil"] = content_sigil(capsule)
         self.path.mkdir(parents=True, exist_ok=True)
         path = self.path / f"{task_id}.json"
         path.write_text(_json(capsule))
@@ -114,9 +115,13 @@ class CapsuleStore:
         if not path.exists():
             raise AthanorError(f"unknown Task Capsule: {task_id}")
         try:
-            return json.loads(path.read_text())
+            capsule = json.loads(path.read_text())
         except json.JSONDecodeError as error:
             raise AthanorError(f"invalid Task Capsule: {task_id}") from error
+        expected = content_sigil({key: value for key, value in capsule.items() if key != "capsule_sigil"})
+        if capsule.get("capsule_sigil") != expected:
+            raise AthanorError(f"Task Capsule Sigil mismatch: {task_id}")
+        return capsule
 
 
 @dataclass(frozen=True)
@@ -131,12 +136,18 @@ class WardDecision:
 class Ward:
     """Checks a Task Capsule against its Capability contract and approvals."""
 
-    def __init__(self, registry: CapabilityRegistry, approvals: set[str]) -> None:
+    def __init__(self, registry: CapabilityRegistry, approvals: dict[str, dict[str, Any]]) -> None:
         self.registry = registry
         self.approvals = approvals
 
     def evaluate(self, capsule: dict[str, Any]) -> WardDecision:
-        required = {"schema_version", "task_id", "host", "capability", "input_sigil", "circle"}
+        from .schema_validation import validate_instance
+
+        try:
+            validate_instance("agent-contract-1.0.json", capsule)
+        except AthanorError as error:
+            return WardDecision("REJECTED", [str(error)])
+        required = {"schema_version", "task_id", "host", "capability", "input_sigil", "circle", "capsule_sigil"}
         if not required.issubset(capsule):
             return WardDecision("REJECTED", ["Task Capsule is missing required fields"])
         if capsule["schema_version"] != "task-capsule/1.0":
@@ -147,6 +158,9 @@ class Ward:
             or capsule["host"] not in {"cli", "codex", "claude-code"}
         ):
             return WardDecision("REJECTED", ["Task Capsule identifiers are invalid"])
+        expected_sigil = content_sigil({key: value for key, value in capsule.items() if key != "capsule_sigil"})
+        if capsule["capsule_sigil"] != expected_sigil:
+            return WardDecision("REJECTED", ["Task Capsule content does not match its Sigil"])
 
         contract = self.registry.get(capsule["capability"])
         circle = capsule["circle"]
@@ -160,6 +174,16 @@ class Ward:
             return WardDecision("REJECTED", ["Circle exceeds the Capability time budget"])
         if bool(circle.get("network", False)) and not contract.get("network", False):
             return WardDecision("REJECTED", ["Circle requests network access outside the Capability contract"])
-        if contract.get("requires_approval", False) and capsule["task_id"] not in self.approvals:
-            return WardDecision("WAITING_FOR_APPROVAL", ["human approval receipt required"])
+        if contract.get("requires_approval", False):
+            approval = self.approvals.get(capsule["task_id"])
+            binding = {
+                "capsule_sigil": capsule["capsule_sigil"],
+                "capability": capsule["capability"],
+                "input_sigil": capsule["input_sigil"],
+                "circle": capsule["circle"],
+            }
+            if approval is None:
+                return WardDecision("WAITING_FOR_APPROVAL", ["human approval receipt required"])
+            if any(approval.get(key) != value for key, value in binding.items()):
+                return WardDecision("REJECTED", ["approval does not match the current Task Capsule"])
         return WardDecision("PASS", [])

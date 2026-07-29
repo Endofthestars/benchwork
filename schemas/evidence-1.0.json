@@ -7,8 +7,8 @@
   "properties": {
     "schema_version": {"const": "evidence/1.0"},
     "evidence_id": {"type": "string", "pattern": "^EV-"},
-    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
-    "source": {"$ref": "common-definitions-1.0.json#/$defs/artifact_ref"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "source": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"},
     "claim_relations": {
       "type": "array",
       "items": {"type": "object", "required": ["claim_id", "relation"], "properties": {"claim_id": {"type": "string", "pattern": "^CL-"}, "relation": {"enum": ["SUPPORTS", "CONTRADICTS", "LIMITS", "REPRODUCES", "UNRESOLVED"]}}}

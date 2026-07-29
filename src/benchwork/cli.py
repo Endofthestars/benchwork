@@ -25,6 +25,7 @@ def _parser() -> argparse.ArgumentParser:
     create = program_commands.add_parser("create", help="create a Research Program")
     create.add_argument("slug")
     create.add_argument("--title", required=True)
+    create.add_argument("--problem", default="")
 
     protocol = subparsers.add_parser("protocol", help="manage Protocols")
     protocol_commands = protocol.add_subparsers(dest="protocol_command", required=True)
@@ -88,6 +89,13 @@ def _parser() -> argparse.ArgumentParser:
     working_advance = working_commands.add_parser("advance", help="advance a Working one stage")
     working_advance.add_argument("working_id")
     working_advance.add_argument("--reason", required=True)
+    working_advance.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="KIND|URI|SHA256",
+        help="typed artifact reference; repeatable",
+    )
 
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
     trace.add_argument("object_id")
@@ -112,7 +120,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             rites.initialize()
             print("BENCHWORK · ATHANOR\nChronicle initialized at .benchwork/chronicle.jsonl")
         elif args.command == "program":
-            program_id, receipt = athanor.create_program(args.slug, args.title)
+            problem = {"statement": args.problem} if args.problem else {}
+            program_id, receipt = athanor.create_program(args.slug, args.title, problem)
             _print_receipt(f"Research Program {program_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol" and args.protocol_command == "draft":
             receipt = athanor.draft_protocol(args.protocol_id, args.program, args.title, args.analysis_plan)
@@ -129,19 +138,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.input_sigil,
                 {"tools": args.tool, "time_budget_seconds": args.time_budget, "network": args.network},
             )
-            decision = Ward(registry, set(athanor.approvals())).evaluate(capsule)
+            decision = Ward(registry, athanor.approvals()).evaluate(capsule)
             print(json.dumps({"task_id": capsule["task_id"], "ward": decision.as_dict()}, indent=2))
         elif args.command == "task":
             print(json.dumps(capsules.get(args.task_id), indent=2))
         elif args.command == "ward":
             capsule = capsules.get(args.task_id)
-            decision = Ward(registry, set(athanor.approvals())).evaluate(capsule)
+            decision = Ward(registry, athanor.approvals()).evaluate(capsule)
             print(json.dumps(decision.as_dict(), indent=2))
             return 0 if decision.status == "PASS" else 2
         elif args.command == "approval":
             if not capsules.get(args.task_id):
                 raise AthanorError(f"unknown Task Capsule: {args.task_id}")
-            receipt = athanor.grant_approval(args.task_id, args.reason)
+            receipt = athanor.grant_approval(capsules.get(args.task_id), args.reason)
             _print_receipt(f"Approval granted for {args.task_id}", receipt.receipt_id, receipt.sigil)
         elif args.command == "host" and args.host_command == "list":
             print(json.dumps({"hosts": HOSTS}, indent=2))
@@ -165,7 +174,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise AthanorError(f"unknown Working: {args.working_id}") from error
             print(json.dumps(working, indent=2))
         elif args.command == "working":
-            receipt = athanor.advance_working(args.working_id, args.reason)
+            artifacts = []
+            for value in args.artifact:
+                try:
+                    kind, uri, digest = value.split("|", 2)
+                except ValueError as error:
+                    raise AthanorError("artifact must use KIND|URI|SHA256") from error
+                artifacts.append({"kind": kind, "uri": uri, "sigil": digest})
+            receipt = athanor.advance_working(args.working_id, args.reason, artifacts)
             _print_receipt(f"Working {args.working_id} advanced", receipt.receipt_id, receipt.sigil)
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))

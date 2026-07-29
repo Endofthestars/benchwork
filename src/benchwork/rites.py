@@ -11,7 +11,14 @@ from .athanor import AthanorError
 
 DEFAULT_RITES: dict[str, dict[str, Any]] = {
     "computational-study@0.1.0": {
-        "stages": ["IMPLEMENTATION", "PILOT", "RUN", "ANALYSIS", "REVIEW", "DECISION"],
+        "stages": [
+            {"name": "IMPLEMENTATION", "exit_artifact": "implementation"},
+            {"name": "PILOT", "exit_artifact": "pilot-result"},
+            {"name": "RUN", "exit_artifact": "run-record"},
+            {"name": "ANALYSIS", "exit_artifact": "result-bundle"},
+            {"name": "REVIEW", "exit_artifact": "assessment"},
+            {"name": "DECISION", "exit_artifact": "decision"}
+        ],
         "description": "A protocol-bound computational research study.",
     }
 }

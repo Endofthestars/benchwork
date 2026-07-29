@@ -6,7 +6,7 @@
   "required": ["schema_version", "event_id", "type", "object_id", "occurred_at", "previous_sigil", "payload", "receipt"],
   "properties": {
     "schema_version": {"const": "chronicle-event/1.0"},
-    "event_id": {"type": "string", "pattern": "^EV-"},
+    "event_id": {"type": "string", "pattern": "^CE-"},
     "type": {"type": "string"},
     "object_id": {"type": "string"},
     "occurred_at": {"type": "string", "format": "date-time"},
@@ -17,7 +17,7 @@
       "required": ["receipt_id", "event_id", "sigil", "previous_sigil", "accepted_at"],
       "properties": {
         "receipt_id": {"type": "string", "pattern": "^RC-"},
-        "event_id": {"type": "string", "pattern": "^EV-"},
+        "event_id": {"type": "string", "pattern": "^CE-"},
         "sigil": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "previous_sigil": {"type": ["string", "null"]},
         "accepted_at": {"type": "string", "format": "date-time"}

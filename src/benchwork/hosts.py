@@ -58,7 +58,7 @@ class HostAdapter:
             {"tools": tools, "time_budget_seconds": time_budget_seconds, "network": network},
             host=self.host,
         )
-        ward = Ward(self.registry, set(self.athanor.approvals())).evaluate(capsule)
+        ward = Ward(self.registry, self.athanor.approvals()).evaluate(capsule)
         return HostProposal(self.host, capsule, ward)
 
 

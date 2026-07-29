@@ -2,9 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 import json
+import multiprocessing as mp
+from jsonschema import Draft202012Validator
 
 from benchwork.athanor import Athanor, AthanorError
 from benchwork.circle import CapsuleStore, CapabilityRegistry, Ward
+from benchwork.schema_validation import validate_instance
+
+
+def _concurrent_program(argument: tuple[str, str]) -> str:
+    root, slug = argument
+    return Athanor(Path(root)).create_program(slug, slug)[0]
 
 
 class AthanorTest(unittest.TestCase):
@@ -31,7 +39,7 @@ class AthanorTest(unittest.TestCase):
         self.assertEqual(len(self.athanor.trace("PT-001")), 2)
 
     def test_protocol_must_be_drafted_and_cannot_reseal(self) -> None:
-        with self.assertRaisesRegex(AthanorError, "unknown Protocol"):
+        with self.assertRaisesRegex(AthanorError, "not an unsealed draft"):
             self.athanor.seal_protocol("PT-001")
 
         program_id, _ = self.athanor.create_program("memory", "Memory")
@@ -39,7 +47,7 @@ class AthanorTest(unittest.TestCase):
             self.athanor.draft_protocol("PT-001", program_id, "Memory", "")
         self.athanor.draft_protocol("PT-001", program_id, "Memory", "Pre-register the comparison.")
         self.athanor.seal_protocol("PT-001")
-        with self.assertRaisesRegex(AthanorError, "already sealed"):
+        with self.assertRaisesRegex(AthanorError, "not an unsealed draft"):
             self.athanor.seal_protocol("PT-001")
 
     def test_altered_or_reordered_event_fails_verification(self) -> None:
@@ -65,7 +73,8 @@ class AthanorTest(unittest.TestCase):
             self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
         self.athanor.seal_protocol("PT-001")
         working_id, _ = self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
-        self.athanor.advance_working(working_id, "Implementation reviewed.")
+        artifact = {"kind": "implementation", "uri": "artifact.json", "sigil": "sha256:" + "1" * 64}
+        self.athanor.advance_working(working_id, "Implementation reviewed.", [artifact])
         self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
         self.assertEqual(len(self.athanor.workings()[working_id]["history"]), 2)
 
@@ -75,6 +84,7 @@ class AthanorTest(unittest.TestCase):
             schema = json.loads(schema_path.read_text())
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
             self.assertIn("/1.0", schema["$id"])
+            Draft202012Validator.check_schema(schema)
 
     def test_ward_requires_approval_before_gated_task_can_pass(self) -> None:
         registry = CapabilityRegistry(self.root)
@@ -83,14 +93,14 @@ class AthanorTest(unittest.TestCase):
             "sha256:" + "0" * 64,
             {"tools": ["read", "write"], "time_budget_seconds": 300, "network": False},
         )
-        ward = Ward(registry, set())
+        ward = Ward(registry, {})
         self.assertEqual(ward.evaluate(capsule).status, "WAITING_FOR_APPROVAL")
-        self.athanor.grant_approval(capsule["task_id"], "Reviewed requested code boundary.")
-        self.assertEqual(Ward(registry, set(self.athanor.approvals())).evaluate(capsule).status, "PASS")
+        self.athanor.grant_approval(capsule, "Reviewed requested code boundary.")
+        self.assertEqual(Ward(registry, self.athanor.approvals()).evaluate(capsule).status, "PASS")
 
     def test_ward_rejects_tool_and_network_escalation(self) -> None:
         registry = CapabilityRegistry(self.root)
-        ward = Ward(registry, set())
+        ward = Ward(registry, {})
         capsule = {
             "schema_version": "task-capsule/1.0",
             "task_id": "TK-EXAMPLE",
@@ -101,3 +111,55 @@ class AthanorTest(unittest.TestCase):
         self.assertEqual(ward.evaluate(capsule).status, "REJECTED")
         capsule["circle"] = {"tools": ["read"], "time_budget_seconds": 60, "network": True}
         self.assertEqual(ward.evaluate(capsule).status, "REJECTED")
+
+    def test_concurrent_program_creation_is_one_transaction(self) -> None:
+        context = mp.get_context("fork")
+        with context.Pool(2) as pool:
+            identifiers = pool.map(
+                _concurrent_program,
+                [(str(self.root), "alpha"), (str(self.root), "beta")],
+            )
+        self.assertEqual(sorted(identifiers), ["RP-001", "RP-002"])
+        self.assertEqual(len(self.athanor.programs()), 2)
+
+    def test_chronicle_tail_truncation_is_detected(self) -> None:
+        self.athanor.create_program("alpha", "Alpha")
+        self.athanor.create_program("beta", "Beta")
+        ledger = self.root / ".benchwork" / "chronicle.jsonl"
+        ledger.write_text(ledger.read_text().splitlines()[0] + "\n")
+        with self.assertRaisesRegex(AthanorError, "head mismatch"):
+            self.athanor.chronicle.events()
+
+    def test_approval_cannot_be_reused_after_capsule_mutation(self) -> None:
+        registry = CapabilityRegistry(self.root)
+        capsule = CapsuleStore(self.root).create(
+            "bench.code.modify",
+            "sha256:" + "0" * 64,
+            {"tools": ["read", "write"], "time_budget_seconds": 300, "network": False},
+        )
+        self.athanor.grant_approval(capsule, "Approve code modification.")
+        capsule["capability"] = "bench.experiment.execute"
+        capsule["circle"]["tools"] = ["execute"]
+        self.assertEqual(Ward(registry, self.athanor.approvals()).evaluate(capsule).status, "REJECTED")
+
+    def test_working_transition_requires_stage_artifact(self) -> None:
+        program_id, _ = self.athanor.create_program("memory", "Memory")
+        self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute metrics.")
+        self.athanor.seal_protocol("PT-001")
+        working_id, _ = self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+        with self.assertRaisesRegex(AthanorError, "typed, content-addressed"):
+            self.athanor.advance_working(working_id, "skip", [])
+        wrong = {"kind": "result-bundle", "uri": "result.json", "sigil": "sha256:" + "1" * 64}
+        with self.assertRaisesRegex(AthanorError, "requires artifact kind implementation"):
+            self.athanor.advance_working(working_id, "skip", [wrong])
+
+    def test_working_rejects_unregistered_rite(self) -> None:
+        program_id, _ = self.athanor.create_program("memory", "Memory")
+        self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute metrics.")
+        self.athanor.seal_protocol("PT-001")
+        with self.assertRaisesRegex(AthanorError, "unknown Rite"):
+            self.athanor.create_working("anything@9", program_id, "PT-001")
+
+    def test_agent_contract_rejects_empty_object(self) -> None:
+        with self.assertRaisesRegex(AthanorError, "validation failed"):
+            validate_instance("agent-contract-1.0.json", {})
