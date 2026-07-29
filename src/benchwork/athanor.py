@@ -275,6 +275,7 @@ class Athanor:
         artifacts: dict[str, dict[str, Any]] = {}
         issues: dict[str, dict[str, Any]] = {}
         deviations: dict[str, dict[str, Any]] = {}
+        agent_results: dict[str, dict[str, Any]] = {}
         for event in events:
             payload = event["payload"]
             object_id = event["object_id"]
@@ -426,6 +427,31 @@ class Athanor:
                     **payload,
                     "receipt_id": event["receipt"]["receipt_id"],
                     "granted_at": event["occurred_at"],
+                }
+            elif event["type"] == "agent-result.accepted":
+                result = payload["result"]
+                from .schema_validation import validate_instance
+
+                if result.get("schema_version") != "agent-result/1.0":
+                    raise AthanorError(f"invalid Agent Result acceptance: {object_id}")
+                validate_instance("agent-contract-1.0.json", result)
+                if (
+                    object_id in agent_results
+                    or result["task_id"] != object_id
+                    or result["input_sigil"] != payload["input_sigil"]
+                ):
+                    raise AthanorError(f"invalid Agent Result acceptance: {object_id}")
+                agent_results[object_id] = {
+                    "schema_version": "agent-result-record/1.0",
+                    "task_id": object_id,
+                    "host": payload["host"],
+                    "capability": payload["capability"],
+                    "input_sigil": payload["input_sigil"],
+                    "capsule_sigil": payload["capsule_sigil"],
+                    "artifacts": result["artifacts"],
+                    "status": result["status"],
+                    "accepted_at": event["occurred_at"],
+                    "acceptance_receipt": event["receipt"]["receipt_id"],
                 }
             elif event["type"] == "working.created":
                 protocol = protocols.get(payload["protocol_id"])
@@ -801,6 +827,8 @@ class Athanor:
             validate_instance("issue-1.0.json", issue)
         for deviation in deviations.values():
             validate_instance("deviation-1.0.json", deviation)
+        for result in agent_results.values():
+            validate_instance("agent-result-record-1.0.json", result)
         return {
             "programs": programs,
             "protocols": protocols,
@@ -817,6 +845,7 @@ class Athanor:
             "artifacts": artifacts,
             "issues": issues,
             "deviations": deviations,
+            "agent_results": agent_results,
         }
 
     def replay(self) -> dict[str, Any]:
@@ -866,6 +895,9 @@ class Athanor:
 
     def deviations(self) -> dict[str, dict[str, Any]]:
         return self.replay()["deviations"]
+
+    def agent_results(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["agent_results"]
 
     def create_program(self, slug: str, title: str, problem: dict[str, Any] | None = None) -> tuple[str, Receipt]:
         if not SLUG.fullmatch(slug) or not title.strip():
@@ -1121,6 +1153,37 @@ class Athanor:
                 "capability": capsule["capability"],
                 "input_sigil": capsule["input_sigil"],
                 "circle": capsule["circle"],
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def accept_agent_result(self, result: dict[str, Any]) -> Receipt:
+        from .circle import CapsuleStore, CapabilityRegistry, Ward
+        from .schema_validation import validate_instance
+
+        if not isinstance(result, dict) or result.get("schema_version") != "agent-result/1.0":
+            raise AthanorError("Agent Result must use agent-result/1.0")
+        validate_instance("agent-contract-1.0.json", result)
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            task_id = result["task_id"]
+            if task_id in state["agent_results"]:
+                raise AthanorError(f"Task already has an accepted Agent Result: {task_id}")
+            capsule = CapsuleStore(self.root).get(task_id)
+            if result["input_sigil"] != capsule["input_sigil"]:
+                raise AthanorError("Agent Result input Sigil does not match its Task Capsule")
+            ward = Ward(CapabilityRegistry(self.root), state["approvals"]).evaluate(capsule)
+            if ward.status != "PASS":
+                raise AthanorError(
+                    f"Agent Result cannot be accepted while Ward is {ward.status}"
+                )
+            return "agent-result.accepted", task_id, {
+                "host": capsule["host"],
+                "capability": capsule["capability"],
+                "input_sigil": capsule["input_sigil"],
+                "capsule_sigil": capsule["capsule_sigil"],
+                "result": result,
             }
 
         return self.chronicle.transact(build)[1]

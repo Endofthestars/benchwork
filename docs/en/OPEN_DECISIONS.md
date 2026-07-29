@@ -16,3 +16,5 @@ canonical: true
    before Open Grimoire accepts remote sources or executable extension types.
 5. Define Decision supersession and Program branching semantics before a
    `PIVOT` outcome automatically creates lineage.
+6. Define Provider leases, cancellation, result transport, and executor
+   isolation before direct research verbs automatically execute Task Capsules.

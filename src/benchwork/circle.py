@@ -3,23 +3,66 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .athanor import AthanorError, content_sigil
+from .athanor import AthanorError, _exclusive_lock, content_sigil
 
 
 TASK_ID = re.compile(r"^TK-[A-Z0-9]+$")
 SIGIL = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 DEFAULT_CAPABILITIES: dict[str, dict[str, Any]] = {
+    "bench.research.orchestrate": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
     "bench.evidence.discover": {
         "allowed_tools": ["read", "web"],
         "network": True,
         "max_time_seconds": 900,
+        "requires_approval": False,
+    },
+    "bench.evidence.synthesize": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.evidence.verify": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 900,
+        "requires_approval": False,
+    },
+    "bench.hypothesis.frame": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.hypothesis.challenge": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.study.design": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.study.audit": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
         "requires_approval": False,
     },
     "bench.code.inspect": {
@@ -40,8 +83,38 @@ DEFAULT_CAPABILITIES: dict[str, dict[str, Any]] = {
         "max_time_seconds": 14400,
         "requires_approval": True,
     },
+    "bench.experiment.plan": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.experiment.collect": {
+        "allowed_tools": ["read", "write", "execute"],
+        "network": False,
+        "max_time_seconds": 14400,
+        "requires_approval": True,
+    },
     "bench.analysis.compute": {
         "allowed_tools": ["read", "execute"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.analysis.interpret": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.decision.review": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.decision.propose": {
+        "allowed_tools": ["read"],
         "network": False,
         "max_time_seconds": 1800,
         "requires_approval": False,
@@ -58,23 +131,60 @@ class CapabilityRegistry:
 
     def __init__(self, root: Path) -> None:
         self.path = root / ".benchwork" / "capabilities.json"
+        self.lock_path = root / ".benchwork" / "capabilities.lock"
 
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.path.exists():
-            self.path.write_text(_json({"schema_version": "capability-registry/1.0", "capabilities": DEFAULT_CAPABILITIES}))
+        with _exclusive_lock(self.lock_path):
+            registry = {
+                "schema_version": "capability-registry/1.0",
+                "capabilities": DEFAULT_CAPABILITIES,
+            }
+            if self.path.exists():
+                try:
+                    existing = json.loads(self.path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    return
+                capabilities = existing.get("capabilities")
+                if (
+                    existing.get("schema_version") != "capability-registry/1.0"
+                    or not isinstance(capabilities, dict)
+                ):
+                    return
+                registry = existing
+                changed = False
+                for capability, contract in DEFAULT_CAPABILITIES.items():
+                    if capability not in capabilities:
+                        capabilities[capability] = contract
+                        changed = True
+                if not changed:
+                    return
+            temporary = self.path.with_suffix(".json.tmp")
+            temporary.write_text(_json(registry), encoding="utf-8")
+            with temporary.open("rb") as handle:
+                os.fsync(handle.fileno())
+            os.replace(temporary, self.path)
+            directory = os.open(self.path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
 
     def capabilities(self) -> dict[str, dict[str, Any]]:
         self.initialize()
-        try:
-            registry = json.loads(self.path.read_text())
-        except json.JSONDecodeError as error:
-            raise AthanorError("invalid Capability Registry") from error
+        with _exclusive_lock(self.lock_path):
+            try:
+                registry = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise AthanorError("invalid Capability Registry") from error
         if registry.get("schema_version") != "capability-registry/1.0":
             raise AthanorError("unsupported Capability Registry version")
         capabilities = registry.get("capabilities")
         if not isinstance(capabilities, dict):
             raise AthanorError("Capability Registry is missing capabilities")
+        from .schema_validation import validate_instance
+
+        validate_instance("capability-registry-1.0.json", registry)
         return capabilities
 
     def get(self, capability: str) -> dict[str, Any]:

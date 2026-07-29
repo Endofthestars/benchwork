@@ -53,3 +53,10 @@ Assessments; human-Sealed Decisions; and cross-object Chronicle lineage.
 Completed: canonical, content-addressed Artifacts with producer and input
 lineage; open-to-resolved research Issues; and immutable Deviations that record
 post-Seal changes without rewriting the Protocol commitment.
+
+## M9: Command Surface and Agent Handoff
+
+Completed: all RFC Capability contracts; direct research verbs that create
+Ward-checked Task Proposals; canonical Agent Result acceptance bound to the
+original Capsule and input Sigil; Chronicle and Sigil inspection; and the
+documented Grimoire, Rite, Working, Seal, and typed Trace command forms.

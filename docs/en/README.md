@@ -27,6 +27,7 @@ English is the canonical source for all Benchwork documentation.
 - [Alembic](architecture/ALEMBIC.md)
 - [Scientific Canon](architecture/SCIENTIFIC_CANON.md)
 - [Integrity and Recovery](architecture/INTEGRITY_RECOVERY.md)
+- [Command Surface and Agent Handoff](architecture/COMMAND_SURFACE.md)
 - [Open Grimoire](architecture/OPEN_GRIMOIRE.md)
 - [Integrity Repair](architecture/INTEGRITY_REPAIR.md)
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Sequence
 
@@ -14,12 +16,55 @@ from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
 from .rites import RiteRegistry
 
 
+def _add_task_boundary_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--input-sigil")
+    parser.add_argument("--tool", action="append")
+    parser.add_argument("--time-budget", type=int)
+    parser.add_argument(
+        "--network",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bwork", description="Benchwork Athanor foundation")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init", help="initialize a local Benchwork project")
     subparsers.add_parser("status", help="show rebuilt canonical state")
     subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
+
+    start = subparsers.add_parser("start", help="start a Research Program")
+    start.add_argument("objective")
+    start.add_argument("--slug")
+
+    for command, help_text in (
+        ("investigate", "prepare an Evidence discovery Task"),
+        ("design", "prepare a study design Task"),
+        ("implement", "prepare a code modification Task"),
+        ("pilot", "prepare a bounded experiment execution Task"),
+    ):
+        phase = subparsers.add_parser(command, help=help_text)
+        _add_task_boundary_arguments(phase)
+
+    resume = subparsers.add_parser("resume", help="inspect a recoverable Working")
+    resume.add_argument("working_id", nargs="?")
+
+    scry = subparsers.add_parser("scry", help="prepare a bounded discovery Task")
+    scry.add_argument("domain", choices=("literature", "code"))
+    _add_task_boundary_arguments(scry)
+
+    distill = subparsers.add_parser("distill", help="prepare a bounded synthesis Task")
+    distill.add_argument("material", choices=("evidence",))
+    _add_task_boundary_arguments(distill)
+
+    invoke = subparsers.add_parser("invoke", help="prepare an explicit Capability Task")
+    invoke.add_argument("capability")
+    _add_task_boundary_arguments(invoke)
+
+    seal_command = subparsers.add_parser("seal", help="Seal a scientific commitment")
+    seal_command.add_argument("object_type", choices=("protocol",))
+    seal_command.add_argument("object_id")
 
     program = subparsers.add_parser("program", help="manage Research Programs")
     program_commands = program.add_subparsers(dest="program_command", required=True)
@@ -110,6 +155,10 @@ def _parser() -> argparse.ArgumentParser:
     task_create.add_argument("--network", action="store_true")
     task_show = task_commands.add_parser("show", help="show a Task Capsule")
     task_show.add_argument("task_id")
+    task_accept = task_commands.add_parser(
+        "accept", help="accept a schema-valid Agent Result through Athanor"
+    )
+    task_accept.add_argument("result_file", type=Path)
 
     ward = subparsers.add_parser("ward", help="evaluate Circle policy")
     ward_commands = ward.add_subparsers(dest="ward_command", required=True)
@@ -136,14 +185,32 @@ def _parser() -> argparse.ArgumentParser:
     rite = subparsers.add_parser("rite", help="inspect versioned workflow definitions")
     rite_commands = rite.add_subparsers(dest="rite_command", required=True)
     rite_commands.add_parser("list", help="list installed Rites")
+    rite_search = rite_commands.add_parser("search", help="search installed Rite IDs")
+    rite_search.add_argument("query")
+    rite_install = rite_commands.add_parser(
+        "install", help="install Rites from a local Grimoire"
+    )
+    rite_install.add_argument("source", type=Path)
+    rite_run = rite_commands.add_parser("run", help="start a Working from a Rite")
+    rite_run.add_argument("rite_id")
+    rite_run.add_argument("--program", required=True)
+    rite_run.add_argument("--protocol", required=True)
 
     grimoire = subparsers.add_parser("grimoire", help="manage pinned data-only extensions")
     grimoire_commands = grimoire.add_subparsers(dest="grimoire_command", required=True)
     grimoire_commands.add_parser("list", help="list installed Grimoires")
     grimoire_install = grimoire_commands.add_parser("install", help="install a local Grimoire directory")
     grimoire_install.add_argument("source", type=Path)
+    grimoire_add = grimoire_commands.add_parser(
+        "add", help="alias for installing a local Grimoire directory"
+    )
+    grimoire_add.add_argument("source", type=Path)
     grimoire_show = grimoire_commands.add_parser("show", help="show an installed Grimoire")
     grimoire_show.add_argument("grimoire_ref")
+    grimoire_inspect = grimoire_commands.add_parser(
+        "inspect", help="inspect an installed Grimoire"
+    )
+    grimoire_inspect.add_argument("grimoire_ref")
     grimoire_sigil = grimoire_commands.add_parser("sigil", help="compute a canonical Rite definition Sigil")
     grimoire_sigil.add_argument("rite_file", type=Path)
 
@@ -155,6 +222,11 @@ def _parser() -> argparse.ArgumentParser:
     working_start.add_argument("--protocol", required=True)
     working_show = working_commands.add_parser("show", help="show a Working projection")
     working_show.add_argument("working_id")
+    working_inspect = working_commands.add_parser("inspect", help="inspect a Working")
+    working_inspect.add_argument("working_id")
+    working_commands.add_parser("list", help="list Workings")
+    working_resume = working_commands.add_parser("resume", help="resume inspection at a checkpoint")
+    working_resume.add_argument("working_id")
     working_advance = working_commands.add_parser("advance", help="advance a Working one stage")
     working_advance.add_argument("working_id")
     working_advance.add_argument("--reason", required=True)
@@ -176,7 +248,8 @@ def _parser() -> argparse.ArgumentParser:
     experiment_create.add_argument("--hypothesis")
 
     run = subparsers.add_parser("run", help="record immutable experimental Runs")
-    run_commands = run.add_subparsers(dest="run_command", required=True)
+    _add_task_boundary_arguments(run)
+    run_commands = run.add_subparsers(dest="run_command")
     run_record = run_commands.add_parser("record", help="record a Run and its observed metrics")
     run_record.add_argument("run_id")
     run_record.add_argument("--experiment", required=True)
@@ -299,13 +372,97 @@ def _parser() -> argparse.ArgumentParser:
     deviation_show = deviation_commands.add_parser("show", help="show a Deviation")
     deviation_show.add_argument("deviation_id")
 
+    chronicle = subparsers.add_parser("chronicle", help="inspect and verify Chronicle")
+    chronicle_commands = chronicle.add_subparsers(dest="chronicle_command", required=True)
+    chronicle_commands.add_parser("show", help="show verified Chronicle events")
+    chronicle_commands.add_parser("verify", help="verify the Chronicle chain")
+
+    sigil = subparsers.add_parser("sigil", help="show or verify content Sigils")
+    sigil_commands = sigil.add_subparsers(dest="sigil_command", required=True)
+    sigil_show = sigil_commands.add_parser("show", help="show an object or Receipt Sigil")
+    sigil_show.add_argument("identifier")
+    sigil_verify = sigil_commands.add_parser("verify", help="compute and verify a file Sigil")
+    sigil_verify.add_argument("path", type=Path)
+    sigil_verify.add_argument("--expected")
+
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
-    trace.add_argument("object_id")
+    trace.add_argument("object_type_or_id")
+    trace.add_argument("object_id", nargs="?")
     return parser
 
 
 def _print_receipt(message: str, receipt_id: str, sigil: str) -> None:
     print(f"{message}\nReceipt {receipt_id}  {sigil}")
+
+
+def _load_json_object(path: Path) -> dict:
+    def reject_duplicates(pairs: list[tuple[str, object]]) -> dict:
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise AthanorError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    try:
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicates,
+        )
+    except OSError as error:
+        raise AthanorError(f"cannot read JSON file: {path}") from error
+    except json.JSONDecodeError as error:
+        raise AthanorError(f"invalid JSON file: {path}") from error
+    if not isinstance(value, dict):
+        raise AthanorError(f"JSON file must contain an object: {path}")
+    return value
+
+
+def _prepare_task(
+    args: argparse.Namespace,
+    capability: str,
+    athanor: Athanor,
+    registry: CapabilityRegistry,
+    capsules: CapsuleStore,
+) -> int:
+    contract = registry.get(capability)
+    input_sigil = args.input_sigil
+    if input_sigil is None:
+        programs = athanor.programs()
+        if not programs:
+            raise AthanorError("Task requires --input-sigil or an existing Research Program")
+        input_sigil = content_sigil(next(reversed(programs.values())))
+    tools = args.tool if args.tool is not None else contract["allowed_tools"]
+    time_budget = (
+        args.time_budget
+        if args.time_budget is not None
+        else contract["max_time_seconds"]
+    )
+    network = args.network if args.network is not None else contract["network"]
+    capsule = capsules.create(
+        capability,
+        input_sigil,
+        {
+            "tools": tools,
+            "time_budget_seconds": time_budget,
+            "network": network,
+        },
+    )
+    decision = Ward(registry, athanor.approvals()).evaluate(capsule)
+    print(json.dumps({"task_id": capsule["task_id"], "ward": decision.as_dict()}, indent=2))
+    return 0 if decision.status == "PASS" else 2
+
+
+def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
+    workings = athanor.workings()
+    if working_id is None:
+        if not workings:
+            raise AthanorError("no Working is available to resume")
+        return next(reversed(workings.values()))
+    try:
+        return workings[working_id]
+    except KeyError as error:
+        raise AthanorError(f"unknown Working: {working_id}") from error
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -321,6 +478,60 @@ def main(argv: Sequence[str] | None = None) -> int:
             registry.initialize()
             rites.initialize()
             print("BENCHWORK · ATHANOR\nChronicle initialized at .benchwork/chronicle.jsonl")
+        elif args.command == "start":
+            existing_slugs = {program["slug"] for program in athanor.programs().values()}
+            slug = args.slug
+            if slug is None:
+                base = "-".join(re.findall(r"[a-z0-9]+", args.objective.lower()))
+                base = base or "research-program"
+                slug = base
+                suffix = 2
+                while slug in existing_slugs:
+                    slug = f"{base}-{suffix}"
+                    suffix += 1
+            program_id, receipt = athanor.create_program(
+                slug,
+                args.objective,
+                {"statement": args.objective},
+            )
+            _print_receipt(
+                f"Research Program {program_id} started",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command in {"investigate", "design", "implement", "pilot"}:
+            capability = {
+                "investigate": "bench.evidence.discover",
+                "design": "bench.study.design",
+                "implement": "bench.code.modify",
+                "pilot": "bench.experiment.execute",
+            }[args.command]
+            return _prepare_task(args, capability, athanor, registry, capsules)
+        elif args.command == "scry":
+            capability = {
+                "literature": "bench.evidence.discover",
+                "code": "bench.code.inspect",
+            }[args.domain]
+            return _prepare_task(args, capability, athanor, registry, capsules)
+        elif args.command == "distill":
+            return _prepare_task(
+                args,
+                "bench.evidence.synthesize",
+                athanor,
+                registry,
+                capsules,
+            )
+        elif args.command == "invoke":
+            return _prepare_task(args, args.capability, athanor, registry, capsules)
+        elif args.command == "resume":
+            print(json.dumps(_working_projection(athanor, args.working_id), indent=2))
+        elif args.command == "seal":
+            receipt = athanor.seal_protocol(args.object_id)
+            _print_receipt(
+                f"Protocol {args.object_id} sealed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "program":
             problem = {"statement": args.problem} if args.problem else {}
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
@@ -417,6 +628,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             decision = Ward(registry, athanor.approvals()).evaluate(capsule)
             print(json.dumps({"task_id": capsule["task_id"], "ward": decision.as_dict()}, indent=2))
+        elif args.command == "task" and args.task_command == "accept":
+            result = _load_json_object(args.result_file)
+            receipt = athanor.accept_agent_result(result)
+            _print_receipt(
+                f"Agent Result for {result['task_id']} accepted",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "task":
             print(json.dumps(capsules.get(args.task_id), indent=2))
         elif args.command == "ward":
@@ -438,13 +657,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(proposal.as_dict(), indent=2))
             return 0 if proposal.ward.status == "PASS" else 2
-        elif args.command == "rite":
-            print(json.dumps(rites.rites(), indent=2))
-        elif args.command == "grimoire" and args.grimoire_command == "install":
+        elif args.command == "rite" and args.rite_command == "search":
+            matches = {
+                rite_id: definition
+                for rite_id, definition in rites.rites().items()
+                if args.query.lower() in rite_id.lower()
+                or args.query.lower() in definition["description"].lower()
+            }
+            print(json.dumps(matches, indent=2))
+        elif args.command == "rite" and args.rite_command == "install":
             grimoire_ref, manifest_sigil, installed = rites.install_grimoire(args.source)
             disposition = "installed" if installed else "already installed"
             print(f"Grimoire {grimoire_ref} {disposition}\nManifest {manifest_sigil}")
-        elif args.command == "grimoire" and args.grimoire_command == "show":
+        elif args.command == "rite" and args.rite_command == "run":
+            rites.get(args.rite_id)
+            working_id, receipt = athanor.create_working(
+                args.rite_id,
+                args.program,
+                args.protocol,
+            )
+            _print_receipt(
+                f"Working {working_id} started",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "rite":
+            print(json.dumps(rites.rites(), indent=2))
+        elif args.command == "grimoire" and args.grimoire_command in {"install", "add"}:
+            grimoire_ref, manifest_sigil, installed = rites.install_grimoire(args.source)
+            disposition = "installed" if installed else "already installed"
+            print(f"Grimoire {grimoire_ref} {disposition}\nManifest {manifest_sigil}")
+        elif args.command == "grimoire" and args.grimoire_command in {"show", "inspect"}:
             try:
                 grimoire = rites.grimoires()[args.grimoire_ref]
             except KeyError as error:
@@ -458,12 +701,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             rites.get(args.rite_id)
             working_id, receipt = athanor.create_working(args.rite_id, args.program, args.protocol)
             _print_receipt(f"Working {working_id} started", receipt.receipt_id, receipt.sigil)
-        elif args.command == "working" and args.working_command == "show":
-            try:
-                working = athanor.workings()[args.working_id]
-            except KeyError as error:
-                raise AthanorError(f"unknown Working: {args.working_id}") from error
-            print(json.dumps(working, indent=2))
+        elif args.command == "working" and args.working_command in {
+            "show",
+            "inspect",
+            "resume",
+        }:
+            print(json.dumps(_working_projection(athanor, args.working_id), indent=2))
+        elif args.command == "working" and args.working_command == "list":
+            print(json.dumps(athanor.workings(), indent=2))
         elif args.command == "working":
             artifacts = []
             for value in args.artifact:
@@ -483,6 +728,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.hypothesis,
             )
             _print_receipt(f"Experiment {args.experiment_id} created", receipt.receipt_id, receipt.sigil)
+        elif args.command == "run" and args.run_command is None:
+            return _prepare_task(
+                args,
+                "bench.experiment.execute",
+                athanor,
+                registry,
+                capsules,
+            )
         elif args.command == "run":
             metrics: dict[str, float] = {}
             for value in args.metric:
@@ -668,13 +921,78 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(deviation, indent=2))
         elif args.command == "deviation":
             print(json.dumps(athanor.deviations(), indent=2))
+        elif args.command == "chronicle" and args.chronicle_command == "show":
+            print(json.dumps(athanor.chronicle.events(), indent=2))
+        elif args.command == "chronicle":
+            event_count = len(athanor.chronicle.events())
+            print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
+        elif args.command == "sigil" and args.sigil_command == "verify":
+            try:
+                digest = "sha256:" + hashlib.sha256(args.path.read_bytes()).hexdigest()
+            except OSError as error:
+                raise AthanorError(f"cannot read file: {args.path}") from error
+            if args.expected is not None and args.expected != digest:
+                raise AthanorError(
+                    f"file Sigil mismatch: expected {args.expected}, computed {digest}"
+                )
+            print(digest)
+        elif args.command == "sigil":
+            events = athanor.chronicle.events()
+            match = next(
+                (
+                    event["receipt"]["sigil"]
+                    for event in events
+                    if event["receipt"]["receipt_id"] == args.identifier
+                    or event["event_id"] == args.identifier
+                ),
+                None,
+            )
+            if match is None:
+                state = athanor.replay()
+                record = next(
+                    (
+                        collection[args.identifier]
+                        for collection in state.values()
+                        if isinstance(collection, dict)
+                        and args.identifier in collection
+                    ),
+                    None,
+                )
+                if record is None:
+                    raise AthanorError(f"unknown object or Receipt: {args.identifier}")
+                match = content_sigil(record)
+            print(match)
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":
             event_count = len(athanor.chronicle.events())
             print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
         elif args.command == "trace":
-            print(json.dumps(athanor.trace(args.object_id), indent=2))
+            object_id = args.object_id or args.object_type_or_id
+            if args.object_id is not None:
+                prefixes = {
+                    "program": "RP-",
+                    "evidence": "EV-",
+                    "claim": "CL-",
+                    "hypothesis": "HY-",
+                    "protocol": "PT-",
+                    "working": "WK-",
+                    "experiment": "EX-",
+                    "run": "RUN-",
+                    "result": "RB-",
+                    "assessment": "AS-",
+                    "decision": "DE-",
+                    "artifact": "AR-",
+                    "issue": "IS-",
+                    "deviation": "DV-",
+                    "task": "TK-",
+                }
+                prefix = prefixes.get(args.object_type_or_id.lower())
+                if prefix is None or not object_id.startswith(prefix):
+                    raise AthanorError(
+                        f"trace type does not match object ID: {args.object_type_or_id} {object_id}"
+                    )
+            print(json.dumps(athanor.trace(object_id), indent=2))
     except AthanorError as error:
         print(f"Athanor rejected transition: {error}")
         return 2

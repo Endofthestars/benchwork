@@ -9,7 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.2.0a2` public Alpha. Milestones M0–M8 are implemented.
+> Project status: `0.2.0a3` public Alpha. Milestones M0–M9 are implemented.
 
 ## Why Benchwork
 
@@ -52,6 +52,8 @@ scientific state.
   final scientific commitments human-sealed and replayable.
 - **Artifacts, Issues, and Deviations** preserve content-addressed outputs,
   recoverable problems, and post-Seal changes without rewriting history.
+- **Direct verbs and Agent handoff** create Ward-checked Task Proposals and
+  accept matching `agent-result/1.0` outputs through Athanor.
 - **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
   without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
@@ -224,6 +226,33 @@ Ward ── REJECTED
     └── PASS
 ```
 
+The RFC direct verbs use the same boundary:
+
+```bash
+bwork start "Study recoverable agent memory"
+bwork investigate
+bwork design
+bwork implement
+bwork pilot
+bwork run
+
+bwork scry literature
+bwork distill evidence
+bwork invoke bench.hypothesis.challenge
+```
+
+`investigate` and `design` normally pass their read-only contracts.
+`implement`, `pilot`, and bare `run` stop at `WAITING_FOR_APPROVAL`. These
+commands prepare Task Capsules; they do not report Provider work as complete.
+After a Provider returns an `agent-result/1.0` file:
+
+```bash
+bwork task accept agent-result.json
+bwork trace task TK-001
+bwork chronicle verify
+bwork sigil verify artifact.json
+```
+
 Useful discovery commands:
 
 ```bash
@@ -242,12 +271,16 @@ bwork --help
 | `bwork status` | Rebuild and print canonical state |
 | `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
 | `bwork program` | Create Research Programs |
+| `bwork start` | Start a Research Program from an objective |
+| `bwork investigate`, `design`, `implement`, `pilot`, `run` | Prepare bounded phase Tasks |
+| `bwork scry`, `distill`, `invoke` | Prepare Arcana or explicit Capability Tasks |
+| `bwork seal` | Seal a Protocol through the direct RFC form |
 | `bwork evidence` | Record, verify, and inspect sourced Evidence |
 | `bwork claim` | Create and inspect Evidence-backed Claims |
 | `bwork hypothesis` | Create and inspect falsifiable Hypotheses |
 | `bwork protocol` | Draft and Seal Protocols |
 | `bwork capability` | Inspect installed Capability contracts |
-| `bwork task` | Create and inspect bounded Task Capsules |
+| `bwork task` | Create/inspect Task Capsules and accept Agent Results |
 | `bwork ward` | Evaluate a Task Capsule against policy |
 | `bwork approval` | Record explicit human approval |
 | `bwork host` | Create Codex or Claude Code Host proposals |
@@ -255,7 +288,7 @@ bwork --help
 | `bwork grimoire` | Compute Rite Sigils and install pinned local Grimoires |
 | `bwork working` | Start, inspect, and advance Rite executions |
 | `bwork experiment` | Create Protocol-bound Experiments |
-| `bwork run` | Record immutable Runs and analysis inclusion |
+| `bwork run record` | Record immutable Runs and analysis inclusion |
 | `bwork analyze` | Produce a deterministic Alembic Result Bundle |
 | `bwork review` | Record a Result Bundle Assessment |
 | `bwork assessment` | Inspect completed Assessments |
@@ -264,6 +297,8 @@ bwork --help
 | `bwork artifact` | Register and inspect content-addressed Artifacts |
 | `bwork issue` | Open, resolve, and inspect research Issues |
 | `bwork deviation` | Record and inspect post-Seal Protocol Deviations |
+| `bwork chronicle` | Show or verify the Chronicle |
+| `bwork sigil` | Show object/Receipt Sigils or verify a file |
 | `bwork trace` | Show Chronicle events for an object |
 
 Use `bwork <command> --help` for command-specific arguments.
@@ -278,6 +313,7 @@ Use `bwork <command> --help` for command-specific arguments.
 ├── chronicle.head
 ├── chronicle.lock
 ├── capabilities.json
+├── capabilities.lock
 ├── rites.json
 ├── grimoires.json
 ├── grimoires.lock
@@ -300,6 +336,8 @@ them.
 | Working lifecycle | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | Analysis boundary | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
 | Scientific canon | [Scientific Canon](docs/en/architecture/SCIENTIFIC_CANON.md) | — |
+| Integrity and recovery | [Integrity and Recovery](docs/en/architecture/INTEGRITY_RECOVERY.md) | — |
+| Commands and Agent handoff | [Command Surface](docs/en/architecture/COMMAND_SURFACE.md) | — |
 | Extension boundary | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | Localization | [Policy](docs/LOCALIZATION.md) | — |
 

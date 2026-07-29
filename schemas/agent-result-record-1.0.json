@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result-record/1.0",
+  "title": "Accepted Agent Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "host", "capability", "input_sigil", "capsule_sigil", "artifacts", "status", "accepted_at", "acceptance_receipt"],
+  "properties": {
+    "schema_version": {"const": "agent-result-record/1.0"},
+    "task_id": {"type": "string", "pattern": "^TK-"},
+    "host": {"enum": ["cli", "codex", "claude-code"]},
+    "capability": {"type": "string", "pattern": "^bench\\."},
+    "input_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+    "capsule_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"}
+    },
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]},
+    "accepted_at": {"type": "string", "format": "date-time"},
+    "acceptance_receipt": {"type": "string", "pattern": "^RC-"}
+  }
+}

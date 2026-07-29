@@ -8,7 +8,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.2.0a2` 公开 Alpha。M0–M8 里程碑已经实现。
+> 项目状态：`0.2.0a3` 公开 Alpha。M0–M9 里程碑已经实现。
 
 ## 为什么需要 Benchwork
 
@@ -47,6 +47,8 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
   由人类 Seal 且可回放。
 - **Artifact、Issue 与 Deviation** 保存内容寻址产物、可恢复的问题，以及不改写
   历史的 Protocol 封存后变更。
+- **直动词与 Agent 交接** 创建经过 Ward 检查的 Task Proposal，并由 Athanor
+  接纳匹配的 `agent-result/1.0` 输出。
 - **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
@@ -212,6 +214,32 @@ Ward ── REJECTED
     └── PASS
 ```
 
+RFC 直动词复用同一边界：
+
+```bash
+bwork start "研究可恢复的智能体记忆"
+bwork investigate
+bwork design
+bwork implement
+bwork pilot
+bwork run
+
+bwork scry literature
+bwork distill evidence
+bwork invoke bench.hypothesis.challenge
+```
+
+`investigate` 与 `design` 通常通过只读契约；`implement`、`pilot` 和裸
+`run` 会停在 `WAITING_FOR_APPROVAL`。这些命令只准备 Task Capsule，不会把
+尚未发生的 Provider 工作报告为完成。Provider 返回 `agent-result/1.0` 文件后：
+
+```bash
+bwork task accept agent-result.json
+bwork trace task TK-001
+bwork chronicle verify
+bwork sigil verify artifact.json
+```
+
 常用发现命令：
 
 ```bash
@@ -230,12 +258,16 @@ bwork --help
 | `bwork status` | 重建并输出规范状态 |
 | `bwork doctor` | 验证 Chronicle 事件、Sigil、head 与 Receipt 链 |
 | `bwork program` | 创建 Research Program |
+| `bwork start` | 从研究目标启动 Research Program |
+| `bwork investigate`、`design`、`implement`、`pilot`、`run` | 准备有边界的阶段 Task |
+| `bwork scry`、`distill`、`invoke` | 准备 Arcana 或显式 Capability Task |
+| `bwork seal` | 使用 RFC 直达形式 Seal Protocol |
 | `bwork evidence` | 记录、验证和查看有来源的 Evidence |
 | `bwork claim` | 创建和查看由 Evidence 支撑的 Claim |
 | `bwork hypothesis` | 创建和查看可证伪 Hypothesis |
 | `bwork protocol` | 起草并封存 Protocol |
 | `bwork capability` | 查看已安装的 Capability 契约 |
-| `bwork task` | 创建和查看有边界的 Task Capsule |
+| `bwork task` | 创建/查看 Task Capsule，并接纳 Agent Result |
 | `bwork ward` | 根据策略评估 Task Capsule |
 | `bwork approval` | 记录明确的人工审批 |
 | `bwork host` | 创建 Codex 或 Claude Code Host 提案 |
@@ -243,7 +275,7 @@ bwork --help
 | `bwork grimoire` | 计算 Rite Sigil 并安装固定版本的本地 Grimoire |
 | `bwork working` | 启动、查看和推进 Rite 执行 |
 | `bwork experiment` | 创建绑定 Protocol 的 Experiment |
-| `bwork run` | 记录不可变 Run 及其分析纳入状态 |
+| `bwork run record` | 记录不可变 Run 及其分析纳入状态 |
 | `bwork analyze` | 生成确定性的 Alembic Result Bundle |
 | `bwork review` | 记录 Result Bundle Assessment |
 | `bwork assessment` | 查看已完成的 Assessment |
@@ -252,6 +284,8 @@ bwork --help
 | `bwork artifact` | 登记和查看内容寻址 Artifact |
 | `bwork issue` | 打开、解决和查看科研 Issue |
 | `bwork deviation` | 记录和查看 Protocol 封存后的 Deviation |
+| `bwork chronicle` | 输出或验证 Chronicle |
+| `bwork sigil` | 输出对象/Receipt Sigil 或验证文件 |
 | `bwork trace` | 查看一个对象对应的 Chronicle 事件 |
 
 使用 `bwork <command> --help` 查看具体参数。
@@ -266,6 +300,7 @@ bwork --help
 ├── chronicle.head
 ├── chronicle.lock
 ├── capabilities.json
+├── capabilities.lock
 ├── rites.json
 ├── grimoires.json
 ├── grimoires.lock
@@ -287,6 +322,8 @@ Chronicle 是规范状态。Task Capsule 是不可变、可检查的提案；在
 | Working 生命周期 | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | 分析边界 | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
 | 科研规范对象 | [Scientific Canon](docs/en/architecture/SCIENTIFIC_CANON.md) | — |
+| 完整性与恢复 | [Integrity and Recovery](docs/en/architecture/INTEGRITY_RECOVERY.md) | — |
+| 命令与 Agent 交接 | [Command Surface](docs/en/architecture/COMMAND_SURFACE.md) | — |
 | 扩展边界 | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | 本地化 | [规则](docs/LOCALIZATION.md) | — |
 
