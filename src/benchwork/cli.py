@@ -17,8 +17,12 @@ from .rites import RiteRegistry
 from .tasks import TaskService
 
 
-def _add_task_boundary_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--program", required=True)
+def _add_task_boundary_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    program_required: bool = True,
+) -> None:
+    parser.add_argument("--program", required=program_required)
     parser.add_argument("--objective")
     parser.add_argument("--tool", action="append")
     parser.add_argument("--time-budget", type=int)
@@ -88,6 +92,11 @@ def _parser() -> argparse.ArgumentParser:
     draft.add_argument(
         "--study-mode",
         choices=("confirmatory", "exploratory"),
+    )
+    draft.add_argument(
+        "--analysis-spec",
+        type=Path,
+        help="registered analysis-spec/1.0 JSON document",
     )
     seal = protocol_commands.add_parser("seal", help="seal a drafted Protocol")
     seal.add_argument("protocol_id")
@@ -286,7 +295,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     run = subparsers.add_parser("run", help="record immutable experimental Runs")
-    _add_task_boundary_arguments(run)
+    _add_task_boundary_arguments(run, program_required=False)
     run_commands = run.add_subparsers(dest="run_command")
     run_record = run_commands.add_parser("record", help="record a Run and its observed metrics")
     run_record.add_argument("run_id")
@@ -300,6 +309,7 @@ def _parser() -> argparse.ArgumentParser:
     run_record.add_argument("--include", action="store_true", help="include this Run in primary analysis")
     run_record.add_argument("--exclusion-reason")
     run_record.add_argument("--policy-reference")
+    run_record.add_argument("--arm")
     run_record.add_argument("--seed", type=int)
     run_record.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
     run_record.add_argument("--artifact", action="append", default=[], metavar="URI|SHA256")
@@ -620,6 +630,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
             _print_receipt(f"Research Program {program_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol" and args.protocol_command == "draft":
+            analysis_spec = (
+                _load_json_object(args.analysis_spec)
+                if args.analysis_spec is not None
+                else None
+            )
             receipt = athanor.draft_protocol(
                 args.protocol_id,
                 args.program,
@@ -627,6 +642,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.analysis_plan,
                 args.hypothesis,
                 args.study_mode,
+                analysis_spec,
             )
             _print_receipt(f"Protocol {args.protocol_id} drafted", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol":
@@ -840,6 +856,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             _print_receipt(f"Experiment {args.experiment_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "run" and args.run_command is None:
+            if args.program is None:
+                raise AthanorError("run task preparation requires --program")
             return _prepare_task(
                 args,
                 "bench.experiment.execute",
@@ -875,6 +893,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.phase,
                 args.exclusion_reason,
                 args.policy_reference,
+                args.arm,
             )
             run_sigil = content_sigil(athanor.runs()[args.run_id])
             _print_receipt(

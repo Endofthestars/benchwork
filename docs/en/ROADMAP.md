@@ -33,8 +33,8 @@ machine.
 
 ## M5: Alembic
 
-Completed: canonical Experiment and Run provenance plus deterministic,
-Schema-validated `result-bundle/1.0` analysis artifacts.
+Completed: canonical Experiment and Run provenance plus schema-validated
+`result-bundle/1.1` deterministic descriptive aggregation.
 
 ## M6: Open Grimoire
 

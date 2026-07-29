@@ -58,6 +58,24 @@ class ScientificCanonTest(unittest.TestCase):
             "Registered treatment comparison",
             "Compute the registered score across included completed runs.",
             ["HY-001"],
+            analysis_spec={
+                "schema_version": "analysis-spec/1.0",
+                "comparisons": [
+                    {
+                        "comparison_id": "CMP-001",
+                        "experiment_id": "EX-001",
+                        "arms": ["baseline", "treatment"],
+                        "metric": "score",
+                        "estimand": "mean_difference",
+                        "pairing": "none",
+                        "uncertainty_method": "unavailable",
+                        "confidence_level": 0.95,
+                    }
+                ],
+                "multiple_comparison_policy": "none",
+                "practical_significance_thresholds": {"score": 0.01},
+                "expected_run_ids": ["RUN-000", "RUN-001"],
+            },
         )
         self.athanor.seal_protocol("PT-001")
         self.athanor.create_experiment(
@@ -68,12 +86,22 @@ class ScientificCanonTest(unittest.TestCase):
             "HY-001",
         )
         self.athanor.record_run(
+            "RUN-000",
+            "EX-001",
+            "COMPLETED",
+            True,
+            {"score": 0.80},
+            seed=1,
+            arm="baseline",
+        )
+        self.athanor.record_run(
             "RUN-001",
             "EX-001",
             "COMPLETED",
             True,
             {"score": 0.82},
             seed=1,
+            arm="treatment",
         )
         bundle, _, _, _ = self.athanor.compute_analysis(program_id, "PT-001")
         return program_id, bundle

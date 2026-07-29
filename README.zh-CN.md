@@ -42,7 +42,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 - **Codex 与 Claude Code Host** 生成对称、与 Provider 无关的任务提案。
 - **Rite 与 Working** 固定工作流定义，并记录受 Protocol 约束的阶段迁移。
 - **Experiment、Run 与 Alembic** 保留全部结果，并生成确定性的
-  `result-bundle/1.0` 分析产物。
+  `result-bundle/1.1` 描述性聚合产物。
 - **Assessment 与 Decision** 将解释绑定到 Result Bundle，并让最终科研承诺
   由人类 Seal 且可回放。
 - **Artifact、Issue 与 Deviation** 保存内容寻址产物、可恢复的问题，以及不改写
@@ -125,7 +125,8 @@ bwork protocol draft PT-001 \
   --title "记忆检索研究" \
   --analysis-plan "计算跨随机种子的效应量与不确定性。" \
   --study-mode confirmatory \
-  --hypothesis HY-001
+  --hypothesis HY-001 \
+  --analysis-spec examples/basic-analysis-spec.json
 
 bwork protocol seal PT-001
 
@@ -149,11 +150,21 @@ bwork experiment create EX-001 \
 bwork experiment transition EX-001 implemented
 bwork experiment transition EX-001 pilot-started
 
+bwork run record RUN-000 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --status COMPLETED \
+  --include \
+  --arm baseline \
+  --seed 1 \
+  --metric score=0.80
+
 bwork run record RUN-001 \
   --experiment EX-001 \
   --phase PILOT \
   --status COMPLETED \
   --include \
+  --arm treatment \
   --seed 1 \
   --metric score=0.82
 
@@ -163,7 +174,7 @@ bwork analyze --program RP-001 --protocol PT-001
 
 bwork review RB-001 \
   --summary "注册结果支持该假设。" \
-  --limitation "目前只有一次 Run。" \
+  --limitation "目前只有一组配对观察。" \
   --claim-finding "CL-001|SUPPORTED|观察方向与 Claim 一致。" \
   --hypothesis-finding "HY-001|SUPPORTED|预测得到满足。"
 

@@ -913,6 +913,7 @@ class Athanor:
             elif event["type"] == "protocol.drafted":
                 hypothesis_ids = payload.get("hypothesis_ids", [])
                 study_mode = payload.get("study_mode")
+                analysis_spec = payload.get("analysis_spec")
                 if (
                     payload["program_id"] not in programs
                     or object_id in protocols
@@ -927,9 +928,13 @@ class Athanor:
                     raise AthanorError(f"invalid Protocol draft: {object_id}")
                 protocol = {
                     "schema_version": (
-                        "study-protocol/1.2"
-                        if study_mode is not None
-                        else "study-protocol/1.1"
+                        "study-protocol/1.3"
+                        if analysis_spec is not None
+                        else (
+                            "study-protocol/1.2"
+                            if study_mode is not None
+                            else "study-protocol/1.1"
+                        )
                     ),
                     "protocol_id": object_id,
                     "program_id": payload["program_id"],
@@ -944,6 +949,8 @@ class Athanor:
                 }
                 if study_mode is not None:
                     protocol["study_mode"] = study_mode
+                if analysis_spec is not None:
+                    protocol["analysis_spec"] = analysis_spec
                 protocols[object_id] = protocol
             elif event["type"] == "protocol.sealed":
                 protocol = protocols.get(object_id)
@@ -1198,7 +1205,11 @@ class Athanor:
                 if analysis_included and payload["status"] != "COMPLETED":
                     raise AthanorError(f"non-completed Run cannot be included: {object_id}")
                 run = {
-                    "schema_version": "run/1.1" if disposition is not None else "run/1.0",
+                    "schema_version": (
+                        "run/1.2"
+                        if "arm" in payload
+                        else ("run/1.1" if disposition is not None else "run/1.0")
+                    ),
                     "run_id": object_id,
                     "program_id": payload["program_id"],
                     "protocol_id": payload["protocol_id"],
@@ -1213,20 +1224,35 @@ class Athanor:
                 else:
                     run["phase"] = payload["phase"]
                     run["analysis_disposition"] = disposition
+                    if "arm" in payload:
+                        run["arm"] = payload["arm"]
                 runs[object_id] = run
                 _advance_program(
                     programs[payload["program_id"]],
                     "PILOTED" if payload.get("phase") == "PILOT" else "RUNNING",
                 )
             elif event["type"] == "analysis.computed":
-                from .alembic import build_result_bundle
+                from .alembic import (
+                    build_legacy_result_bundle,
+                    build_result_bundle,
+                )
 
                 bundle = payload["bundle"]
-                expected = build_result_bundle(
-                    object_id,
-                    bundle["program_id"],
-                    bundle["protocol_id"],
-                    list(runs.values()),
+                protocol = protocols.get(bundle["protocol_id"])
+                expected = (
+                    build_result_bundle(
+                        object_id,
+                        protocol,
+                        list(runs.values()),
+                    )
+                    if bundle.get("schema_version") == "result-bundle/1.1"
+                    and protocol is not None
+                    else build_legacy_result_bundle(
+                        object_id,
+                        bundle["program_id"],
+                        bundle["protocol_id"],
+                        list(runs.values()),
+                    )
                 )
                 if (
                     object_id in result_bundles
@@ -1605,9 +1631,11 @@ class Athanor:
             validate_instance("research-program-1.1.json", program)
         for protocol in protocols.values():
             validate_instance(
-                "protocol-1.2.json"
-                if protocol["schema_version"] == "study-protocol/1.2"
-                else "protocol-1.1.json",
+                {
+                    "study-protocol/1.1": "protocol-1.1.json",
+                    "study-protocol/1.2": "protocol-1.2.json",
+                    "study-protocol/1.3": "protocol-1.3.json",
+                }[protocol["schema_version"]],
                 protocol,
             )
         for working in workings.values():
@@ -1626,11 +1654,20 @@ class Athanor:
             )
         for run in runs.values():
             validate_instance(
-                "run-1.1.json" if run["schema_version"] == "run/1.1" else "run-1.0.json",
+                {
+                    "run/1.0": "run-1.0.json",
+                    "run/1.1": "run-1.1.json",
+                    "run/1.2": "run-1.2.json",
+                }[run["schema_version"]],
                 run,
             )
         for bundle in result_bundles.values():
-            validate_instance("result-bundle-1.0.json", bundle)
+            validate_instance(
+                "result-bundle-1.1.json"
+                if bundle["schema_version"] == "result-bundle/1.1"
+                else "result-bundle-1.0.json",
+                bundle,
+            )
         for record in evidence.values():
             validate_instance("evidence-1.2.json", record)
         for claim in claims.values():
@@ -2107,6 +2144,7 @@ class Athanor:
         analysis_plan: str,
         hypothesis_ids: list[str] | None = None,
         study_mode: str | None = None,
+        analysis_spec: dict[str, Any] | None = None,
     ) -> Receipt:
         if not IDENTIFIER.fullmatch(protocol_id) or not protocol_id.startswith("PT-"):
             raise AthanorError("Protocol ID must use the form PT-<identifier>")
@@ -2129,6 +2167,23 @@ class Athanor:
             for hypothesis_id in normalized_hypotheses
         ):
             raise AthanorError("Protocol Hypotheses must use HY- identifiers")
+        if analysis_spec is not None:
+            if not isinstance(analysis_spec, dict):
+                raise AthanorError("Protocol analysis_spec must be an object")
+            from .schema_validation import validate_instance
+
+            validate_instance("analysis-spec-1.0.json", analysis_spec)
+            comparisons = analysis_spec["comparisons"]
+            comparison_ids = [
+                comparison["comparison_id"] for comparison in comparisons
+            ]
+            if len(comparison_ids) != len(set(comparison_ids)):
+                raise AthanorError("Protocol comparison IDs must be unique")
+            if any(
+                comparison["arms"][0] == comparison["arms"][1]
+                for comparison in comparisons
+            ):
+                raise AthanorError("Protocol comparison arms must be distinct")
 
         def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
             state = self._project(events)
@@ -2142,13 +2197,16 @@ class Athanor:
                 for hypothesis_id in normalized_hypotheses
             ):
                 raise AthanorError("Protocol Hypotheses must belong to its Research Program")
-            return "protocol.drafted", protocol_id, {
+            payload = {
                 "program_id": program_id,
                 "study_mode": study_mode,
                 "hypothesis_ids": normalized_hypotheses,
                 "title": title,
                 "analysis_plan": analysis_plan,
             }
+            if analysis_spec is not None:
+                payload["analysis_spec"] = analysis_spec
+            return "protocol.drafted", protocol_id, payload
 
         return self.chronicle.transact(build)[1]
 
@@ -2447,6 +2505,7 @@ class Athanor:
         phase: str = "FORMAL",
         exclusion_reason: str | None = None,
         policy_reference: str | None = None,
+        arm: str | None = None,
     ) -> Receipt:
         statuses = {"COMPLETED", "FAILED", "CANCELLED", "LOST"}
         if not IDENTIFIER.fullmatch(run_id) or not run_id.startswith("RUN-"):
@@ -2473,6 +2532,8 @@ class Athanor:
             not isinstance(policy_reference, str) or "#" not in policy_reference
         ):
             raise AthanorError("Run policy reference must identify a Protocol section")
+        if arm is not None and (not isinstance(arm, str) or not arm.strip()):
+            raise AthanorError("Run arm must be a non-empty string")
         if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
             raise AthanorError("Run seed must be an integer or null")
         if metrics is not None and not isinstance(metrics, dict):
@@ -2508,12 +2569,17 @@ class Athanor:
                 raise AthanorError(f"unknown Experiment: {experiment_id}")
             if run_id in state["runs"]:
                 raise AthanorError(f"Run already exists: {run_id}")
+            protocol = state["protocols"][experiment["protocol_id"]]
+            if protocol.get("analysis_spec") is not None and arm is None:
+                raise AthanorError(
+                    "Run arm is required by the Protocol analysis_spec"
+                )
             reference = policy_reference or f"{experiment['protocol_id']}#analysis-plan"
             if not reference.startswith(f"{experiment['protocol_id']}#"):
                 raise AthanorError(
                     "Run policy reference must belong to the Experiment Protocol"
                 )
-            return "run.recorded", run_id, {
+            payload = {
                 "program_id": experiment["program_id"],
                 "protocol_id": experiment["protocol_id"],
                 "experiment_id": experiment_id,
@@ -2528,6 +2594,9 @@ class Athanor:
                 "metrics": normalized_metrics,
                 "artifacts": normalized_artifacts,
             }
+            if arm is not None:
+                payload["arm"] = arm
+            return "run.recorded", run_id, payload
 
         return self.chronicle.transact(build)[1]
 
@@ -2541,8 +2610,27 @@ class Athanor:
             protocol = state["protocols"].get(protocol_id)
             if protocol is None or protocol["program_id"] != program_id:
                 raise AthanorError(f"Protocol {protocol_id} does not belong to Program {program_id}")
+            if protocol.get("analysis_spec") is None:
+                raise AthanorError(
+                    "Alembic v1.1 requires a Protocol with a registered analysis_spec"
+                )
+            for comparison in protocol["analysis_spec"]["comparisons"]:
+                experiment = state["experiments"].get(comparison["experiment_id"])
+                if (
+                    experiment is None
+                    or experiment["program_id"] != program_id
+                    or experiment["protocol_id"] != protocol_id
+                ):
+                    raise AthanorError(
+                        "Protocol comparison references an unknown matching Experiment: "
+                        f"{comparison['experiment_id']}"
+                    )
             bundle_id = f"RB-{len(state['result_bundles']) + 1:03d}"
-            bundle = build_result_bundle(bundle_id, program_id, protocol_id, list(state["runs"].values()))
+            bundle = build_result_bundle(
+                bundle_id,
+                protocol,
+                list(state["runs"].values()),
+            )
             return "analysis.computed", bundle_id, {
                 "bundle": bundle,
                 "bundle_sigil": content_sigil(bundle),

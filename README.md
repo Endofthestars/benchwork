@@ -47,7 +47,7 @@ scientific state.
 - **Rites and Workings** pin workflow definitions and record protocol-bound
   stage transitions.
 - **Experiments, Runs, and Alembic** preserve all outcomes and produce
-  deterministic `result-bundle/1.0` analysis artifacts.
+  deterministic `result-bundle/1.1` descriptive aggregation artifacts.
 - **Assessments and Decisions** bind interpretation to Result Bundles and keep
   final scientific commitments human-sealed and replayable.
 - **Artifacts, Issues, and Deviations** preserve content-addressed outputs,
@@ -137,7 +137,8 @@ bwork protocol draft PT-001 \
   --title "Memory retrieval study" \
   --analysis-plan "Compute effect sizes and uncertainty across seeds." \
   --study-mode confirmatory \
-  --hypothesis HY-001
+  --hypothesis HY-001 \
+  --analysis-spec examples/basic-analysis-spec.json
 
 bwork protocol seal PT-001
 
@@ -161,11 +162,21 @@ bwork experiment create EX-001 \
 bwork experiment transition EX-001 implemented
 bwork experiment transition EX-001 pilot-started
 
+bwork run record RUN-000 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --status COMPLETED \
+  --include \
+  --arm baseline \
+  --seed 1 \
+  --metric score=0.80
+
 bwork run record RUN-001 \
   --experiment EX-001 \
   --phase PILOT \
   --status COMPLETED \
   --include \
+  --arm treatment \
   --seed 1 \
   --metric score=0.82
 
@@ -175,7 +186,7 @@ bwork analyze --program RP-001 --protocol PT-001
 
 bwork review RB-001 \
   --summary "The registered result supports the hypothesis." \
-  --limitation "Only one run is available." \
+  --limitation "Only one paired observation is available." \
   --claim-finding "CL-001|SUPPORTED|The observed direction matches the claim." \
   --hypothesis-finding "HY-001|SUPPORTED|The prediction was satisfied."
 

@@ -23,6 +23,24 @@ class LifecycleV11Test(unittest.TestCase):
             "Exploratory lifecycle",
             "Aggregate included completed runs.",
             study_mode="exploratory",
+            analysis_spec={
+                "schema_version": "analysis-spec/1.0",
+                "comparisons": [
+                    {
+                        "comparison_id": "CMP-001",
+                        "experiment_id": "EX-001",
+                        "arms": ["baseline", "treatment"],
+                        "metric": "score",
+                        "estimand": "mean_difference",
+                        "pairing": "none",
+                        "uncertainty_method": "unavailable",
+                        "confidence_level": 0.95,
+                    }
+                ],
+                "multiple_comparison_policy": "none",
+                "practical_significance_thresholds": {},
+                "expected_run_ids": ["RUN-BASELINE", "RUN-001"],
+            },
         )
         self.athanor.seal_protocol("PT-001")
         working_id, _ = self.athanor.create_working(
@@ -72,6 +90,16 @@ class LifecycleV11Test(unittest.TestCase):
         self.athanor.transition_experiment(experiment_id, "implemented")
         self.athanor.transition_experiment(experiment_id, "pilot-started")
         self.athanor.record_run(
+            "RUN-BASELINE",
+            experiment_id,
+            "COMPLETED",
+            True,
+            {"score": 0.5},
+            seed=7,
+            phase="PILOT",
+            arm="baseline",
+        )
+        self.athanor.record_run(
             "RUN-001",
             experiment_id,
             "COMPLETED",
@@ -79,6 +107,7 @@ class LifecycleV11Test(unittest.TestCase):
             {"score": 0.75},
             seed=7,
             phase="PILOT",
+            arm="treatment",
         )
         self.assertEqual(self.athanor.workings()[working_id]["stage"], "ANALYSIS")
         self.assertEqual(self.athanor.programs()[program_id]["status"], "PILOTED")
@@ -163,6 +192,7 @@ class LifecycleV11Test(unittest.TestCase):
                     experiment_id,
                     transient,
                     False,
+                    arm="baseline",
                 )
         with self.assertRaisesRegex(AthanorError, "requires an exclusion reason"):
             self.athanor.record_run(
@@ -171,6 +201,7 @@ class LifecycleV11Test(unittest.TestCase):
                 "COMPLETED",
                 False,
                 {"score": 0.1},
+                arm="baseline",
             )
         self.athanor.record_run(
             "RUN-EXCLUDED",
@@ -179,6 +210,7 @@ class LifecycleV11Test(unittest.TestCase):
             False,
             {"score": 0.1},
             exclusion_reason="Registered exclusion rule.",
+            arm="baseline",
         )
         disposition = self.athanor.runs()["RUN-EXCLUDED"]["analysis_disposition"]
         self.assertFalse(disposition["included"])

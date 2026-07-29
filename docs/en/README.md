@@ -22,6 +22,7 @@ English is the canonical source for all Benchwork documentation.
 - [RFC-0003: Scientific Gate Semantics](rfcs/RFC-0003-scientific-gate-semantics.md)
 - [RFC-0004: Rite and Working Transition Model](rfcs/RFC-0004-rite-working-transition-model.md)
 - [RFC-0005: Experiment and Run Lifecycle](rfcs/RFC-0005-experiment-run-lifecycle.md)
+- [RFC-0006: Alembic Analysis Contract](rfcs/RFC-0006-alembic-analysis-contract.md)
 
 ## Architecture
 

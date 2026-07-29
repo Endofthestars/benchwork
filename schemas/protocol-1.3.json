@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/protocol/1.3",
+  "title": "Study Protocol With Registered Analysis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol_id", "program_id", "study_mode", "title", "analysis_plan", "analysis_spec", "status", "hypothesis_ids", "deviations", "sealed_at", "seal_receipt", "seal_actor"],
+  "properties": {
+    "schema_version": {"const": "study-protocol/1.3"},
+    "protocol_id": {"type": "string", "pattern": "^PT-"},
+    "program_id": {"type": "string", "pattern": "^RP-"},
+    "study_mode": {"enum": ["confirmatory", "exploratory"]},
+    "hypothesis_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^HY-"}
+    },
+    "title": {"type": "string", "minLength": 1},
+    "analysis_plan": {"type": "string", "minLength": 1},
+    "analysis_spec": {"$ref": "https://benchwork.dev/schemas/analysis-spec/1.0"},
+    "status": {"enum": ["DRAFT", "FROZEN", "SUPERSEDED"]},
+    "deviations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^DV-"}
+    },
+    "sealed_at": {"type": ["string", "null"], "format": "date-time"},
+    "seal_receipt": {"type": ["string", "null"], "pattern": "^RC-"},
+    "seal_actor": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://benchwork.dev/schemas/actor/1.0"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"study_mode": {"const": "confirmatory"}}},
+      "then": {"properties": {"hypothesis_ids": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "FROZEN"}}},
+      "then": {
+        "properties": {
+          "sealed_at": {"type": "string", "format": "date-time"},
+          "seal_receipt": {"type": "string", "pattern": "^RC-"},
+          "seal_actor": {"$ref": "https://benchwork.dev/schemas/actor/1.0"}
+        }
+      }
+    }
+  ]
+}
