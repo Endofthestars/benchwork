@@ -53,7 +53,8 @@ scientific state.
 - **Artifacts, Issues, and Deviations** preserve content-addressed outputs,
   recoverable problems, and post-Seal changes without rewriting history.
 - **Direct verbs and Agent handoff** create Ward-checked Task Proposals and
-  accept matching `agent-result/1.0` outputs through Athanor.
+  accept Snapshot- and Contract-bound `agent-result/1.1` outputs through
+  Athanor.
 - **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
   without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
@@ -230,21 +231,21 @@ The RFC direct verbs use the same boundary:
 
 ```bash
 bwork start "Study recoverable agent memory"
-bwork investigate
-bwork design
-bwork implement
-bwork pilot
-bwork run
+bwork investigate --program RP-001
+bwork design --program RP-001
+bwork implement --program RP-001
+bwork pilot --program RP-001
+bwork run --program RP-001
 
-bwork scry literature
-bwork distill evidence
-bwork invoke bench.hypothesis.challenge
+bwork scry literature --program RP-001
+bwork distill evidence --program RP-001
+bwork invoke bench.hypothesis.challenge --program RP-001
 ```
 
 `investigate` and `design` normally pass their read-only contracts.
 `implement`, `pilot`, and bare `run` stop at `WAITING_FOR_APPROVAL`. These
 commands prepare Task Capsules; they do not report Provider work as complete.
-After a Provider returns an `agent-result/1.0` file:
+After a Provider returns an `agent-result/1.1` file:
 
 ```bash
 bwork task accept agent-result.json

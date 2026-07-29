@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/evidence-synthesis-result/1.0",
+  "allOf": [
+    {"$ref": "https://benchwork.dev/schemas/capability-output/1.0"},
+    {"properties": {"schema_version": {"const": "evidence-synthesis-result/1.0"}}}
+  ]
+}

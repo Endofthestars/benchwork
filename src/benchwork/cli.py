@@ -14,10 +14,12 @@ from .circle import CapsuleStore, CapabilityRegistry, Ward
 from .grimoire import rite_definition_sigil
 from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
 from .rites import RiteRegistry
+from .tasks import TaskService
 
 
 def _add_task_boundary_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input-sigil")
+    parser.add_argument("--program", required=True)
+    parser.add_argument("--objective")
     parser.add_argument("--tool", action="append")
     parser.add_argument("--time-budget", type=int)
     parser.add_argument(
@@ -149,7 +151,8 @@ def _parser() -> argparse.ArgumentParser:
     task_commands = task.add_subparsers(dest="task_command", required=True)
     task_create = task_commands.add_parser("create", help="create a bounded Task Capsule")
     task_create.add_argument("capability")
-    task_create.add_argument("--input-sigil", required=True)
+    task_create.add_argument("--program", required=True)
+    task_create.add_argument("--objective", required=True)
     task_create.add_argument("--tool", action="append", default=[])
     task_create.add_argument("--time-budget", type=int, required=True)
     task_create.add_argument("--network", action="store_true")
@@ -177,7 +180,8 @@ def _parser() -> argparse.ArgumentParser:
     propose = host_commands.add_parser("propose", help="create and check a Host Task Capsule")
     propose.add_argument("host", choices=HOSTS)
     propose.add_argument("capability")
-    propose.add_argument("--input-sigil", required=True)
+    propose.add_argument("--program", required=True)
+    propose.add_argument("--objective", required=True)
     propose.add_argument("--tool", action="append", default=[])
     propose.add_argument("--time-budget", type=int, required=True)
     propose.add_argument("--network", action="store_true")
@@ -439,12 +443,6 @@ def _prepare_task(
     capsules: CapsuleStore,
 ) -> int:
     contract = registry.get(capability)
-    input_sigil = args.input_sigil
-    if input_sigil is None:
-        programs = athanor.programs()
-        if not programs:
-            raise AthanorError("Task requires --input-sigil or an existing Research Program")
-        input_sigil = content_sigil(next(reversed(programs.values())))
     tools = args.tool if args.tool is not None else contract["allowed_tools"]
     time_budget = (
         args.time_budget
@@ -452,9 +450,11 @@ def _prepare_task(
         else contract["max_time_seconds"]
     )
     network = args.network if args.network is not None else contract["network"]
-    capsule = capsules.create(
+    objective = args.objective or f"Execute {capability} for {args.program}"
+    capsule = TaskService(athanor, registry, capsules).create(
         capability,
-        input_sigil,
+        args.program,
+        objective,
         {
             "tools": tools,
             "time_budget_seconds": time_budget,
@@ -633,10 +633,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "capability":
             print(json.dumps(registry.capabilities(), indent=2))
         elif args.command == "task" and args.task_command == "create":
-            registry.get(args.capability)
-            capsule = capsules.create(
+            capsule = TaskService(athanor, registry, capsules).create(
                 args.capability,
-                args.input_sigil,
+                args.program,
+                args.objective,
                 {"tools": args.tool, "time_budget_seconds": args.time_budget, "network": args.network},
             )
             decision = Ward(registry, athanor.approvals()).evaluate(capsule)
@@ -666,7 +666,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "host":
             adapter_class = CodexHostAdapter if args.host == "codex" else ClaudeCodeHostAdapter
             proposal = adapter_class(athanor, registry, capsules).propose(
-                args.capability, args.input_sigil, args.tool, args.time_budget, args.network
+                args.capability,
+                args.program,
+                args.objective,
+                args.tool,
+                args.time_budget,
+                args.network,
             )
             print(json.dumps(proposal.as_dict(), indent=2))
             return 0 if proposal.ward.status == "PASS" else 2

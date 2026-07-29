@@ -48,7 +48,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 - **Artifact、Issue 与 Deviation** 保存内容寻址产物、可恢复的问题，以及不改写
   历史的 Protocol 封存后变更。
 - **直动词与 Agent 交接** 创建经过 Ward 检查的 Task Proposal，并由 Athanor
-  接纳匹配的 `agent-result/1.0` 输出。
+  接纳绑定 Snapshot 与 Capability Contract 的 `agent-result/1.1` 输出。
 - **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
@@ -218,20 +218,20 @@ RFC 直动词复用同一边界：
 
 ```bash
 bwork start "研究可恢复的智能体记忆"
-bwork investigate
-bwork design
-bwork implement
-bwork pilot
-bwork run
+bwork investigate --program RP-001
+bwork design --program RP-001
+bwork implement --program RP-001
+bwork pilot --program RP-001
+bwork run --program RP-001
 
-bwork scry literature
-bwork distill evidence
-bwork invoke bench.hypothesis.challenge
+bwork scry literature --program RP-001
+bwork distill evidence --program RP-001
+bwork invoke bench.hypothesis.challenge --program RP-001
 ```
 
 `investigate` 与 `design` 通常通过只读契约；`implement`、`pilot` 和裸
 `run` 会停在 `WAITING_FOR_APPROVAL`。这些命令只准备 Task Capsule，不会把
-尚未发生的 Provider 工作报告为完成。Provider 返回 `agent-result/1.0` 文件后：
+尚未发生的 Provider 工作报告为完成。Provider 返回 `agent-result/1.1` 文件后：
 
 ```bash
 bwork task accept agent-result.json

@@ -30,9 +30,9 @@ class CliSurfaceTest(unittest.TestCase):
 
     def test_rfc_command_forms_parse(self) -> None:
         cases = (
-            ["scry", "literature"],
-            ["distill", "evidence"],
-            ["invoke", "bench.evidence.verify"],
+            ["scry", "literature", "--program", "RP-001"],
+            ["distill", "evidence", "--program", "RP-001"],
+            ["invoke", "bench.evidence.verify", "--program", "RP-001"],
             ["seal", "protocol", "PT-001"],
             ["working", "inspect", "WK-001"],
             ["working", "resume", "WK-001"],
@@ -52,39 +52,58 @@ class CliSurfaceTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(Athanor(self.root).programs()["RP-001"]["slug"], "research-program")
 
-        code, output = self._run("investigate")
+        code, output = self._run("investigate", "--program", "RP-001")
         self.assertEqual(code, 0)
         task_id = json.loads(output)["task_id"]
         capsule = json.loads(
             (self.root / ".benchwork" / "capsules" / f"{task_id}.json").read_text()
         )
-        self.assertEqual(capsule["capability"], "bench.evidence.discover")
+        self.assertEqual(capsule["capability"]["id"], "bench.evidence.discover")
         self.assertTrue(capsule["circle"]["network"])
 
-        code, output = self._run("implement")
+        code, output = self._run("implement", "--program", "RP-001")
         self.assertEqual(code, 2)
         self.assertEqual(json.loads(output)["ward"]["status"], "WAITING_FOR_APPROVAL")
 
-        code, output = self._run("run")
+        code, output = self._run("run", "--program", "RP-001")
         self.assertEqual(code, 2)
         self.assertEqual(json.loads(output)["ward"]["status"], "WAITING_FOR_APPROVAL")
 
     def test_aliases_and_agent_result_acceptance(self) -> None:
         self._run("init")
         self._run("start", "Alias study", "--slug", "alias-study")
-        code, output = self._run("investigate")
+        code, output = self._run("investigate", "--program", "RP-001")
         self.assertEqual(code, 0)
         task_id = json.loads(output)["task_id"]
         capsule_path = self.root / ".benchwork" / "capsules" / f"{task_id}.json"
         capsule = json.loads(capsule_path.read_text())
+        output_path = self.root / "proposals" / "discovery.json"
+        output_path.parent.mkdir()
+        output_document = {
+            "schema_version": "evidence-discovery-result/1.0",
+            "task_id": task_id,
+            "summary": "Discovery proposal completed.",
+            "data": {},
+        }
+        blob = json.dumps(output_document, sort_keys=True).encode()
+        output_path.write_bytes(blob)
         result_path = self.root / "agent-result.json"
         result_path.write_text(
             json.dumps(
                 {
-                    "schema_version": "agent-result/1.0",
+                    "schema_version": "agent-result/1.1",
                     "task_id": task_id,
-                    "input_sigil": capsule["input_sigil"],
-                    "artifacts": [],
+                    "snapshot_sigil": capsule["snapshot"]["snapshot_sigil"],
+                    "capability_contract_sigil": capsule["capability"]["contract_sigil"],
+                    "outputs": [
+                        {
+                            "schema": "evidence-discovery-result/1.0",
+                            "uri": "proposals/discovery.json",
+                            "blob_sigil": (
+                                "sha256:" + hashlib.sha256(blob).hexdigest()
+                            ),
+                        }
+                    ],
                     "status": "COMPLETED",
                 }
             ),

@@ -15,10 +15,11 @@ Provider as completed work.
 Capabilities. `scry`, `distill`, and `invoke` expose the same mechanism through
 Arcana and explicit Capability language.
 
-When `--input-sigil` is omitted, the CLI derives it from the latest canonical
-Research Program projection. Tool, time, and network boundaries default to the
-Capability contract and can be narrowed on the command line. Ward evaluates
-every proposal. Write and execution Capabilities remain
+Each direct verb requires `--program`. It creates an immutable Research
+Snapshot and pins the complete Capability Contract Sigil; there is no
+creation-order or "latest Program" fallback. Tool, time, and network boundaries
+default to the Capability contract and can be narrowed on the command line.
+Ward evaluates every proposal. Write and execution Capabilities remain
 `WAITING_FOR_APPROVAL` until a matching approval Receipt exists.
 
 These verbs prepare bounded work; they do not claim that a Provider ran.
@@ -26,12 +27,13 @@ Automatic Provider invocation remains an open design decision.
 
 ## Agent Result acceptance
 
-An Agent returns an `agent-result/1.0` Proposal. `bwork task accept FILE`
-validates the result, reloads the immutable Task Capsule, checks its input
-Sigil, reevaluates Ward against current approvals, and rejects duplicate
+An Agent returns an `agent-result/1.1` Proposal. `bwork task accept FILE`
+validates the result, reloads the immutable Task Capsule and Snapshot, rechecks
+the Capability Contract Sigil and Program freshness, verifies each output Blob
+Sigil and Capability-specific schema, reevaluates Ward, and rejects duplicate
 acceptance. Athanor then appends `agent-result.accepted` and projects an
-`agent-result-record/1.0` with the Capability, Host, Capsule Sigil, artifacts,
-status, timestamp, and Receipt.
+`agent-result-record/1.1` with the pinned boundaries, Host, outputs, available
+runtime provenance, status, timestamp, and Receipt.
 
 Replay validates the embedded output contract without depending on the
 non-canonical Capsule file. The accepted Result remains a proposal record until

@@ -726,27 +726,61 @@ class Athanor:
                 result = payload["result"]
                 from .schema_validation import validate_instance
 
-                if result.get("schema_version") != "agent-result/1.0":
+                result_version = result.get("schema_version")
+                if result_version not in {"agent-result/1.0", "agent-result/1.1"}:
                     raise AthanorError(f"invalid Agent Result acceptance: {object_id}")
-                validate_instance("agent-contract-1.0.json", result)
-                if (
-                    object_id in agent_results
-                    or result["task_id"] != object_id
-                    or result["input_sigil"] != payload["input_sigil"]
-                ):
-                    raise AthanorError(f"invalid Agent Result acceptance: {object_id}")
-                agent_results[object_id] = {
-                    "schema_version": "agent-result-record/1.0",
-                    "task_id": object_id,
-                    "host": payload["host"],
-                    "capability": payload["capability"],
-                    "input_sigil": payload["input_sigil"],
-                    "capsule_sigil": payload["capsule_sigil"],
-                    "artifacts": result["artifacts"],
-                    "status": result["status"],
-                    "accepted_at": event["occurred_at"],
-                    "acceptance_receipt": event["receipt"]["receipt_id"],
-                }
+                if result_version == "agent-result/1.0":
+                    validate_instance("agent-contract-1.0.json", result)
+                    if (
+                        object_id in agent_results
+                        or result["task_id"] != object_id
+                        or result["input_sigil"] != payload["input_sigil"]
+                    ):
+                        raise AthanorError(
+                            f"invalid Agent Result acceptance: {object_id}"
+                        )
+                    agent_results[object_id] = {
+                        "schema_version": "agent-result-record/1.0",
+                        "task_id": object_id,
+                        "host": payload["host"],
+                        "capability": payload["capability"],
+                        "input_sigil": payload["input_sigil"],
+                        "capsule_sigil": payload["capsule_sigil"],
+                        "artifacts": result["artifacts"],
+                        "status": result["status"],
+                        "accepted_at": event["occurred_at"],
+                        "acceptance_receipt": event["receipt"]["receipt_id"],
+                    }
+                else:
+                    validate_instance("agent-result-1.1.json", result)
+                    capability = payload["capability"]
+                    snapshot = payload["snapshot"]
+                    if (
+                        object_id in agent_results
+                        or result["task_id"] != object_id
+                        or result["snapshot_sigil"] != snapshot["snapshot_sigil"]
+                        or result["capability_contract_sigil"]
+                        != capability["contract_sigil"]
+                    ):
+                        raise AthanorError(
+                            f"invalid Agent Result acceptance: {object_id}"
+                        )
+                    record = {
+                        "schema_version": "agent-result-record/1.1",
+                        "task_id": object_id,
+                        "host": payload["host"],
+                        "program_id": payload["program_id"],
+                        "capability": capability,
+                        "snapshot": snapshot,
+                        "capsule_sigil": payload["capsule_sigil"],
+                        "outputs": result["outputs"],
+                        "status": result["status"],
+                        "accepted_at": event["occurred_at"],
+                        "acceptance_receipt": event["receipt"]["receipt_id"],
+                    }
+                    if "provenance" in result:
+                        record["provenance"] = result["provenance"]
+                    agent_results[object_id] = record
             elif event["type"] == "working.created":
                 protocol = protocols.get(payload["protocol_id"])
                 rite = payload["rite"]
@@ -1122,7 +1156,12 @@ class Athanor:
         for deviation in deviations.values():
             validate_instance("deviation-1.0.json", deviation)
         for result in agent_results.values():
-            validate_instance("agent-result-record-1.0.json", result)
+            schema_name = (
+                "agent-result-record-1.1.json"
+                if result["schema_version"] == "agent-result-record/1.1"
+                else "agent-result-record-1.0.json"
+            )
+            validate_instance(schema_name, result)
         return {
             "programs": programs,
             "protocols": protocols,
@@ -1432,9 +1471,20 @@ class Athanor:
     def grant_approval(self, capsule: dict[str, Any], reason: str) -> Receipt:
         if not reason.strip():
             raise AthanorError("approval reason cannot be empty")
-        required = {"task_id", "capsule_sigil", "capability", "input_sigil", "circle"}
+        required = {"task_id", "capsule_sigil", "capability", "snapshot", "circle"}
         if not required.issubset(capsule):
             raise AthanorError("approval requires a complete verified Task Capsule")
+        from .schema_validation import validate_instance
+
+        validate_instance("task-capsule-1.1.json", capsule)
+        from .circle import CapabilityRegistry
+
+        capability = capsule["capability"]
+        current_contract_sigil = CapabilityRegistry(self.root).contract_sigil(
+            capability["id"]
+        )
+        if current_contract_sigil != capability["contract_sigil"]:
+            raise AthanorError("Capability Contract changed after Task creation")
 
         def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
             approvals = self._project(events)["approvals"]
@@ -1444,8 +1494,8 @@ class Athanor:
             return "approval.granted", task_id, {
                 "reason": reason,
                 "capsule_sigil": capsule["capsule_sigil"],
-                "capability": capsule["capability"],
-                "input_sigil": capsule["input_sigil"],
+                "capability": capsule["capability"]["id"],
+                "capability_contract_sigil": capsule["capability"]["contract_sigil"],
                 "circle": capsule["circle"],
             }
 
@@ -1454,10 +1504,11 @@ class Athanor:
     def accept_agent_result(self, result: dict[str, Any]) -> Receipt:
         from .circle import CapsuleStore, CapabilityRegistry, Ward
         from .schema_validation import validate_instance
+        from .snapshots import SnapshotStore
 
-        if not isinstance(result, dict) or result.get("schema_version") != "agent-result/1.0":
-            raise AthanorError("Agent Result must use agent-result/1.0")
-        validate_instance("agent-contract-1.0.json", result)
+        if not isinstance(result, dict) or result.get("schema_version") != "agent-result/1.1":
+            raise AthanorError("Agent Result must use agent-result/1.1")
+        validate_instance("agent-result-1.1.json", result)
 
         def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
             state = self._project(events)
@@ -1465,17 +1516,97 @@ class Athanor:
             if task_id in state["agent_results"]:
                 raise AthanorError(f"Task already has an accepted Agent Result: {task_id}")
             capsule = CapsuleStore(self.root).get(task_id)
-            if result["input_sigil"] != capsule["input_sigil"]:
-                raise AthanorError("Agent Result input Sigil does not match its Task Capsule")
-            ward = Ward(CapabilityRegistry(self.root), state["approvals"]).evaluate(capsule)
+            capability = capsule["capability"]
+            snapshot_reference = capsule["snapshot"]
+            if result["snapshot_sigil"] != snapshot_reference["snapshot_sigil"]:
+                raise AthanorError(
+                    "Agent Result Snapshot Sigil does not match its Task Capsule"
+                )
+            if (
+                result["capability_contract_sigil"]
+                != capability["contract_sigil"]
+            ):
+                raise AthanorError(
+                    "Agent Result Capability Contract Sigil does not match its Task Capsule"
+                )
+            registry = CapabilityRegistry(self.root)
+            current_contract_sigil = registry.contract_sigil(capability["id"])
+            if current_contract_sigil != capability["contract_sigil"]:
+                raise AthanorError(
+                    "Capability Contract changed after Task creation"
+                )
+            snapshots = SnapshotStore(self.root)
+            snapshot, _ = snapshots.get(
+                snapshot_reference["snapshot_id"],
+                snapshot_reference["snapshot_sigil"],
+            )
+            if snapshot["program_id"] != capsule["program_id"]:
+                raise AthanorError("Task Capsule and Research Snapshot Program mismatch")
+            snapshots.require_fresh(snapshot, state, events)
+            ward = Ward(registry, state["approvals"]).evaluate(capsule)
             if ward.status != "PASS":
                 raise AthanorError(
                     f"Agent Result cannot be accepted while Ward is {ward.status}"
                 )
+            expected_schemas = {
+                output["schema"] for output in capsule["expected_outputs"]
+            }
+            provenance = result.get("provenance")
+            if (
+                provenance is not None
+                and "host" in provenance
+                and provenance["host"] != capsule["host"]
+            ):
+                raise AthanorError(
+                    "Agent Result provenance Host does not match its Task Capsule"
+                )
+            for output in result["outputs"]:
+                if output["schema"] not in expected_schemas:
+                    raise AthanorError(
+                        f"Agent Result output schema is not expected: {output['schema']}"
+                    )
+                uri = Path(output["uri"])
+                if uri.is_absolute():
+                    raise AthanorError("Agent Result output URI must be project-relative")
+                path = (self.root / uri).resolve()
+                try:
+                    path.relative_to(self.root.resolve())
+                except ValueError as error:
+                    raise AthanorError(
+                        "Agent Result output URI escapes the project"
+                    ) from error
+                try:
+                    blob = path.read_bytes()
+                except OSError as error:
+                    raise AthanorError(
+                        f"Agent Result output is unavailable: {output['uri']}"
+                    ) from error
+                actual_sigil = "sha256:" + hashlib.sha256(blob).hexdigest()
+                if actual_sigil != output["blob_sigil"]:
+                    raise AthanorError(
+                        f"Agent Result output Blob Sigil mismatch: {output['uri']}"
+                    )
+                try:
+                    document = json.loads(blob)
+                except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                    raise AthanorError(
+                        f"Agent Result output is not valid JSON: {output['uri']}"
+                    ) from error
+                if not isinstance(document, dict):
+                    raise AthanorError(
+                        f"Agent Result output must be an object: {output['uri']}"
+                    )
+                schema_name = output["schema"].replace("/", "-") + ".json"
+                validate_instance(schema_name, document)
+                if document.get("task_id") != task_id:
+                    raise AthanorError(
+                        f"Agent Result output Task ID mismatch: {output['uri']}"
+                    )
             return "agent-result.accepted", task_id, {
                 "host": capsule["host"],
+                "program_id": capsule["program_id"],
                 "capability": capsule["capability"],
-                "input_sigil": capsule["input_sigil"],
+                "snapshot": capsule["snapshot"],
                 "capsule_sigil": capsule["capsule_sigil"],
                 "result": result,
             }

@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 from benchwork.athanor import Athanor, AthanorError
 from benchwork.circle import CapsuleStore, CapabilityRegistry, Ward
 from benchwork.schema_validation import validate_instance
+from benchwork.tasks import TaskService
 
 
 def _concurrent_program(argument: tuple[str, str]) -> str:
@@ -89,9 +90,15 @@ class AthanorTest(unittest.TestCase):
 
     def test_ward_requires_approval_before_gated_task_can_pass(self) -> None:
         registry = CapabilityRegistry(self.root)
-        capsule = CapsuleStore(self.root).create(
+        program_id, _ = self.athanor.create_program("ward-approval", "Ward approval")
+        capsule = TaskService(
+            self.athanor,
+            registry,
+            CapsuleStore(self.root),
+        ).create(
             "bench.code.modify",
-            "sha256:" + "0" * 64,
+            program_id,
+            "Modify code within the approved boundary.",
             {"tools": ["read", "write"], "time_budget_seconds": 300, "network": False},
         )
         ward = Ward(registry, {})
@@ -133,13 +140,22 @@ class AthanorTest(unittest.TestCase):
 
     def test_approval_cannot_be_reused_after_capsule_mutation(self) -> None:
         registry = CapabilityRegistry(self.root)
-        capsule = CapsuleStore(self.root).create(
+        program_id, _ = self.athanor.create_program(
+            "approval-mutation",
+            "Approval mutation",
+        )
+        capsule = TaskService(
+            self.athanor,
+            registry,
+            CapsuleStore(self.root),
+        ).create(
             "bench.code.modify",
-            "sha256:" + "0" * 64,
+            program_id,
+            "Modify code within the approved boundary.",
             {"tools": ["read", "write"], "time_budget_seconds": 300, "network": False},
         )
         self.athanor.grant_approval(capsule, "Approve code modification.")
-        capsule["capability"] = "bench.experiment.execute"
+        capsule["capability"]["id"] = "bench.experiment.execute"
         capsule["circle"]["tools"] = ["execute"]
         self.assertEqual(Ward(registry, self.athanor.approvals()).evaluate(capsule).status, "REJECTED")
 

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result-record/1.1",
+  "title": "Accepted Agent Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "host",
+    "program_id",
+    "capability",
+    "snapshot",
+    "capsule_sigil",
+    "outputs",
+    "status",
+    "accepted_at",
+    "acceptance_receipt"
+  ],
+  "properties": {
+    "schema_version": {"const": "agent-result-record/1.1"},
+    "task_id": {"type": "string", "pattern": "^TK-[A-Z0-9]+$"},
+    "host": {"enum": ["cli", "codex", "claude-code"]},
+    "program_id": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "contract_version", "contract_sigil"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^bench\\."},
+        "contract_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "contract_sigil": {
+          "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "snapshot_sigil"],
+      "properties": {
+        "snapshot_id": {"type": "string", "pattern": "^SS-[A-Z0-9]+$"},
+        "snapshot_sigil": {
+          "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+        }
+      }
+    },
+    "capsule_sigil": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "uri", "blob_sigil"],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*/[0-9]+\\.[0-9]+$"
+          },
+          "uri": {"type": "string", "minLength": 1},
+          "blob_sigil": {
+            "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+          }
+        }
+      }
+    },
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime": {"type": "string", "minLength": 1},
+        "host": {"enum": ["cli", "codex", "claude-code"]},
+        "invocation_id": {"type": "string", "minLength": 1}
+      },
+      "minProperties": 1
+    },
+    "accepted_at": {"type": "string", "format": "date-time"},
+    "acceptance_receipt": {"type": "string", "pattern": "^RC-[A-Z0-9]+$"}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/capability-output/1.0",
+  "title": "Capability Proposal Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "summary", "data"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*/[0-9]+\\.[0-9]+$"
+    },
+    "task_id": {"type": "string", "pattern": "^TK-[A-Z0-9]+$"},
+    "summary": {"type": "string", "minLength": 1},
+    "data": {"type": "object"}
+  }
+}
