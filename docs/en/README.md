@@ -45,6 +45,7 @@ English is the canonical source for all Benchwork documentation.
 - [Compatibility policy](COMPATIBILITY.md)
 - [Release process](RELEASE_PROCESS.md)
 - [M10 acceptance matrix](M10_ACCEPTANCE.md)
+- [0.2.0rc1 release notes](releases/0.2.0rc1.md)
 
 Architecture notes describe implemented boundaries unless a page explicitly
 marks work as planned or in progress. For current milestone status, see the

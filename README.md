@@ -9,7 +9,8 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.2.0a3` public Alpha. Milestones M0–M9 are implemented.
+> Project status: `0.2.0rc1` public release candidate. M10 Phase 1 acceptance
+> is implemented; stable naming remains provisional.
 
 ## Why Benchwork
 

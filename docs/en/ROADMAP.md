@@ -63,7 +63,8 @@ documented Grimoire, Rite, Working, Seal, and typed Trace command forms.
 
 ## M10: The Seal
 
-In progress: Phase 1 hardening for Receipt integrity, state-bound Tasks,
-explicit scientific Gates, canonical Working and Run lifecycles, registered
-Alembic comparisons, deterministic CLI project context, and release acceptance.
-Automatic Provider execution remains outside M10.
+Release candidate implemented: Phase 1 hardening for Receipt integrity,
+state-bound Tasks, explicit scientific Gates, canonical Working and Run
+lifecycles, registered Alembic comparisons, deterministic CLI project context,
+governance, and golden release acceptance. Automatic Provider execution remains
+outside M10. Final acceptance requires the complete stacked CI suite to pass.
