@@ -26,7 +26,6 @@ class AlembicTest(unittest.TestCase):
             self.program_id,
             "PT-001",
             "Does the treatment improve the registered score?",
-            "HY-001",
         )
 
     def tearDown(self) -> None:
@@ -50,7 +49,7 @@ class AlembicTest(unittest.TestCase):
             )
         experiment = self.athanor.experiments()["EX-001"]
         self.assertEqual(experiment["status"], "PLANNED")
-        self.assertEqual(experiment["hypothesis_id"], "HY-001")
+        self.assertIsNone(experiment["hypothesis_id"])
 
     def test_run_inclusion_requires_completed_status_and_metrics(self) -> None:
         with self.assertRaisesRegex(AthanorError, "only a completed Run"):
@@ -117,6 +116,7 @@ class AlembicTest(unittest.TestCase):
             False,
             {"score": -10.0, "latency": 99.0},
             seed=4,
+            exclusion_reason="Registered outlier policy.",
         )
 
         bundle, sigil, receipt, path = self.athanor.compute_analysis(self.program_id, "PT-001")

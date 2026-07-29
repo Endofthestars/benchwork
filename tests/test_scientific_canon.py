@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -397,13 +398,16 @@ class ScientificCanonTest(unittest.TestCase):
                 }
             ],
         )
+        reproduction = self.root / "artifacts" / "reproduction.json"
+        reproduction.parent.mkdir(exist_ok=True)
+        reproduction.write_text("reproduction", encoding="utf-8")
         self.athanor.register_artifact(
             "AR-001",
             program_id,
             "reproduction",
             {
                 "uri": "artifacts/reproduction.json",
-                "sigil": "sha256:" + "3" * 64,
+                "sigil": "sha256:" + hashlib.sha256(b"reproduction").hexdigest(),
             },
             assessment_id,
             ["RUN-001", bundle["bundle_id"]],

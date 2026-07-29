@@ -74,6 +74,8 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("slug")
     create.add_argument("--title", required=True)
     create.add_argument("--problem", default="")
+    close = program_commands.add_parser("close", help="close an evaluated Research Program")
+    close.add_argument("program_id")
 
     protocol = subparsers.add_parser("protocol", help="manage Protocols")
     protocol_commands = protocol.add_subparsers(dest="protocol_command", required=True)
@@ -83,6 +85,10 @@ def _parser() -> argparse.ArgumentParser:
     draft.add_argument("--title", required=True)
     draft.add_argument("--analysis-plan", required=True)
     draft.add_argument("--hypothesis", action="append", default=[])
+    draft.add_argument(
+        "--study-mode",
+        choices=("confirmatory", "exploratory"),
+    )
     seal = protocol_commands.add_parser("seal", help="seal a drafted Protocol")
     seal.add_argument("protocol_id")
 
@@ -240,7 +246,10 @@ def _parser() -> argparse.ArgumentParser:
     working_commands.add_parser("list", help="list Workings")
     working_resume = working_commands.add_parser("resume", help="resume inspection at a checkpoint")
     working_resume.add_argument("working_id")
-    working_advance = working_commands.add_parser("advance", help="advance a Working one stage")
+    working_advance = working_commands.add_parser(
+        "advance",
+        help="deprecated compatibility alias; Workings advance from canonical events",
+    )
     working_advance.add_argument("working_id")
     working_advance.add_argument("--reason", required=True)
     working_advance.add_argument(
@@ -259,6 +268,22 @@ def _parser() -> argparse.ArgumentParser:
     experiment_create.add_argument("--protocol", required=True)
     experiment_create.add_argument("--question", required=True)
     experiment_create.add_argument("--hypothesis")
+    experiment_transition = experiment_commands.add_parser(
+        "transition",
+        help="record a monotonic Experiment lifecycle transition",
+    )
+    experiment_transition.add_argument("experiment_id")
+    experiment_transition.add_argument(
+        "transition",
+        choices=(
+            "implemented",
+            "pilot-started",
+            "pilot-completed",
+            "formal-started",
+            "completed",
+            "cancelled",
+        ),
+    )
 
     run = subparsers.add_parser("run", help="record immutable experimental Runs")
     _add_task_boundary_arguments(run)
@@ -269,9 +294,12 @@ def _parser() -> argparse.ArgumentParser:
     run_record.add_argument(
         "--status",
         required=True,
-        choices=("QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"),
+        choices=("COMPLETED", "FAILED", "CANCELLED", "LOST"),
     )
+    run_record.add_argument("--phase", choices=("PILOT", "FORMAL"), default="FORMAL")
     run_record.add_argument("--include", action="store_true", help="include this Run in primary analysis")
+    run_record.add_argument("--exclusion-reason")
+    run_record.add_argument("--policy-reference")
     run_record.add_argument("--seed", type=int)
     run_record.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
     run_record.add_argument("--artifact", action="append", default=[], metavar="URI|SHA256")
@@ -580,6 +608,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt.receipt_id,
                 receipt.sigil,
             )
+        elif args.command == "program" and args.program_command == "close":
+            receipt = athanor.close_program(args.program_id)
+            _print_receipt(
+                f"Research Program {args.program_id} closed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "program":
             problem = {"statement": args.problem} if args.problem else {}
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
@@ -591,6 +626,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.title,
                 args.analysis_plan,
                 args.hypothesis,
+                args.study_mode,
             )
             _print_receipt(f"Protocol {args.protocol_id} drafted", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol":
@@ -787,6 +823,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 artifacts.append({"kind": kind, "uri": uri, "sigil": digest})
             receipt = athanor.advance_working(args.working_id, args.reason, artifacts)
             _print_receipt(f"Working {args.working_id} advanced", receipt.receipt_id, receipt.sigil)
+        elif args.command == "experiment" and args.experiment_command == "transition":
+            receipt = athanor.transition_experiment(args.experiment_id, args.transition)
+            _print_receipt(
+                f"Experiment {args.experiment_id} transitioned",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "experiment":
             receipt = athanor.create_experiment(
                 args.experiment_id,
@@ -829,6 +872,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 metrics,
                 args.seed,
                 artifacts,
+                args.phase,
+                args.exclusion_reason,
+                args.policy_reference,
             )
             run_sigil = content_sigil(athanor.runs()[args.run_id])
             _print_receipt(

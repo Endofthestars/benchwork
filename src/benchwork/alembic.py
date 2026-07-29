@@ -18,16 +18,40 @@ def build_result_bundle(
     runs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build a deterministic result bundle without interpreting its meaning."""
+    selected_records = (
+        run.copy()
+        for run in runs
+        if run["program_id"] == program_id and run["protocol_id"] == protocol_id
+    )
     selected = sorted(
         (
-            run.copy()
-            for run in runs
-            if run["program_id"] == program_id and run["protocol_id"] == protocol_id
+            {
+                "schema_version": "run/1.0",
+                "run_id": run["run_id"],
+                "program_id": run["program_id"],
+                "protocol_id": run["protocol_id"],
+                "experiment_id": run["experiment_id"],
+                "status": run["status"],
+                "analysis_included": run["analysis_disposition"]["included"],
+                "seed": run["seed"],
+                "metrics": run["metrics"],
+                "artifacts": run["artifacts"],
+            }
+            if run["schema_version"] == "run/1.1"
+            else run
+            for run in selected_records
         ),
         key=lambda run: run["run_id"],
     )
     included = [
-        run for run in selected if run["status"] == "COMPLETED" and run["analysis_included"]
+        run
+        for run in selected
+        if run["status"] == "COMPLETED"
+        and (
+            run["analysis_disposition"]["included"]
+            if "analysis_disposition" in run
+            else run["analysis_included"]
+        )
     ]
     if not included:
         raise AthanorError("analysis requires at least one completed, included Run")

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/rite-registry/1.1",
+  "title": "Rite Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rites"],
+  "properties": {
+    "schema_version": {"const": "rite-registry/1.1"},
+    "rites": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"$ref": "https://benchwork.dev/schemas/rite-definition/1.0"},
+          {"$ref": "https://benchwork.dev/schemas/rite-definition/1.1"}
+        ]
+      }
+    }
+  }
+}

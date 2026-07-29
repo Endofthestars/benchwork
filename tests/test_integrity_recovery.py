@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,13 +29,16 @@ class IntegrityRecoveryTest(unittest.TestCase):
 
     def test_artifact_issue_and_deviation_are_replayable(self) -> None:
         program_id, protocol_id = self._program_with_protocol()
+        implementation = self.root / "artifacts" / "implementation.json"
+        implementation.parent.mkdir()
+        implementation.write_text("implementation", encoding="utf-8")
         artifact_receipt = self.athanor.register_artifact(
             "AR-001",
             program_id,
             "implementation",
             {
                 "uri": "artifacts/implementation.json",
-                "sigil": "sha256:" + "a" * 64,
+                "sigil": "sha256:" + hashlib.sha256(b"implementation").hexdigest(),
             },
             protocol_id,
             [program_id],

@@ -121,23 +121,36 @@ bwork claim create CL-001 \
   --statement "The treatment can improve retrieval." \
   --evidence "EV-001|SUPPORTS"
 
+bwork claim verify-relation CL-001 --evidence EV-001
+
 bwork hypothesis create HY-001 \
   --program RP-001 \
   --claim CL-001 \
   --statement "The treatment improves registered retrieval score." \
   --prediction "Mean score exceeds the baseline mean."
 
+bwork rq seal --program RP-001 \
+  --statement "Does the treatment improve registered retrieval score?"
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "Memory retrieval study" \
   --analysis-plan "Compute effect sizes and uncertainty across seeds." \
+  --study-mode confirmatory \
   --hypothesis HY-001
 
 bwork protocol seal PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork working start computational-study@0.2.0 \
   --program RP-001 \
   --protocol PT-001
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:<digest-from-bwork-sigil-file>" \
+  --producer WK-001 \
+  --input PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
@@ -145,12 +158,18 @@ bwork experiment create EX-001 \
   --hypothesis HY-001 \
   --question "Does the treatment improve the registered score?"
 
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
 bwork run record RUN-001 \
   --experiment EX-001 \
+  --phase PILOT \
   --status COMPLETED \
   --include \
   --seed 1 \
   --metric score=0.82
+
+bwork experiment transition EX-001 pilot-completed
 
 bwork analyze --program RP-001 --protocol PT-001
 
@@ -172,22 +191,12 @@ bwork trace CL-001
 ```
 
 In a new project, the commands above create a complete trace from `EV-001` to
-the Sealed `DE-001`, while `WK-001` starts at the `IMPLEMENTATION` stage.
+the Sealed `DE-001`. The matching canonical events move `WK-001` through its
+pinned exit contracts to `COMPLETED`.
 
-Every Working transition must provide the artifact required by the pinned Rite:
+Operational integrity objects remain available alongside the scientific chain:
 
 ```bash
-bwork working advance WK-001 \
-  --reason "Implementation reviewed." \
-  --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
-
-bwork artifact register AR-001 \
-  --program RP-001 \
-  --kind implementation \
-  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
-  --producer WK-001 \
-  --input PT-001
-
 bwork issue open IS-001 \
   --program RP-001 \
   --subject AR-001 \

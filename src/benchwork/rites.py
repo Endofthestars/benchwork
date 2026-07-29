@@ -25,6 +25,62 @@ DEFAULT_RITES: dict[str, dict[str, Any]] = {
             {"name": "DECISION", "exit_artifact": "decision"}
         ],
         "description": "A protocol-bound computational research study.",
+    },
+    "computational-study@0.2.0": {
+        "schema_version": "rite/1.1",
+        "rite_id": "computational-study@0.2.0",
+        "stages": [
+            {
+                "name": "IMPLEMENTATION",
+                "exit_contract": {
+                    "event_type": "artifact.registered",
+                    "object_type": "artifact",
+                    "kind": "implementation",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "PILOT",
+                "exit_contract": {
+                    "event_type": "run.recorded",
+                    "object_type": "run",
+                    "phase": "PILOT",
+                    "status": "COMPLETED",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "ANALYSIS",
+                "exit_contract": {
+                    "event_type": "analysis.computed",
+                    "object_type": "result-bundle",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "REVIEW",
+                "exit_contract": {
+                    "event_type": "assessment.recorded",
+                    "object_type": "assessment",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "DECISION",
+                "exit_contract": {
+                    "event_type": "decision.sealed",
+                    "object_type": "decision",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {"name": "COMPLETED"},
+        ],
+        "description": "A canonical-event-driven computational research study.",
     }
 }
 
@@ -43,7 +99,7 @@ class RiteRegistry:
             if not self.path.exists():
                 temporary = self.path.with_suffix(".json.tmp")
                 temporary.write_text(
-                    canonical_json({"schema_version": "rite-registry/1.0", "rites": DEFAULT_RITES}) + "\n",
+                    canonical_json({"schema_version": "rite-registry/1.1", "rites": DEFAULT_RITES}) + "\n",
                     encoding="utf-8",
                 )
                 with temporary.open("rb") as handle:
@@ -54,6 +110,41 @@ class RiteRegistry:
                     os.fsync(directory)
                 finally:
                     os.close(directory)
+            else:
+                try:
+                    registry = json.loads(self.path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as error:
+                    raise AthanorError("invalid Rite Registry") from error
+                if registry.get("schema_version") == "rite-registry/1.0":
+                    if not isinstance(registry.get("rites"), dict):
+                        raise AthanorError("Rite Registry is missing rites")
+                    normalized_legacy: dict[str, dict[str, Any]] = {}
+                    for rite_id, raw_definition in registry["rites"].items():
+                        if not isinstance(raw_definition, dict):
+                            raise AthanorError(f"invalid Rite definition: {rite_id}")
+                        definition = raw_definition.copy()
+                        definition.setdefault("schema_version", "rite/1.0")
+                        definition.setdefault("rite_id", rite_id)
+                        normalized_legacy[rite_id] = definition
+                    registry["rites"] = normalized_legacy
+                    validate_instance("rite-registry-1.0.json", registry)
+                    registry["schema_version"] = "rite-registry/1.1"
+                    for rite_id, definition in DEFAULT_RITES.items():
+                        registry["rites"].setdefault(rite_id, definition)
+                    validate_instance("rite-registry-1.1.json", registry)
+                    temporary = self.path.with_suffix(".json.tmp")
+                    temporary.write_text(
+                        canonical_json(registry) + "\n",
+                        encoding="utf-8",
+                    )
+                    with temporary.open("rb") as handle:
+                        os.fsync(handle.fileno())
+                    os.replace(temporary, self.path)
+                    directory = os.open(self.path.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(directory)
+                    finally:
+                        os.close(directory)
         self.grimoire_registry.initialize()
 
     def rites(self) -> dict[str, dict[str, Any]]:
@@ -63,7 +154,8 @@ class RiteRegistry:
                 registry = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as error:
                 raise AthanorError("invalid Rite Registry") from error
-        if registry.get("schema_version") != "rite-registry/1.0":
+        registry_version = registry.get("schema_version")
+        if registry_version not in {"rite-registry/1.0", "rite-registry/1.1"}:
             raise AthanorError("unsupported Rite Registry version")
         rites = registry.get("rites")
         if not isinstance(rites, dict):
@@ -75,14 +167,28 @@ class RiteRegistry:
             definition = raw_definition.copy()
             definition.setdefault("schema_version", "rite/1.0")
             definition.setdefault("rite_id", rite_id)
-            validate_instance("rite-definition-1.0.json", definition)
+            schema_name = (
+                "rite-definition-1.1.json"
+                if definition["schema_version"] == "rite/1.1"
+                else "rite-definition-1.0.json"
+            )
+            validate_instance(schema_name, definition)
             stages = [stage["name"] for stage in definition["stages"]]
             if len(stages) != len(set(stages)):
                 raise AthanorError(f"Rite has duplicate stage names: {rite_id}")
+            if definition["schema_version"] == "rite/1.1" and (
+                any("exit_contract" not in stage for stage in definition["stages"][:-1])
+                or "exit_contract" in definition["stages"][-1]
+            ):
+                raise AthanorError(
+                    f"Rite v1.1 requires exits on non-terminal stages only: {rite_id}"
+                )
             normalized[rite_id] = definition
         validate_instance(
-            "rite-registry-1.0.json",
-            {"schema_version": "rite-registry/1.0", "rites": normalized},
+            "rite-registry-1.1.json"
+            if registry_version == "rite-registry/1.1"
+            else "rite-registry-1.0.json",
+            {"schema_version": registry_version, "rites": normalized},
         )
         for rite_id, entry in self.grimoire_registry.rite_entries().items():
             if rite_id in normalized:

@@ -109,23 +109,36 @@ bwork claim create CL-001 \
   --statement "处理方法可以提高检索表现。" \
   --evidence "EV-001|SUPPORTS"
 
+bwork claim verify-relation CL-001 --evidence EV-001
+
 bwork hypothesis create HY-001 \
   --program RP-001 \
   --claim CL-001 \
   --statement "处理方法提高注册检索指标。" \
   --prediction "平均指标高于基线平均值。"
 
+bwork rq seal --program RP-001 \
+  --statement "处理方法是否提高已注册检索指标？"
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "记忆检索研究" \
   --analysis-plan "计算跨随机种子的效应量与不确定性。" \
+  --study-mode confirmatory \
   --hypothesis HY-001
 
 bwork protocol seal PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork working start computational-study@0.2.0 \
   --program RP-001 \
   --protocol PT-001
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:<由-bwork-sigil-file-得到的摘要>" \
+  --producer WK-001 \
+  --input PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
@@ -133,12 +146,18 @@ bwork experiment create EX-001 \
   --hypothesis HY-001 \
   --question "处理方法是否提高已注册指标？"
 
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
 bwork run record RUN-001 \
   --experiment EX-001 \
+  --phase PILOT \
   --status COMPLETED \
   --include \
   --seed 1 \
   --metric score=0.82
+
+bwork experiment transition EX-001 pilot-completed
 
 bwork analyze --program RP-001 --protocol PT-001
 
@@ -159,23 +178,12 @@ bwork doctor
 bwork trace CL-001
 ```
 
-在新项目中，上述命令会建立从 `EV-001` 到已 Seal 的 `DE-001` 的完整追踪，
-同时让 `WK-001` 从 `IMPLEMENTATION` 阶段开始。
+在新项目中，上述命令会建立从 `EV-001` 到已 Seal 的 `DE-001` 的完整追踪。
+匹配的规范事件会让 `WK-001` 按固定退出契约推进到 `COMPLETED`。
 
-每次 Working 迁移都必须提供固定 Rite 所要求的 Artifact：
+操作完整性对象仍可与科学链并列记录：
 
 ```bash
-bwork working advance WK-001 \
-  --reason "实现已经审查。" \
-  --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
-
-bwork artifact register AR-001 \
-  --program RP-001 \
-  --kind implementation \
-  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
-  --producer WK-001 \
-  --input PT-001
-
 bwork issue open IS-001 \
   --program RP-001 \
   --subject AR-001 \

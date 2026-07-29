@@ -41,10 +41,23 @@ def _load_extension_json(path: Path, label: str) -> dict[str, Any]:
 
 def load_rite_definition(path: Path) -> dict[str, Any]:
     definition = _load_extension_json(path, "Grimoire Rite")
-    validate_instance("rite-definition-1.0.json", definition)
+    schema_name = (
+        "rite-definition-1.1.json"
+        if definition.get("schema_version") == "rite/1.1"
+        else "rite-definition-1.0.json"
+    )
+    validate_instance(schema_name, definition)
     stages = [stage["name"] for stage in definition["stages"]]
     if len(stages) != len(set(stages)):
         raise AthanorError(f"Grimoire Rite has duplicate stage names: {definition['rite_id']}")
+    if definition["schema_version"] == "rite/1.1" and (
+        any("exit_contract" not in stage for stage in definition["stages"][:-1])
+        or "exit_contract" in definition["stages"][-1]
+    ):
+        raise AthanorError(
+            "Grimoire Rite v1.1 requires exits on non-terminal stages only: "
+            f"{definition['rite_id']}"
+        )
     return definition
 
 

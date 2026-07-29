@@ -93,13 +93,9 @@ class GrimoireTest(unittest.TestCase):
         self.assertEqual(working["stage"], "PREPARE")
         self.assertEqual(working["rite_sigil"], content_sigil(pinned))
 
-        artifact = {
-            "kind": "dataset-manifest",
-            "uri": "dataset.json",
-            "sigil": "sha256:" + "1" * 64,
-        }
-        athanor.advance_working(working_id, "Dataset fixed.", [artifact])
-        self.assertEqual(athanor.workings()[working_id]["stage"], "EXECUTE")
+        with self.assertRaisesRegex(AthanorError, "manual Working advancement is deprecated"):
+            athanor.advance_working(working_id, "Dataset fixed.", [])
+        self.assertEqual(athanor.workings()[working_id]["stage"], "PREPARE")
 
     def test_install_rejects_rite_content_drift(self) -> None:
         definition = _write_grimoire(self.source)

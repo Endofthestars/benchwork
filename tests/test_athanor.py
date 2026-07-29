@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -68,14 +69,24 @@ class AthanorTest(unittest.TestCase):
     def test_working_requires_frozen_protocol_and_replays_lifecycle(self) -> None:
         program_id, _ = self.athanor.create_program("memory", "Memory")
         with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
-            self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+            self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
         self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute pre-registered metrics.")
         with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
-            self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+            self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
         self.athanor.seal_protocol("PT-001")
-        working_id, _ = self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
-        artifact = {"kind": "implementation", "uri": "artifact.json", "sigil": "sha256:" + "1" * 64}
-        self.athanor.advance_working(working_id, "Implementation reviewed.", [artifact])
+        working_id, _ = self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+        artifact_path = self.root / "artifact.json"
+        artifact_path.write_text("implementation", encoding="utf-8")
+        self.athanor.register_artifact(
+            "AR-001",
+            program_id,
+            "implementation",
+            {
+                "uri": "artifact.json",
+                "sigil": "sha256:" + hashlib.sha256(b"implementation").hexdigest(),
+            },
+            working_id,
+        )
         self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
         self.assertEqual(len(self.athanor.workings()[working_id]["history"]), 2)
 
@@ -159,16 +170,13 @@ class AthanorTest(unittest.TestCase):
         capsule["circle"]["tools"] = ["execute"]
         self.assertEqual(Ward(registry, self.athanor.approvals()).evaluate(capsule).status, "REJECTED")
 
-    def test_working_transition_requires_stage_artifact(self) -> None:
+    def test_manual_working_transition_is_deprecated(self) -> None:
         program_id, _ = self.athanor.create_program("memory", "Memory")
         self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute metrics.")
         self.athanor.seal_protocol("PT-001")
-        working_id, _ = self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
-        with self.assertRaisesRegex(AthanorError, "typed, content-addressed"):
+        working_id, _ = self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+        with self.assertRaisesRegex(AthanorError, "manual Working advancement is deprecated"):
             self.athanor.advance_working(working_id, "skip", [])
-        wrong = {"kind": "result-bundle", "uri": "result.json", "sigil": "sha256:" + "1" * 64}
-        with self.assertRaisesRegex(AthanorError, "requires artifact kind implementation"):
-            self.athanor.advance_working(working_id, "skip", [wrong])
 
     def test_working_rejects_unregistered_rite(self) -> None:
         program_id, _ = self.athanor.create_program("memory", "Memory")

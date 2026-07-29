@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/run/1.1",
+  "title": "Terminal Experimental Run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "program_id", "protocol_id", "experiment_id", "phase", "status", "analysis_disposition", "seed", "metrics", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "run/1.1"},
+    "run_id": {"type": "string", "pattern": "^RUN-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
+    "experiment_id": {"type": "string", "pattern": "^EX-"},
+    "phase": {"enum": ["PILOT", "FORMAL"]},
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED", "LOST"]},
+    "analysis_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["included", "reason", "policy_reference"],
+      "properties": {
+        "included": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]},
+        "policy_reference": {"type": "string", "pattern": "^PT-[A-Za-z0-9][A-Za-z0-9._-]*#"}
+      }
+    },
+    "seed": {"type": ["integer", "null"]},
+    "metrics": {
+      "type": "object",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {"type": "number"}
+    },
+    "artifacts": {"type": "array", "items": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"analysis_disposition": {"properties": {"included": {"const": true}}}}},
+      "then": {
+        "properties": {
+          "status": {"const": "COMPLETED"},
+          "metrics": {"minProperties": 1},
+          "analysis_disposition": {
+            "properties": {
+              "reason": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "COMPLETED"},
+          "analysis_disposition": {"properties": {"included": {"const": false}}}
+        },
+        "required": ["status", "analysis_disposition"]
+      },
+      "then": {
+        "properties": {
+          "analysis_disposition": {
+            "properties": {
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
