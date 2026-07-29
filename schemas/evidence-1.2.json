@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/evidence/1.2",
+  "title": "Evidence Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "program_id",
+    "source",
+    "observation",
+    "claim_relations",
+    "verification",
+    "reproduction_ids"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence/1.2"},
+    "evidence_id": {"type": "string", "pattern": "^EV-"},
+    "program_id": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"
+    },
+    "source": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"
+    },
+    "observation": {"type": "string", "minLength": 1},
+    "claim_relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "relation", "status"],
+        "properties": {
+          "claim_id": {"type": "string", "pattern": "^CL-"},
+          "relation": {
+            "enum": ["SUPPORTS", "CONTRADICTS", "LIMITS", "REPRODUCES", "UNRESOLVED"]
+          },
+          "status": {"enum": ["PROPOSED", "VERIFIED"]}
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_resolved", "content_inspected"],
+      "properties": {
+        "source_resolved": {"type": "boolean"},
+        "content_inspected": {"type": "boolean"}
+      }
+    },
+    "reproduction_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^RR-"}
+    }
+  }
+}

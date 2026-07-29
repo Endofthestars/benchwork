@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/research-program/1.1",
+  "title": "Research Program",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "program_id",
+    "slug",
+    "title",
+    "status",
+    "problem",
+    "research_question",
+    "evidence",
+    "claims",
+    "hypotheses",
+    "protocols",
+    "assessments",
+    "decisions",
+    "artifacts",
+    "issues",
+    "deviations",
+    "reproduction_records"
+  ],
+  "properties": {
+    "schema_version": {"const": "research-program/1.1"},
+    "program_id": {"type": "string", "pattern": "^RP-"},
+    "slug": {"type": "string"},
+    "title": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": [
+        "IDEA",
+        "EVIDENCE_RECORDED",
+        "CLAIMS_REGISTERED",
+        "HYPOTHESES_REGISTERED",
+        "RQ_FROZEN",
+        "DESIGN_FROZEN",
+        "IMPLEMENTED",
+        "PILOTED",
+        "RUNNING",
+        "RESULT_READY",
+        "EVALUATED",
+        "CLOSED"
+      ]
+    },
+    "problem": {"type": "object"},
+    "research_question": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["statement", "sealed_at", "seal_receipt", "actor"],
+          "properties": {
+            "statement": {"type": "string", "minLength": 1},
+            "sealed_at": {"type": "string", "format": "date-time"},
+            "seal_receipt": {"type": "string", "pattern": "^RC-"},
+            "actor": {"$ref": "https://benchwork.dev/schemas/actor/1.0"}
+          }
+        }
+      ]
+    },
+    "evidence": {"type": "array", "items": {"type": "string", "pattern": "^EV-"}},
+    "claims": {"type": "array", "items": {"type": "string", "pattern": "^CL-"}},
+    "hypotheses": {"type": "array", "items": {"type": "string", "pattern": "^HY-"}},
+    "protocols": {"type": "array", "items": {"type": "string", "pattern": "^PT-"}},
+    "assessments": {"type": "array", "items": {"type": "string", "pattern": "^AS-"}},
+    "decisions": {"type": "array", "items": {"type": "string", "pattern": "^DE-"}},
+    "artifacts": {"type": "array", "items": {"type": "string", "pattern": "^AR-"}},
+    "issues": {"type": "array", "items": {"type": "string", "pattern": "^IS-"}},
+    "deviations": {"type": "array", "items": {"type": "string", "pattern": "^DV-"}},
+    "reproduction_records": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^RR-"}
+    }
+  }
+}

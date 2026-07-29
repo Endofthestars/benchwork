@@ -263,9 +263,11 @@ bwork --help
 | `bwork scry`、`distill`、`invoke` | 准备 Arcana 或显式 Capability Task |
 | `bwork seal` | 使用 RFC 直达形式 Seal Protocol |
 | `bwork evidence` | 记录、验证和查看有来源的 Evidence |
-| `bwork claim` | 创建和查看由 Evidence 支撑的 Claim |
+| `bwork claim` | 创建 Claim 并显式验证 Evidence 关系 |
 | `bwork hypothesis` | 创建和查看可证伪 Hypothesis |
+| `bwork rq` | 显式封存 Research Question |
 | `bwork protocol` | 起草并封存 Protocol |
+| `bwork reproduction` | 将复现状态绑定到规范科研对象 |
 | `bwork capability` | 查看已安装的 Capability 契约 |
 | `bwork task` | 创建/查看 Task Capsule，并接纳 Agent Result |
 | `bwork ward` | 根据策略评估 Task Capsule |

@@ -95,7 +95,6 @@ def _parser() -> argparse.ArgumentParser:
     evidence_record.add_argument("--observation", required=True)
     evidence_record.add_argument("--source-resolved", action="store_true")
     evidence_record.add_argument("--content-inspected", action="store_true")
-    evidence_record.add_argument("--locally-reproduced", action="store_true")
     evidence_verify = evidence_commands.add_parser("verify", help="mark Evidence checks complete")
     evidence_verify.add_argument("evidence_id")
     evidence_verify.add_argument(
@@ -105,8 +104,6 @@ def _parser() -> argparse.ArgumentParser:
         choices=(
             "source_resolved",
             "content_inspected",
-            "claim_relation_verified",
-            "locally_reproduced",
         ),
     )
     evidence_show = evidence_commands.add_parser("show", help="show an Evidence projection")
@@ -129,6 +126,12 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
         metavar="EV-ID|RELATION",
     )
+    claim_verify = claim_commands.add_parser(
+        "verify-relation",
+        help="verify one proposed Claim-Evidence relation",
+    )
+    claim_verify.add_argument("claim_id")
+    claim_verify.add_argument("--evidence", required=True)
     claim_show = claim_commands.add_parser("show", help="show a Claim projection")
     claim_show.add_argument("claim_id")
 
@@ -142,6 +145,12 @@ def _parser() -> argparse.ArgumentParser:
     hypothesis_create.add_argument("--prediction", required=True)
     hypothesis_show = hypothesis_commands.add_parser("show", help="show a Hypothesis projection")
     hypothesis_show.add_argument("hypothesis_id")
+
+    rq = subparsers.add_parser("rq", help="seal a Research Question")
+    rq_commands = rq.add_subparsers(dest="rq_command", required=True)
+    rq_seal = rq_commands.add_parser("seal", help="seal a Program Research Question")
+    rq_seal.add_argument("--program", required=True)
+    rq_seal.add_argument("--statement", required=True)
 
     capability = subparsers.add_parser("capability", help="inspect Capability contracts")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)
@@ -310,12 +319,38 @@ def _parser() -> argparse.ArgumentParser:
     )
     decide.add_argument("--assessment", action="append", required=True)
     decide.add_argument("--rationale", required=True)
+    decide.add_argument("--required-action", action="append", default=[])
+    decide.add_argument("--pivot-reason")
 
     decision = subparsers.add_parser("decision", help="inspect sealed Decisions")
     decision_commands = decision.add_subparsers(dest="decision_command", required=True)
     decision_commands.add_parser("list", help="list sealed Decisions")
     decision_show = decision_commands.add_parser("show", help="show a Decision")
     decision_show.add_argument("decision_id")
+
+    reproduction = subparsers.add_parser(
+        "reproduction",
+        help="record a canonical reproduction assessment",
+    )
+    reproduction_commands = reproduction.add_subparsers(
+        dest="reproduction_command",
+        required=True,
+    )
+    reproduction_record = reproduction_commands.add_parser(
+        "record",
+        help="bind reproduction status to canonical outputs",
+    )
+    reproduction_record.add_argument("reproduction_id")
+    reproduction_record.add_argument("--evidence", required=True)
+    reproduction_record.add_argument("--run", action="append", required=True)
+    reproduction_record.add_argument("--result-bundle", required=True)
+    reproduction_record.add_argument("--artifact", action="append", required=True)
+    reproduction_record.add_argument("--assessment", required=True)
+    reproduction_record.add_argument(
+        "--status",
+        choices=("REPRODUCED", "NOT_REPRODUCED", "INCONCLUSIVE"),
+        required=True,
+    )
 
     artifact = subparsers.add_parser("artifact", help="register and inspect canonical Artifacts")
     artifact_commands = artifact.add_subparsers(dest="artifact_command", required=True)
@@ -569,8 +604,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             verification = {
                 "source_resolved": args.source_resolved,
                 "content_inspected": args.content_inspected,
-                "claim_relation_verified": False,
-                "locally_reproduced": args.locally_reproduced,
             }
             receipt = athanor.record_evidence(
                 args.evidence_id,
@@ -605,6 +638,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 relations,
             )
             _print_receipt(f"Claim {args.claim_id} created", receipt.receipt_id, receipt.sigil)
+        elif args.command == "claim" and args.claim_command == "verify-relation":
+            receipt = athanor.verify_claim_relation(args.claim_id, args.evidence)
+            _print_receipt(
+                f"Claim relation {args.claim_id} -> {args.evidence} verified",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "claim":
             try:
                 claim = athanor.claims()[args.claim_id]
@@ -630,6 +670,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             except KeyError as error:
                 raise AthanorError(f"unknown Hypothesis: {args.hypothesis_id}") from error
             print(json.dumps(hypothesis, indent=2))
+        elif args.command == "rq":
+            receipt = athanor.seal_research_question(
+                args.program,
+                args.statement,
+            )
+            _print_receipt(
+                f"Research Question for {args.program} sealed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "capability":
             print(json.dumps(registry.capabilities(), indent=2))
         elif args.command == "task" and args.task_command == "create":
@@ -842,14 +892,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "assessment":
             print(json.dumps(athanor.assessments(), indent=2))
         elif args.command == "decide":
+            lineage = (
+                {
+                    "parent_program_id": args.program,
+                    "reason": args.pivot_reason,
+                }
+                if args.pivot_reason is not None
+                else None
+            )
             decision_id, receipt = athanor.seal_decision(
                 args.program,
                 args.outcome,
                 args.assessment,
                 args.rationale,
+                args.required_action,
+                lineage,
             )
             _print_receipt(
                 f"Decision {decision_id} sealed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "reproduction":
+            receipt = athanor.record_reproduction(
+                args.reproduction_id,
+                args.evidence,
+                args.run,
+                args.result_bundle,
+                args.artifact,
+                args.assessment,
+                args.status,
+            )
+            _print_receipt(
+                f"Reproduction {args.reproduction_id} recorded",
                 receipt.receipt_id,
                 receipt.sigil,
             )

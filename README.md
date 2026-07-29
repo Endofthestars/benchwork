@@ -277,9 +277,11 @@ bwork --help
 | `bwork scry`, `distill`, `invoke` | Prepare Arcana or explicit Capability Tasks |
 | `bwork seal` | Seal a Protocol through the direct RFC form |
 | `bwork evidence` | Record, verify, and inspect sourced Evidence |
-| `bwork claim` | Create and inspect Evidence-backed Claims |
+| `bwork claim` | Create Claims and explicitly verify Evidence relations |
 | `bwork hypothesis` | Create and inspect falsifiable Hypotheses |
+| `bwork rq` | Explicitly Seal a Research Question |
 | `bwork protocol` | Draft and Seal Protocols |
+| `bwork reproduction` | Bind reproduction status to canonical research objects |
 | `bwork capability` | Inspect installed Capability contracts |
 | `bwork task` | Create/inspect Task Capsules and accept Agent Results |
 | `bwork ward` | Evaluate a Task Capsule against policy |
