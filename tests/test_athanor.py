@@ -56,6 +56,19 @@ class AthanorTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "slug already exists"):
             self.athanor.create_program("memory", "Another memory project")
 
+    def test_working_requires_frozen_protocol_and_replays_lifecycle(self) -> None:
+        program_id, _ = self.athanor.create_program("memory", "Memory")
+        with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
+            self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+        self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute pre-registered metrics.")
+        with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
+            self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+        self.athanor.seal_protocol("PT-001")
+        working_id, _ = self.athanor.create_working("computational-study@0.1.0", program_id, "PT-001")
+        self.athanor.advance_working(working_id, "Implementation reviewed.")
+        self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
+        self.assertEqual(len(self.athanor.workings()[working_id]["history"]), 2)
+
     def test_schema_files_are_versioned_json_contracts(self) -> None:
         schemas = Path(__file__).parents[1] / "schemas"
         for schema_path in schemas.glob("*.json"):

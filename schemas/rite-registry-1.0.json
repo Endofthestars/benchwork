@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/rite-registry/1.0",
+  "title": "Rite Registry",
+  "type": "object",
+  "required": ["schema_version", "rites"],
+  "properties": {
+    "schema_version": {"const": "rite-registry/1.0"},
+    "rites": {"type": "object"}
+  }
+}

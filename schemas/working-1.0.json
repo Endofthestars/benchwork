@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/working/1.0",
+  "title": "Rite Working",
+  "type": "object",
+  "required": ["schema_version", "working_id", "rite_id", "program_id", "protocol_id", "stage"],
+  "properties": {
+    "schema_version": {"const": "working/1.0"},
+    "working_id": {"type": "string", "pattern": "^WK-"},
+    "rite_id": {"type": "string", "pattern": "@"},
+    "program_id": {"$ref": "common-definitions-1.0.json#/$defs/program_id"},
+    "protocol_id": {"$ref": "common-definitions-1.0.json#/$defs/protocol_id"},
+    "stage": {"enum": ["IMPLEMENTATION", "PILOT", "RUN", "ANALYSIS", "REVIEW", "DECISION"]}
+  }
+}

@@ -21,7 +21,11 @@ Results remain proposals until accepted by Athanor.
 In progress: symmetric Codex and Claude Code Host adapters, both operating
 through the same Capability contracts and local canonical state.
 
-## M4-M6
+## M4: First Rite
 
-Ship the first computational-study Rite, Alembic result analysis, and a pinned
-Grimoire extension ecosystem.
+In progress: `computational-study@0.1.0` and its protocol-bound Working state
+machine.
+
+## M5-M6
+
+Add Alembic result analysis and a pinned Grimoire extension ecosystem.

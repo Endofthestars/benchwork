@@ -20,6 +20,7 @@ class AthanorError(ValueError):
 
 IDENTIFIER = re.compile(r"^[A-Z][A-Z0-9_]*-[A-Z0-9][A-Z0-9_-]*$")
 SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+WORKING_STAGES = ("IMPLEMENTATION", "PILOT", "RUN", "ANALYSIS", "REVIEW", "DECISION")
 
 
 def _canonical_json(value: dict[str, Any]) -> str:
@@ -126,6 +127,7 @@ class Athanor:
         programs: dict[str, dict[str, Any]] = {}
         protocols: dict[str, dict[str, Any]] = {}
         approvals: dict[str, dict[str, Any]] = {}
+        workings: dict[str, dict[str, Any]] = {}
         for event in self.chronicle.events():
             payload = event["payload"]
             if event["type"] == "program.created":
@@ -175,9 +177,38 @@ class Athanor:
                     "receipt_id": event["receipt"]["receipt_id"],
                     "granted_at": event["occurred_at"],
                 }
+            elif event["type"] == "working.created":
+                if event["object_id"] in workings:
+                    raise AthanorError(f"duplicate Working: {event['object_id']}")
+                protocol = protocols.get(payload["protocol_id"])
+                if protocol is None or protocol["status"] != "FROZEN":
+                    raise AthanorError(f"Working requires a frozen Protocol: {payload['protocol_id']}")
+                if protocol["program_id"] != payload["program_id"]:
+                    raise AthanorError(f"Working Program does not match Protocol: {event['object_id']}")
+                workings[event["object_id"]] = {
+                    "working_id": event["object_id"],
+                    "rite_id": payload["rite_id"],
+                    "program_id": payload["program_id"],
+                    "protocol_id": payload["protocol_id"],
+                    "stage": "IMPLEMENTATION",
+                    "history": [{"stage": "IMPLEMENTATION", "at": event["occurred_at"], "reason": "created"}],
+                }
+            elif event["type"] == "working.advanced":
+                working = workings.get(event["object_id"])
+                if working is None:
+                    raise AthanorError(f"advanced unknown Working: {event['object_id']}")
+                if payload["from_stage"] != working["stage"]:
+                    raise AthanorError(f"Working stage mismatch: {event['object_id']}")
+                current_index = WORKING_STAGES.index(working["stage"])
+                if current_index == len(WORKING_STAGES) - 1 or payload["to_stage"] != WORKING_STAGES[current_index + 1]:
+                    raise AthanorError(f"invalid Working transition: {event['object_id']}")
+                working["stage"] = payload["to_stage"]
+                working["history"].append(
+                    {"stage": payload["to_stage"], "at": event["occurred_at"], "reason": payload["reason"]}
+                )
             else:
                 raise AthanorError(f"unsupported Chronicle event type: {event['type']}")
-        return {"programs": programs, "protocols": protocols, "approvals": approvals}
+        return {"programs": programs, "protocols": protocols, "approvals": approvals, "workings": workings}
 
     def programs(self) -> dict[str, dict[str, Any]]:
         return self.replay()["programs"]
@@ -187,6 +218,9 @@ class Athanor:
 
     def approvals(self) -> dict[str, dict[str, Any]]:
         return self.replay()["approvals"]
+
+    def workings(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["workings"]
 
     def create_program(self, slug: str, title: str) -> tuple[str, Receipt]:
         if not SLUG.fullmatch(slug):
@@ -235,6 +269,39 @@ class Athanor:
         if task_id in self.approvals():
             raise AthanorError(f"Task already has an approval: {task_id}")
         return self.chronicle.append("approval.granted", task_id, {"reason": reason})
+
+    def create_working(self, rite_id: str, program_id: str, protocol_id: str) -> tuple[str, Receipt]:
+        protocol = self.protocols().get(protocol_id)
+        if protocol is None or protocol["status"] != "FROZEN":
+            raise AthanorError(f"Working requires a frozen Protocol: {protocol_id}")
+        if protocol["program_id"] != program_id:
+            raise AthanorError(f"Working Program does not match Protocol: {program_id}")
+        working_id = f"WK-{len(self.workings()) + 1:03d}"
+        receipt = self.chronicle.append(
+            "working.created",
+            working_id,
+            {"rite_id": rite_id, "program_id": program_id, "protocol_id": protocol_id},
+        )
+        return working_id, receipt
+
+    def advance_working(self, working_id: str, reason: str) -> Receipt:
+        working = self.workings().get(working_id)
+        if working is None:
+            raise AthanorError(f"unknown Working: {working_id}")
+        if not reason.strip():
+            raise AthanorError("Working transition requires a reason")
+        current_index = WORKING_STAGES.index(working["stage"])
+        if current_index == len(WORKING_STAGES) - 1:
+            raise AthanorError(f"Working is already terminal: {working_id}")
+        return self.chronicle.append(
+            "working.advanced",
+            working_id,
+            {
+                "from_stage": working["stage"],
+                "to_stage": WORKING_STAGES[current_index + 1],
+                "reason": reason,
+            },
+        )
 
     def trace(self, object_id: str) -> list[dict[str, Any]]:
         return [event for event in self.chronicle.events() if event["object_id"] == object_id]

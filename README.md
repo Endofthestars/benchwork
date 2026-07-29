@@ -37,6 +37,8 @@ bwork task create bench.code.modify --input-sigil sha256:00000000000000000000000
 bwork ward check TK-... # waits for explicit approval
 bwork approval grant TK-... --reason "Reviewed the requested code boundary."
 bwork host propose codex bench.code.inspect --input-sigil sha256:... --tool read --time-budget 300
+bwork working start computational-study@0.1.0 --program RP-001 --protocol PT-001
+bwork working advance WK-001 --reason "Implementation reviewed."
 bwork status
 bwork trace PT-001
 ```
@@ -47,6 +49,7 @@ bwork trace PT-001
 - `src/benchwork`: Athanor kernel and CLI.
 - `schemas`: public, versioned JSON Schemas.
 - `hosts`: symmetric Codex and Claude Code Host adapter guidance.
+- `docs/architecture/FIRST_RITE.md`: the first protocol-bound Working lifecycle.
 - `examples`: a minimal research-program artifact.
 
 See [the architecture note](docs/architecture/ATHANOR.md) for invariants and
