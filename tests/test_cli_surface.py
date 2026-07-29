@@ -37,6 +37,8 @@ class CliSurfaceTest(unittest.TestCase):
             ["working", "inspect", "WK-001"],
             ["working", "resume", "WK-001"],
             ["chronicle", "verify"],
+            ["chronicle", "recover", "--dry-run"],
+            ["migrate", "chronicle-v1.0-to-v1.1"],
             ["sigil", "show", "RC-001"],
             ["trace", "claim", "CL-001"],
         )

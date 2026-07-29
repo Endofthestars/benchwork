@@ -376,6 +376,19 @@ def _parser() -> argparse.ArgumentParser:
     chronicle_commands = chronicle.add_subparsers(dest="chronicle_command", required=True)
     chronicle_commands.add_parser("show", help="show verified Chronicle events")
     chronicle_commands.add_parser("verify", help="verify the Chronicle chain")
+    recover = chronicle_commands.add_parser(
+        "recover",
+        help="inspect or accept a valid uncommitted Chronicle tail",
+    )
+    recovery_mode = recover.add_mutually_exclusive_group(required=True)
+    recovery_mode.add_argument("--dry-run", action="store_true")
+    recovery_mode.add_argument("--accept-valid-tail", action="store_true")
+
+    migrate = subparsers.add_parser("migrate", help="run an explicit data migration")
+    migrate.add_argument(
+        "migration",
+        choices=("chronicle-v1.0-to-v1.1",),
+    )
 
     sigil = subparsers.add_parser("sigil", help="show or verify content Sigils")
     sigil_commands = sigil.add_subparsers(dest="sigil_command", required=True)
@@ -923,9 +936,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(athanor.deviations(), indent=2))
         elif args.command == "chronicle" and args.chronicle_command == "show":
             print(json.dumps(athanor.chronicle.events(), indent=2))
+        elif args.command == "chronicle" and args.chronicle_command == "recover":
+            report = athanor.recover_chronicle(
+                accept_valid_tail=args.accept_valid_tail,
+            )
+            print(json.dumps(report, indent=2))
         elif args.command == "chronicle":
             event_count = len(athanor.chronicle.events())
             print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
+        elif args.command == "migrate":
+            print(json.dumps(athanor.migrate_chronicle_v10_to_v11(), indent=2))
         elif args.command == "sigil" and args.sigil_command == "verify":
             try:
                 digest = "sha256:" + hashlib.sha256(args.path.read_bytes()).hexdigest()
@@ -940,7 +960,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             events = athanor.chronicle.events()
             match = next(
                 (
-                    event["receipt"]["sigil"]
+                    event["receipt"]["receipt_sigil"]
                     for event in events
                     if event["receipt"]["receipt_id"] == args.identifier
                     or event["event_id"] == args.identifier

@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -131,17 +132,37 @@ def _exclusive_lock(lock_path: Path) -> Iterator[None]:
 
 @dataclass(frozen=True)
 class Receipt:
+    schema_version: str
     receipt_id: str
     event_id: str
-    sigil: str
-    previous_sigil: str | None
+    event_body_sigil: str
+    previous_receipt_sigil: str | None
     accepted_at: str
+    receipt_sigil: str
 
     def as_dict(self) -> dict[str, str | None]:
         return self.__dict__.copy()
 
+    @property
+    def sigil(self) -> str:
+        """Compatibility alias for callers written against Receipt v1.0."""
+        return self.receipt_sigil
+
+    @property
+    def previous_sigil(self) -> str | None:
+        """Compatibility alias for callers written against Receipt v1.0."""
+        return self.previous_receipt_sigil
+
 
 TransitionBuilder = Callable[[list[dict[str, Any]]], tuple[str, str, dict[str, Any]]]
+ProjectionBuilder = Callable[[list[dict[str, Any]]], dict[str, Any]]
+
+LOCAL_ACTOR = {
+    "actor_id": "local-user",
+    "actor_type": "human",
+    "host": "cli",
+    "authenticated_by": "local-session",
+}
 
 
 class Chronicle:
@@ -163,8 +184,16 @@ class Chronicle:
                 self._write_head(0, None)
 
     def _write_head(self, count: int, sigil: str | None) -> None:
+        from .schema_validation import validate_instance
+
+        head = {
+            "schema_version": "chronicle-head/1.1",
+            "event_count": count,
+            "terminal_receipt_sigil": sigil,
+        }
+        validate_instance("chronicle-head-1.1.json", head)
         temporary = self.head_path.with_suffix(".head.tmp")
-        temporary.write_text(canonical_json({"count": count, "sigil": sigil}) + "\n", encoding="utf-8")
+        temporary.write_text(canonical_json(head) + "\n", encoding="utf-8")
         with temporary.open("rb") as handle:
             os.fsync(handle.fileno())
         os.replace(temporary, self.head_path)
@@ -174,38 +203,146 @@ class Chronicle:
         finally:
             os.close(directory)
 
-    def _parse(self, text: str) -> list[dict[str, Any]]:
+    @staticmethod
+    def _decode_event(line: str, line_number: int) -> dict[str, Any]:
+        def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise AthanorError(
+                        f"duplicate JSON key at Chronicle line {line_number}: {key}"
+                    )
+                result[key] = value
+            return result
+
+        try:
+            event = json.loads(line, object_pairs_hook=reject_duplicates)
+        except json.JSONDecodeError as error:
+            raise AthanorError(f"invalid Chronicle event at line {line_number}") from error
+        if not isinstance(event, dict):
+            raise AthanorError(f"Chronicle event at line {line_number} must be an object")
+        return event
+
+    def _parse_v11(self, text: str) -> list[dict[str, Any]]:
+        from .schema_validation import validate_instance
+
+        events: list[dict[str, Any]] = []
+        previous_receipt_sigil: str | None = None
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            event = self._decode_event(line, line_number)
+            validate_instance("chronicle-event-1.1.json", event)
+            receipt = event["receipt"]
+            event_body = {
+                key: value
+                for key, value in event.items()
+                if key not in {"event_body_sigil", "receipt"}
+            }
+            expected_event_sigil = content_sigil(event_body)
+            receipt_body = {
+                key: value for key, value in receipt.items() if key != "receipt_sigil"
+            }
+            expected_receipt_sigil = content_sigil(receipt_body)
+            if event["sequence"] != line_number:
+                raise AthanorError(
+                    f"broken Chronicle chain: non-contiguous sequence at line {line_number}"
+                )
+            if event["event_body_sigil"] != expected_event_sigil:
+                raise AthanorError(f"invalid Event body Sigil at Chronicle line {line_number}")
+            if receipt["receipt_sigil"] != expected_receipt_sigil:
+                raise AthanorError(f"invalid Receipt Sigil at Chronicle line {line_number}")
+            if event["previous_receipt_sigil"] != previous_receipt_sigil:
+                raise AthanorError(f"broken Chronicle chain at line {line_number}")
+            if receipt["previous_receipt_sigil"] != previous_receipt_sigil:
+                raise AthanorError(f"Receipt chain reference mismatch at line {line_number}")
+            if receipt["event_id"] != event["event_id"]:
+                raise AthanorError(f"Receipt does not match event at line {line_number}")
+            if receipt["event_body_sigil"] != event["event_body_sigil"]:
+                raise AthanorError(f"Receipt body binding mismatch at line {line_number}")
+            if receipt["accepted_at"] != event["occurred_at"]:
+                raise AthanorError(f"Receipt acceptance time mismatch at line {line_number}")
+            previous_receipt_sigil = receipt["receipt_sigil"]
+            events.append(event)
+        return events
+
+    def _parse_v10(self, text: str) -> list[dict[str, Any]]:
+        from .schema_validation import validate_instance
+
         events: list[dict[str, Any]] = []
         previous_sigil: str | None = None
+        event_fields = {
+            "schema_version",
+            "event_id",
+            "type",
+            "object_id",
+            "occurred_at",
+            "previous_sigil",
+            "payload",
+            "receipt",
+        }
+        receipt_fields = {
+            "receipt_id",
+            "event_id",
+            "sigil",
+            "previous_sigil",
+            "accepted_at",
+        }
         for line_number, line in enumerate(text.splitlines(), start=1):
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError as error:
-                raise AthanorError(f"invalid Chronicle event at line {line_number}") from error
-            receipt = event.get("receipt", {})
-            expected = content_sigil({key: value for key, value in event.items() if key != "receipt"})
-            if receipt.get("sigil") != expected:
-                raise AthanorError(f"invalid Sigil at Chronicle line {line_number}")
-            if event.get("previous_sigil") != previous_sigil:
-                raise AthanorError(f"broken Chronicle chain at line {line_number}")
-            if receipt.get("previous_sigil") != previous_sigil:
-                raise AthanorError(f"Receipt chain reference mismatch at line {line_number}")
-            if receipt.get("event_id") != event.get("event_id"):
-                raise AthanorError(f"Receipt does not match event at line {line_number}")
+            event = self._decode_event(line, line_number)
+            validate_instance("chronicle-event-1.0.json", event)
+            receipt = event["receipt"]
+            if set(event) != event_fields or set(receipt) != receipt_fields:
+                raise AthanorError(
+                    f"unsupported v1.0 fields at Chronicle line {line_number}; "
+                    "migration refused"
+                )
+            expected = content_sigil(
+                {key: value for key, value in event.items() if key != "receipt"}
+            )
+            if receipt["sigil"] != expected:
+                raise AthanorError(f"invalid v1.0 Sigil at Chronicle line {line_number}")
+            if event["previous_sigil"] != previous_sigil:
+                raise AthanorError(f"broken v1.0 Chronicle chain at line {line_number}")
+            if receipt["previous_sigil"] != previous_sigil:
+                raise AthanorError(
+                    f"v1.0 Receipt chain reference mismatch at line {line_number}"
+                )
+            if receipt["event_id"] != event["event_id"]:
+                raise AthanorError(f"v1.0 Receipt does not match event at line {line_number}")
+            if receipt["accepted_at"] != event["occurred_at"]:
+                raise AthanorError(
+                    f"v1.0 Receipt acceptance time mismatch at line {line_number}"
+                )
             previous_sigil = expected
             events.append(event)
         return events
 
+    def _read_head_v11(self) -> dict[str, Any]:
+        from .schema_validation import validate_instance
+
+        try:
+            head = json.loads(self.head_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            raise AthanorError("invalid Chronicle head") from error
+        if not isinstance(head, dict):
+            raise AthanorError("Chronicle head must be an object")
+        if head.get("schema_version") != "chronicle-head/1.1":
+            raise AthanorError(
+                "Chronicle v1.0 requires explicit migration: "
+                "bwork migrate chronicle-v1.0-to-v1.1"
+            )
+        validate_instance("chronicle-head-1.1.json", head)
+        return head
+
     def _read_locked(self) -> list[dict[str, Any]]:
         if not self.path.exists() or not self.head_path.exists():
             return []
-        events = self._parse(self.path.read_text(encoding="utf-8"))
-        try:
-            head = json.loads(self.head_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
-            raise AthanorError("invalid Chronicle head") from error
-        actual_sigil = events[-1]["receipt"]["sigil"] if events else None
-        if head != {"count": len(events), "sigil": actual_sigil}:
+        head = self._read_head_v11()
+        events = self._parse_v11(self.path.read_text(encoding="utf-8"))
+        actual_sigil = events[-1]["receipt"]["receipt_sigil"] if events else None
+        if (
+            head["event_count"] != len(events)
+            or head["terminal_receipt_sigil"] != actual_sigil
+        ):
             raise AthanorError("Chronicle head mismatch; truncation or incomplete commit detected")
         return events
 
@@ -214,39 +351,187 @@ class Chronicle:
         with _exclusive_lock(self.lock_path):
             return self._read_locked()
 
-    def transact(self, build: TransitionBuilder) -> tuple[dict[str, Any], Receipt]:
+    def transact(
+        self,
+        build: TransitionBuilder,
+        actor: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], Receipt]:
         self.initialize()
         with _exclusive_lock(self.lock_path):
             events = self._read_locked()
             event_type, object_id, payload = build(events)
-            previous_sigil = events[-1]["receipt"]["sigil"] if events else None
+            previous_sigil = (
+                events[-1]["receipt"]["receipt_sigil"] if events else None
+            )
             accepted_at = datetime.now(UTC).isoformat()
             event = {
-                "schema_version": "chronicle-event/1.0",
+                "schema_version": "chronicle-event/1.1",
                 "event_id": f"CE-{uuid4().hex[:12].upper()}",
+                "sequence": len(events) + 1,
                 "type": event_type,
                 "object_id": object_id,
                 "occurred_at": accepted_at,
-                "previous_sigil": previous_sigil,
+                "previous_receipt_sigil": previous_sigil,
+                "actor": dict(actor or LOCAL_ACTOR),
                 "payload": payload,
             }
+            event_body_sigil = content_sigil(event)
+            event["event_body_sigil"] = event_body_sigil
+            receipt_body = {
+                "schema_version": "receipt/1.1",
+                "receipt_id": f"RC-{uuid4().hex[:12].upper()}",
+                "event_id": event["event_id"],
+                "event_body_sigil": event_body_sigil,
+                "previous_receipt_sigil": previous_sigil,
+                "accepted_at": accepted_at,
+            }
             receipt = Receipt(
-                receipt_id=f"RC-{uuid4().hex[:12].upper()}",
-                event_id=event["event_id"],
-                sigil=content_sigil(event),
-                previous_sigil=previous_sigil,
-                accepted_at=accepted_at,
+                **receipt_body,
+                receipt_sigil=content_sigil(receipt_body),
             )
             event["receipt"] = receipt.as_dict()
             from .schema_validation import validate_instance
 
-            validate_instance("chronicle-event-1.0.json", event)
+            validate_instance("chronicle-event-1.1.json", event)
             with self.path.open("a", encoding="utf-8") as ledger:
                 ledger.write(canonical_json(event) + "\n")
                 ledger.flush()
                 os.fsync(ledger.fileno())
             self._write_head(len(events) + 1, receipt.sigil)
             return event, receipt
+
+    def recover(
+        self,
+        projector: ProjectionBuilder,
+        *,
+        accept_valid_tail: bool,
+    ) -> dict[str, Any]:
+        self.initialize()
+        with _exclusive_lock(self.lock_path):
+            text = self.path.read_text(encoding="utf-8")
+            events = self._parse_v11(text)
+            head = self._read_head_v11()
+            committed_count = head["event_count"]
+            if committed_count > len(events):
+                raise AthanorError("Chronicle recovery cannot restore removed events")
+            committed_sigil = (
+                events[committed_count - 1]["receipt"]["receipt_sigil"]
+                if committed_count
+                else None
+            )
+            if committed_sigil != head["terminal_receipt_sigil"]:
+                raise AthanorError("Chronicle recovery found a rewritten committed prefix")
+            projector(events)
+            tail_count = len(events) - committed_count
+            terminal_sigil = (
+                events[-1]["receipt"]["receipt_sigil"] if events else None
+            )
+            if accept_valid_tail and tail_count:
+                self._write_head(len(events), terminal_sigil)
+            return {
+                "schema_version": "chronicle-recovery-report/1.0",
+                "status": "RECOVERED" if accept_valid_tail and tail_count else (
+                    "RECOVERABLE" if tail_count else "HEALTHY"
+                ),
+                "committed_event_count": committed_count,
+                "tail_event_count": tail_count,
+                "terminal_receipt_sigil": terminal_sigil,
+                "head_updated": bool(accept_valid_tail and tail_count),
+            }
+
+    def migrate_v10_to_v11(self, projector: ProjectionBuilder) -> dict[str, Any]:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with _exclusive_lock(self.lock_path):
+            if not self.path.exists() or not self.head_path.exists():
+                raise AthanorError("Chronicle v1.0 ledger and head are required for migration")
+            text = self.path.read_text(encoding="utf-8")
+            try:
+                raw_head = json.loads(self.head_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as error:
+                raise AthanorError("invalid Chronicle v1.0 head") from error
+            if (
+                isinstance(raw_head, dict)
+                and raw_head.get("schema_version") == "chronicle-head/1.1"
+            ):
+                raise AthanorError("Chronicle is already v1.1; migration refused")
+            old_events = self._parse_v10(text)
+            expected_old_sigil = old_events[-1]["receipt"]["sigil"] if old_events else None
+            if raw_head != {"count": len(old_events), "sigil": expected_old_sigil}:
+                raise AthanorError("Chronicle v1.0 head mismatch; migration refused")
+            old_projection = projector(old_events)
+
+            new_events: list[dict[str, Any]] = []
+            previous_receipt_sigil: str | None = None
+            migration_actor = {
+                "actor_id": "benchwork-migration",
+                "actor_type": "tool",
+                "host": "cli",
+                "authenticated_by": "local-session",
+            }
+            for sequence, old_event in enumerate(old_events, start=1):
+                event_body = {
+                    "schema_version": "chronicle-event/1.1",
+                    "event_id": old_event["event_id"],
+                    "sequence": sequence,
+                    "type": old_event["type"],
+                    "object_id": old_event["object_id"],
+                    "occurred_at": old_event["occurred_at"],
+                    "previous_receipt_sigil": previous_receipt_sigil,
+                    "actor": migration_actor,
+                    "payload": old_event["payload"],
+                }
+                event_body_sigil = content_sigil(event_body)
+                receipt_body = {
+                    "schema_version": "receipt/1.1",
+                    "receipt_id": old_event["receipt"]["receipt_id"],
+                    "event_id": old_event["event_id"],
+                    "event_body_sigil": event_body_sigil,
+                    "previous_receipt_sigil": previous_receipt_sigil,
+                    "accepted_at": old_event["occurred_at"],
+                }
+                receipt_sigil = content_sigil(receipt_body)
+                new_events.append(
+                    {
+                        **event_body,
+                        "event_body_sigil": event_body_sigil,
+                        "receipt": {
+                            **receipt_body,
+                            "receipt_sigil": receipt_sigil,
+                        },
+                    }
+                )
+                previous_receipt_sigil = receipt_sigil
+
+            migrated_text = "".join(canonical_json(event) + "\n" for event in new_events)
+            verified_events = self._parse_v11(migrated_text)
+            if projector(verified_events) != old_projection:
+                raise AthanorError("migration changed the scientific projection")
+
+            migration_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            backup_directory = self.path.parent / "migrations" / migration_id
+            backup_directory.mkdir(parents=True)
+            shutil.copy2(self.path, backup_directory / "chronicle.jsonl.v1.0")
+            shutil.copy2(self.head_path, backup_directory / "chronicle.head.v1.0")
+
+            report = {
+                "schema_version": "chronicle-migration-report/1.0",
+                "migration": "chronicle-v1.0-to-v1.1",
+                "event_count": len(new_events),
+                "source_terminal_sigil": expected_old_sigil,
+                "target_terminal_receipt_sigil": previous_receipt_sigil,
+                "backup_directory": str(backup_directory.relative_to(self.path.parent)),
+                "projection_preserved": True,
+            }
+            report_path = backup_directory / "migration-report.json"
+            report_path.write_text(canonical_json(report) + "\n", encoding="utf-8")
+
+            ledger_temporary = self.path.with_suffix(".jsonl.tmp")
+            ledger_temporary.write_text(migrated_text, encoding="utf-8")
+            with ledger_temporary.open("rb") as handle:
+                os.fsync(handle.fileno())
+            os.replace(ledger_temporary, self.path)
+            self._write_head(len(new_events), previous_receipt_sigil)
+            return report
 
 
 class Athanor:
@@ -258,6 +543,15 @@ class Athanor:
 
     def initialize(self) -> None:
         self.chronicle.initialize()
+
+    def recover_chronicle(self, *, accept_valid_tail: bool = False) -> dict[str, Any]:
+        return self.chronicle.recover(
+            self._project,
+            accept_valid_tail=accept_valid_tail,
+        )
+
+    def migrate_chronicle_v10_to_v11(self) -> dict[str, Any]:
+        return self.chronicle.migrate_v10_to_v11(self._project)
 
     def _project(self, events: list[dict[str, Any]]) -> dict[str, Any]:
         programs: dict[str, dict[str, Any]] = {}

@@ -39,10 +39,12 @@ a later, object-specific Athanor transition uses its artifacts.
 
 ## Inspection and aliases
 
-`chronicle show|verify` exposes the verified event chain. `sigil show` resolves
-objects, events, and Receipts; `sigil verify` computes a file-byte SHA-256
-Sigil. Typed Trace forms such as `trace claim CL-001` coexist with the original
-`trace CL-001`.
+`chronicle show|verify` exposes the verified event chain. `chronicle recover`
+inspects or accepts only a valid uncommitted tail, and `migrate
+chronicle-v1.0-to-v1.1` performs the explicit backed-up ledger migration.
+`sigil show` resolves objects, events, and Receipts; `sigil verify` computes a
+file-byte SHA-256 Sigil. Typed Trace forms such as `trace claim CL-001`
+coexist with the original `trace CL-001`.
 
 The RFC names `grimoire add|inspect`, `rite search|install|run`, and
 `working list|inspect|resume` are available as local, inspectable operations.
