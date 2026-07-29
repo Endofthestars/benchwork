@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .athanor import AthanorError, canonical_json, content_sigil
+from .athanor import AthanorError, content_sigil
 from .schema_validation import validate_instance
 
 

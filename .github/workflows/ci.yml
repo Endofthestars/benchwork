@@ -15,6 +15,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: Lint, types, schemas, docs, and policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install quality dependencies
+        run: python -m pip install --editable ".[dev]"
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Static type checking
+        run: mypy src/benchwork
+
+      - name: JSON Schema compatibility
+        run: python scripts/ci/check-schemas.py
+
+      - name: Documentation links
+        run: python scripts/ci/check-doc-links.py
+
+      - name: Release policy
+        run: python scripts/ci/check-release-policy.py
+
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -42,10 +76,21 @@ jobs:
       - name: Install project and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --editable . pytest
+          python -m pip install --editable ".[dev]"
 
       - name: Run test suite
-        run: python -m pytest
+        run: |
+          python -m coverage run -m unittest discover -s tests
+          python -m coverage report
+
+      - name: Chronicle migration tests
+        run: python -m unittest tests.test_chronicle_v11.ChronicleV11Test.test_v10_migration_preserves_projection_and_creates_backup
+
+      - name: Chronicle commit fault injection
+        run: python -m unittest tests.test_chronicle_v11.ChronicleV11Test.test_commit_failure_leaves_a_recoverable_valid_tail
+
+      - name: Golden M10 replay fixture
+        run: python -m unittest tests.test_m10_repair_study
 
   package:
     name: Build and verify package
@@ -82,6 +127,7 @@ jobs:
           bwork --help
           bwork init
           bwork doctor
+          bwork --json root
 
       - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

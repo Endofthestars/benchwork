@@ -15,11 +15,19 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 from uuid import uuid4
 
+_fcntl: Any = None
+_msvcrt: Any = None
 try:
-    import fcntl
+    import fcntl as _fcntl_module
 except ImportError:  # pragma: no cover - Windows
-    fcntl = None
-    import msvcrt
+    import msvcrt as _msvcrt_module
+
+    _msvcrt = _msvcrt_module
+else:
+    _fcntl = _fcntl_module
+
+fcntl: Any = _fcntl
+msvcrt: Any = _msvcrt
 
 
 class AthanorError(ValueError):
@@ -361,7 +369,7 @@ class Chronicle:
                 if key not in {"event_body_sigil", "receipt"}
             }
             expected_event_sigil = content_sigil(event_body)
-            receipt_body = {
+            receipt_body: dict[str, Any] = {
                 key: value for key, value in receipt.items() if key != "receipt_sigil"
             }
             expected_receipt_sigil = content_sigil(receipt_body)
@@ -500,7 +508,7 @@ class Chronicle:
             }
             event_body_sigil = content_sigil(event)
             event["event_body_sigil"] = event_body_sigil
-            receipt_body = {
+            receipt_body: dict[str, Any] = {
                 "schema_version": "receipt/1.1",
                 "receipt_id": f"RC-{uuid4().hex[:12].upper()}",
                 "event_id": event["event_id"],
@@ -509,7 +517,12 @@ class Chronicle:
                 "accepted_at": accepted_at,
             }
             receipt = Receipt(
-                **receipt_body,
+                schema_version="receipt/1.1",
+                receipt_id=receipt_body["receipt_id"],
+                event_id=receipt_body["event_id"],
+                event_body_sigil=event_body_sigil,
+                previous_receipt_sigil=previous_sigil,
+                accepted_at=accepted_at,
                 receipt_sigil=content_sigil(receipt_body),
             )
             event["receipt"] = receipt.as_dict()
@@ -805,6 +818,7 @@ class Athanor:
                     ],
                 }
                 for relation, record in zip(relations, related_evidence, strict=True):
+                    assert record is not None
                     record["claim_relations"].append(
                         {
                             "claim_id": object_id,
@@ -953,14 +967,14 @@ class Athanor:
                     protocol["analysis_spec"] = analysis_spec
                 protocols[object_id] = protocol
             elif event["type"] == "protocol.sealed":
-                protocol = protocols.get(object_id)
-                if protocol is None or protocol["status"] != "DRAFT":
+                sealed_protocol = protocols.get(object_id)
+                if sealed_protocol is None or sealed_protocol["status"] != "DRAFT":
                     raise AthanorError(f"invalid Protocol Seal: {object_id}")
-                protocol["status"] = "FROZEN"
-                protocol["sealed_at"] = event["occurred_at"]
-                protocol["seal_receipt"] = event["receipt"]["receipt_id"]
-                protocol["seal_actor"] = event_actor
-                program = programs[protocol["program_id"]]
+                sealed_protocol["status"] = "FROZEN"
+                sealed_protocol["sealed_at"] = event["occurred_at"]
+                sealed_protocol["seal_receipt"] = event["receipt"]["receipt_id"]
+                sealed_protocol["seal_actor"] = event_actor
+                program = programs[sealed_protocol["program_id"]]
                 program["protocols"].append(object_id)
                 _advance_program(program, "DESIGN_FROZEN")
             elif event["type"] == "approval.granted":
@@ -1032,13 +1046,13 @@ class Athanor:
                         record["provenance"] = result["provenance"]
                     agent_results[object_id] = record
             elif event["type"] == "working.created":
-                protocol = protocols.get(payload["protocol_id"])
+                working_protocol = protocols.get(payload["protocol_id"])
                 rite = payload["rite"]
                 if (
                     object_id in workings
-                    or protocol is None
-                    or protocol["status"] != "FROZEN"
-                    or protocol["program_id"] != payload["program_id"]
+                    or working_protocol is None
+                    or working_protocol["status"] != "FROZEN"
+                    or working_protocol["program_id"] != payload["program_id"]
                     or payload["rite_sigil"] != content_sigil(rite)
                 ):
                     raise AthanorError(f"invalid Working creation: {object_id}")
@@ -1105,25 +1119,25 @@ class Athanor:
                     }
                 )
             elif event["type"] in {"experiment.created", "experiment.planned"}:
-                protocol = protocols.get(payload["protocol_id"])
+                experiment_protocol = protocols.get(payload["protocol_id"])
                 hypothesis_id = payload["hypothesis_id"]
                 hypothesis = hypotheses.get(hypothesis_id) if hypothesis_id is not None else None
                 if (
                     object_id in experiments
-                    or protocol is None
-                    or protocol["status"] != "FROZEN"
-                    or protocol["program_id"] != payload["program_id"]
+                    or experiment_protocol is None
+                    or experiment_protocol["status"] != "FROZEN"
+                    or experiment_protocol["program_id"] != payload["program_id"]
                     or (
                         hypothesis_id is not None
                         and (
                             hypothesis is None
                             or hypothesis["program_id"] != payload["program_id"]
-                            or hypothesis_id not in protocol["hypothesis_ids"]
+                            or hypothesis_id not in experiment_protocol["hypothesis_ids"]
                         )
                     )
                 ):
                     raise AthanorError(f"invalid Experiment creation: {object_id}")
-                experiment = {
+                planned_experiment = {
                     "schema_version": (
                         "experiment/1.1"
                         if event["type"] == "experiment.planned"
@@ -1137,18 +1151,18 @@ class Athanor:
                     "status": "PLANNED",
                 }
                 if event["type"] == "experiment.planned":
-                    experiment["history"] = [
+                    planned_experiment["history"] = [
                         {
                             "status": "PLANNED",
                             "event_id": event["event_id"],
                             "at": event["occurred_at"],
                         }
                     ]
-                experiments[object_id] = experiment
+                experiments[object_id] = planned_experiment
                 if hypothesis is not None:
                     hypothesis["status"] = "ACTIVE"
             elif event["type"].startswith("experiment."):
-                experiment = experiments.get(object_id)
+                transitioned_experiment = experiments.get(object_id)
                 transitions = {
                     "experiment.implemented": ("PLANNED", "IMPLEMENTED"),
                     "experiment.pilot_started": ("IMPLEMENTED", "PILOT_RUNNING"),
@@ -1158,29 +1172,31 @@ class Athanor:
                 }
                 if event["type"] == "experiment.cancelled":
                     valid = (
-                        experiment is not None
-                        and experiment["schema_version"] == "experiment/1.1"
-                        and experiment["status"] not in {"COMPLETED", "CANCELLED"}
+                        transitioned_experiment is not None
+                        and transitioned_experiment["schema_version"] == "experiment/1.1"
+                        and transitioned_experiment["status"]
+                        not in {"COMPLETED", "CANCELLED"}
                     )
-                    next_status = "CANCELLED"
+                    next_status: str | None = "CANCELLED"
                 else:
                     expected, next_status = transitions.get(event["type"], (None, None))
                     valid = (
-                        experiment is not None
-                        and experiment["schema_version"] == "experiment/1.1"
-                        and experiment["status"] == expected
+                        transitioned_experiment is not None
+                        and transitioned_experiment["schema_version"] == "experiment/1.1"
+                        and transitioned_experiment["status"] == expected
                     )
-                if not valid:
+                if not valid or next_status is None:
                     raise AthanorError(f"invalid Experiment transition: {object_id}")
-                experiment["status"] = next_status
-                experiment["history"].append(
+                assert transitioned_experiment is not None
+                transitioned_experiment["status"] = next_status
+                transitioned_experiment["history"].append(
                     {
                         "status": next_status,
                         "event_id": event["event_id"],
                         "at": event["occurred_at"],
                     }
                 )
-                program = programs[experiment["program_id"]]
+                program = programs[transitioned_experiment["program_id"]]
                 if event["type"] == "experiment.implemented":
                     _advance_program(program, "IMPLEMENTED")
                 elif event["type"] == "experiment.pilot_completed":
@@ -1188,12 +1204,12 @@ class Athanor:
                 elif event["type"] == "experiment.formal_started":
                     _advance_program(program, "RUNNING")
             elif event["type"] == "run.recorded":
-                experiment = experiments.get(payload["experiment_id"])
+                run_experiment = experiments.get(payload["experiment_id"])
                 if (
                     object_id in runs
-                    or experiment is None
-                    or experiment["program_id"] != payload["program_id"]
-                    or experiment["protocol_id"] != payload["protocol_id"]
+                    or run_experiment is None
+                    or run_experiment["program_id"] != payload["program_id"]
+                    or run_experiment["protocol_id"] != payload["protocol_id"]
                 ):
                     raise AthanorError(f"invalid Run record: {object_id}")
                 disposition = payload.get("analysis_disposition")
@@ -1237,44 +1253,47 @@ class Athanor:
                     build_result_bundle,
                 )
 
-                bundle = payload["bundle"]
-                protocol = protocols.get(bundle["protocol_id"])
-                expected = (
+                analysis_bundle = payload["bundle"]
+                analysis_protocol = protocols.get(analysis_bundle["protocol_id"])
+                expected_bundle = (
                     build_result_bundle(
                         object_id,
-                        protocol,
+                        analysis_protocol,
                         list(runs.values()),
                     )
-                    if bundle.get("schema_version") == "result-bundle/1.1"
-                    and protocol is not None
+                    if analysis_bundle.get("schema_version") == "result-bundle/1.1"
+                    and analysis_protocol is not None
                     else build_legacy_result_bundle(
                         object_id,
-                        bundle["program_id"],
-                        bundle["protocol_id"],
+                        analysis_bundle["program_id"],
+                        analysis_bundle["protocol_id"],
                         list(runs.values()),
                     )
                 )
                 if (
                     object_id in result_bundles
-                    or bundle != expected
-                    or payload["bundle_sigil"] != content_sigil(bundle)
+                    or analysis_bundle != expected_bundle
+                    or payload["bundle_sigil"] != content_sigil(analysis_bundle)
                 ):
                     raise AthanorError(f"invalid Result Bundle: {object_id}")
-                result_bundles[object_id] = bundle
-                _advance_program(programs[bundle["program_id"]], "RESULT_READY")
+                result_bundles[object_id] = analysis_bundle
+                _advance_program(
+                    programs[analysis_bundle["program_id"]],
+                    "RESULT_READY",
+                )
             elif event["type"] == "assessment.recorded":
-                bundle = result_bundles.get(payload["result_bundle_id"])
+                assessed_bundle = result_bundles.get(payload["result_bundle_id"])
                 program = programs.get(payload["program_id"])
-                protocol = protocols.get(payload["protocol_id"])
+                assessment_protocol = protocols.get(payload["protocol_id"])
                 claim_findings = payload["claim_findings"]
                 hypothesis_findings = payload["hypothesis_findings"]
                 if (
                     object_id in assessments
-                    or bundle is None
+                    or assessed_bundle is None
                     or program is None
-                    or protocol is None
-                    or bundle["program_id"] != payload["program_id"]
-                    or bundle["protocol_id"] != payload["protocol_id"]
+                    or assessment_protocol is None
+                    or assessed_bundle["program_id"] != payload["program_id"]
+                    or assessed_bundle["protocol_id"] != payload["protocol_id"]
                     or len({finding["claim_id"] for finding in claim_findings}) != len(claim_findings)
                     or len({finding["hypothesis_id"] for finding in hypothesis_findings})
                     != len(hypothesis_findings)
@@ -1286,7 +1305,8 @@ class Athanor:
                     or any(
                         finding["hypothesis_id"] not in hypotheses
                         or hypotheses[finding["hypothesis_id"]]["program_id"] != payload["program_id"]
-                        or finding["hypothesis_id"] not in protocol["hypothesis_ids"]
+                        or finding["hypothesis_id"]
+                        not in assessment_protocol["hypothesis_ids"]
                         for finding in hypothesis_findings
                     )
                 ):
@@ -1309,7 +1329,7 @@ class Athanor:
                     "result_bundle_id": payload["result_bundle_id"],
                     "result_bundle": {
                         "uri": f".benchwork/results/{payload['result_bundle_id']}.json",
-                        "sigil": content_sigil(bundle),
+                        "sigil": content_sigil(assessed_bundle),
                     },
                     "summary": payload["summary"],
                     "limitations": payload["limitations"],
@@ -1386,6 +1406,11 @@ class Athanor:
                     )
                 ):
                     raise AthanorError(f"invalid Decision Seal: {object_id}")
+                verified_assessments = [
+                    assessment
+                    for assessment in related_assessments
+                    if assessment is not None
+                ]
                 open_issue_ids = sorted(
                     issue_id
                     for issue_id, issue in issues.items()
@@ -1395,7 +1420,7 @@ class Athanor:
                 unresolved_uncertainties = sorted(
                     {
                         limitation
-                        for assessment in related_assessments
+                        for assessment in verified_assessments
                         for limitation in assessment["limitations"]
                     }
                 )
@@ -1565,7 +1590,7 @@ class Athanor:
                 issue["resolution_receipt"] = event["receipt"]["receipt_id"]
             elif event["type"] == "deviation.recorded":
                 program = programs.get(payload["program_id"])
-                protocol = protocols.get(payload["protocol_id"])
+                deviation_protocol = protocols.get(payload["protocol_id"])
                 collections = (
                     evidence,
                     claims,
@@ -1584,9 +1609,9 @@ class Athanor:
                 if (
                     object_id in deviations
                     or program is None
-                    or protocol is None
-                    or protocol["program_id"] != payload["program_id"]
-                    or protocol["status"] != "FROZEN"
+                    or deviation_protocol is None
+                    or deviation_protocol["program_id"] != payload["program_id"]
+                    or deviation_protocol["status"] != "FROZEN"
                     or len(set(payload["affected_object_ids"]))
                     != len(payload["affected_object_ids"])
                     or any(
@@ -2197,7 +2222,7 @@ class Athanor:
                 for hypothesis_id in normalized_hypotheses
             ):
                 raise AthanorError("Protocol Hypotheses must belong to its Research Program")
-            payload = {
+            payload: dict[str, Any] = {
                 "program_id": program_id,
                 "study_mode": study_mode,
                 "hypothesis_ids": normalized_hypotheses,

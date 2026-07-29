@@ -60,3 +60,10 @@ Completed: all RFC Capability contracts; direct research verbs that create
 Ward-checked Task Proposals; canonical Agent Result acceptance bound to the
 original Capsule and input Sigil; Chronicle and Sigil inspection; and the
 documented Grimoire, Rite, Working, Seal, and typed Trace command forms.
+
+## M10: The Seal
+
+In progress: Phase 1 hardening for Receipt integrity, state-bound Tasks,
+explicit scientific Gates, canonical Working and Run lifecycles, registered
+Alembic comparisons, deterministic CLI project context, and release acceptance.
+Automatic Provider execution remains outside M10.

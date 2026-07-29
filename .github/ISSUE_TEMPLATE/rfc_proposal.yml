@@ -1,0 +1,30 @@
+name: RFC proposal
+description: Propose a versioned contract or architectural decision.
+title: "[RFC] "
+labels:
+  - rfc
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Proposed invariants
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+    validations:
+      required: true

@@ -10,7 +10,7 @@ import re
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Sequence
+from typing import NoReturn, Sequence
 
 from ..athanor import Athanor, AthanorError, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
@@ -23,7 +23,7 @@ from ..tasks import TaskService
 
 
 class _CommandArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         raise ProjectContextError(
             "INVALID_ARGUMENTS",
             message,
@@ -62,7 +62,12 @@ def _parser() -> argparse.ArgumentParser:
     subparsers.add_parser("init", help="initialize a local Benchwork project")
     subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
-    subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
+    doctor = subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
+    doctor.add_argument(
+        "--deep",
+        action="store_true",
+        help="replay every canonical projection after integrity verification",
+    )
 
     start = subparsers.add_parser("start", help="start a Research Program")
     start.add_argument("objective")
@@ -1116,10 +1121,10 @@ def main(
             )
         elif args.command == "decision" and args.decision_command == "show":
             try:
-                decision = athanor.decisions()[args.decision_id]
+                shown_decision = athanor.decisions()[args.decision_id]
             except KeyError as error:
                 raise AthanorError(f"unknown Decision: {args.decision_id}") from error
-            print(json.dumps(decision, indent=2))
+            print(json.dumps(shown_decision, indent=2))
         elif args.command == "decision":
             print(json.dumps(athanor.decisions(), indent=2))
         elif args.command == "artifact" and args.artifact_command == "register":
@@ -1235,7 +1240,7 @@ def main(
             )
             if match is None:
                 state = athanor.replay()
-                record = next(
+                object_record = next(
                     (
                         collection[args.identifier]
                         for collection in state.values()
@@ -1244,15 +1249,39 @@ def main(
                     ),
                     None,
                 )
-                if record is None:
+                if object_record is None:
                     raise AthanorError(f"unknown object or Receipt: {args.identifier}")
-                match = content_sigil(record)
+                match = content_sigil(object_record)
             print(match)
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":
             event_count = len(athanor.chronicle.events())
-            print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
+            if args.deep:
+                state = athanor.replay()
+                object_count = sum(
+                    len(collection)
+                    for collection in state.values()
+                    if isinstance(collection, dict)
+                )
+                print(
+                    json.dumps(
+                        {
+                            "schema_version": "doctor-report/1.0",
+                            "mode": "deep",
+                            "chronicle_verified": True,
+                            "event_count": event_count,
+                            "all_objects_replayable": True,
+                            "object_count": object_count,
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print(
+                    f"Chronicle healthy: {event_count} verified event(s), "
+                    "receipt chain intact"
+                )
         elif args.command == "trace":
             object_id = args.object_id or args.object_type_or_id
             if args.object_id is not None:

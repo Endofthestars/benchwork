@@ -23,6 +23,7 @@ English is the canonical source for all Benchwork documentation.
 - [RFC-0004: Rite and Working Transition Model](rfcs/RFC-0004-rite-working-transition-model.md)
 - [RFC-0005: Experiment and Run Lifecycle](rfcs/RFC-0005-experiment-run-lifecycle.md)
 - [RFC-0006: Alembic Analysis Contract](rfcs/RFC-0006-alembic-analysis-contract.md)
+- [RFC-0007: Provider and Executor Runtime Boundaries](rfcs/RFC-0007-provider-executor-runtime-boundaries.md)
 
 ## Architecture
 
@@ -41,6 +42,9 @@ English is the canonical source for all Benchwork documentation.
 
 - [Roadmap](ROADMAP.md)
 - [Open Decisions](OPEN_DECISIONS.md)
+- [Compatibility policy](COMPATIBILITY.md)
+- [Release process](RELEASE_PROCESS.md)
+- [M10 acceptance matrix](M10_ACCEPTANCE.md)
 
 Architecture notes describe implemented boundaries unless a page explicitly
 marks work as planned or in progress. For current milestone status, see the

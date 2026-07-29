@@ -401,6 +401,15 @@ validation, integrity failure, and concurrency where applicable. Documentation
 changes should preserve locale paths and follow
 [the localization policy](docs/LOCALIZATION.md).
 
+## Community and release policy
+
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Compatibility policy](docs/en/COMPATIBILITY.md)
+- [Release process](docs/en/RELEASE_PROCESS.md)
+- [M10 acceptance matrix](docs/en/M10_ACCEPTANCE.md)
+
 ## License
 
 Benchwork is available under the [MIT License](LICENSE).

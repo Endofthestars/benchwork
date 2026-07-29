@@ -1,0 +1,20 @@
+{
+  "program_status": "EVALUATED",
+  "working_status": "COMPLETED",
+  "working_stage": "COMPLETED",
+  "decision": "REPAIR",
+  "open_issue": "IS-001",
+  "included_run_ids": [
+    "RUN-B1",
+    "RUN-B2",
+    "RUN-T1",
+    "RUN-T2"
+  ],
+  "failed_run_ids": [
+    "RUN-F1"
+  ],
+  "excluded_run_ids": [
+    "RUN-X1"
+  ],
+  "effect_estimate": 0.075
+}

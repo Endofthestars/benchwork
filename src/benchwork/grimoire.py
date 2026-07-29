@@ -182,7 +182,7 @@ class GrimoireRegistry:
         collision = reserved.intersection(installed_rites)
         if collision:
             raise AthanorError(f"Grimoire cannot override reserved Rite: {sorted(collision)[0]}")
-        record = {
+        record: dict[str, Any] = {
             "manifest": manifest,
             "manifest_sigil": content_sigil(manifest),
             "rites": installed_rites,
