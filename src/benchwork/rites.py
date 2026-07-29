@@ -252,6 +252,57 @@ class RiteRegistry:
             normalized[rite_id] = entry["definition"]
         return normalized
 
+    def verify_existing(self) -> dict[str, dict[str, Any]]:
+        """Validate stored Rites and extensions without initializing either Registry."""
+        if not self.path.is_file():
+            raise AthanorError("Rite Registry is missing")
+        try:
+            registry = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise AthanorError("invalid Rite Registry") from error
+        registry_version = registry.get("schema_version")
+        if registry_version == "rite-registry/1.0":
+            raise AthanorError(
+                "MIGRATION_REQUIRED: Rite Registry v1.0 must be migrated"
+            )
+        if registry_version != "rite-registry/1.1":
+            raise AthanorError("unsupported Rite Registry version")
+        validate_instance("rite-registry-1.1.json", registry)
+        rites = registry["rites"]
+        missing = sorted(set(DEFAULT_RITES) - set(rites))
+        if missing:
+            raise AthanorError(
+                "Rite Registry is missing default Rites: " + ", ".join(missing)
+            )
+        verified: dict[str, dict[str, Any]] = {}
+        for rite_id, definition in rites.items():
+            if definition["rite_id"] != rite_id:
+                raise AthanorError(f"Rite Registry key does not match Rite ID: {rite_id}")
+            schema_name = (
+                "rite-definition-1.1.json"
+                if definition["schema_version"] == "rite/1.1"
+                else "rite-definition-1.0.json"
+            )
+            validate_instance(schema_name, definition)
+            stages = [stage["name"] for stage in definition["stages"]]
+            if len(stages) != len(set(stages)):
+                raise AthanorError(f"Rite has duplicate stage names: {rite_id}")
+            if definition["schema_version"] == "rite/1.1" and (
+                any("exit_contract" not in stage for stage in definition["stages"][:-1])
+                or "exit_contract" in definition["stages"][-1]
+            ):
+                raise AthanorError(
+                    f"Rite v1.1 requires exits on non-terminal stages only: {rite_id}"
+                )
+            verified[rite_id] = definition
+        for rite_id, entry in self.grimoire_registry.verify_existing_rite_entries().items():
+            if rite_id in verified:
+                raise AthanorError(f"installed Grimoire overrides a built-in Rite: {rite_id}")
+            if entry["sigil"] != content_sigil(entry["definition"]):
+                raise AthanorError(f"installed Grimoire Rite Sigil mismatch: {rite_id}")
+            verified[rite_id] = entry["definition"]
+        return verified
+
     def install_grimoire(self, source: Path) -> tuple[str, str, bool]:
         return self.grimoire_registry.install(source, set(DEFAULT_RITES))
 

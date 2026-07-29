@@ -84,21 +84,15 @@ def deep_doctor(root: Path) -> dict[str, Any]:
         return {"verified_count": len(capsule_paths)}
 
     def verify_capabilities() -> dict[str, Any]:
-        if not registry.path.is_file():
-            raise AthanorError("Capability Registry is missing")
-        capabilities = registry.capabilities()
+        capabilities = registry.verify_existing()
         return {"verified_count": len(capabilities)}
 
     def verify_rites() -> dict[str, Any]:
-        if not rites.path.is_file():
-            raise AthanorError("Rite Registry is missing")
-        definitions = rites.rites()
+        definitions = rites.verify_existing()
         return {"verified_count": len(definitions)}
 
     def verify_grimoires() -> dict[str, Any]:
-        if not rites.grimoire_registry.path.is_file():
-            raise AthanorError("Grimoire Registry is missing")
-        installed = rites.grimoires()
+        installed = rites.grimoire_registry.verify_existing()
         return {"verified_count": len(installed)}
 
     def verify_agent_outputs() -> dict[str, Any]:

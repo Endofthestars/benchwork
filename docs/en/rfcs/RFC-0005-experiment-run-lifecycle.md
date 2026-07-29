@@ -29,6 +29,11 @@ to exist in the same Experiment, Program, Protocol, and PILOT phase, and every
 Arm required by the Experiment comparisons to be represented. Individual Run
 records never declare the Pilot complete.
 
+In M10, `analysis-spec/1.0` stores `pilot_run_ids` as a Protocol-level flat
+list. Consequently, `computational-study@0.2.1` supports exactly one Pilot
+Experiment per Working. Multi-Experiment Pilot Workings require a future
+version that scopes Pilot Run IDs by Experiment or Comparison.
+
 The event vocabulary is:
 
 - `experiment.planned`

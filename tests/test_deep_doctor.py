@@ -8,10 +8,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from benchwork.athanor import Athanor
-from benchwork.circle import CapabilityRegistry
+from benchwork.circle import CapabilityRegistry, DEFAULT_CAPABILITIES
 from benchwork.cli.main import main
 from benchwork.doctor import deep_doctor
-from benchwork.rites import RiteRegistry
+from benchwork.rites import DEFAULT_RITES, RiteRegistry
 
 
 class DeepDoctorTest(unittest.TestCase):
@@ -128,6 +128,102 @@ class DeepDoctorTest(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["checks"]["result_exports"]["status"], "FAIL")
         self.assertIn(bundle["bundle_id"], report["checks"]["result_exports"]["message"])
+
+    def test_missing_default_capability_fails_without_repair(self) -> None:
+        path = self.root / ".benchwork" / "capabilities.json"
+        registry = json.loads(path.read_text(encoding="utf-8"))
+        missing = sorted(DEFAULT_CAPABILITIES)[0]
+        del registry["capabilities"][missing]
+        path.write_text(json.dumps(registry), encoding="utf-8")
+        before = path.read_bytes()
+
+        report = deep_doctor(self.root)
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["checks"]["capability_registry"]["status"], "FAIL")
+        self.assertIn(missing, report["checks"]["capability_registry"]["message"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_damaged_rite_registry_fails_without_rewrite(self) -> None:
+        path = self.root / ".benchwork" / "rites.json"
+        path.write_bytes(b"{damaged")
+        before = path.read_bytes()
+
+        report = deep_doctor(self.root)
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["checks"]["rite_registry"]["status"], "FAIL")
+        self.assertIn("invalid Rite Registry", report["checks"]["rite_registry"]["message"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_legacy_registries_require_migration_without_rewrite(self) -> None:
+        cases = (
+            (
+                self.root / ".benchwork" / "capabilities.json",
+                "capability_registry",
+                "capability-registry/1.0",
+            ),
+            (
+                self.root / ".benchwork" / "rites.json",
+                "rite_registry",
+                "rite-registry/1.0",
+            ),
+        )
+        for path, check_name, legacy_version in cases:
+            with self.subTest(check=check_name):
+                current = path.read_bytes()
+                registry = json.loads(current)
+                registry["schema_version"] = legacy_version
+                path.write_text(json.dumps(registry), encoding="utf-8")
+                before = path.read_bytes()
+
+                report = deep_doctor(self.root)
+
+                self.assertFalse(report["ok"])
+                self.assertEqual(report["checks"][check_name]["status"], "FAIL")
+                self.assertIn(
+                    "MIGRATION_REQUIRED",
+                    report["checks"][check_name]["message"],
+                )
+                self.assertEqual(path.read_bytes(), before)
+                path.write_bytes(current)
+
+    def test_missing_registries_fail_without_creation(self) -> None:
+        cases = (
+            (
+                self.root / ".benchwork" / "capabilities.json",
+                "capability_registry",
+            ),
+            (self.root / ".benchwork" / "rites.json", "rite_registry"),
+            (
+                self.root / ".benchwork" / "grimoires.json",
+                "grimoire_registry",
+            ),
+        )
+        for path, check_name in cases:
+            with self.subTest(check=check_name):
+                current = path.read_bytes()
+                path.unlink()
+
+                report = deep_doctor(self.root)
+
+                self.assertFalse(report["ok"])
+                self.assertEqual(report["checks"][check_name]["status"], "FAIL")
+                self.assertFalse(path.exists())
+                path.write_bytes(current)
+
+    def test_readonly_registry_checks_accept_complete_registries(self) -> None:
+        report = deep_doctor(self.root)
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(
+            report["checks"]["capability_registry"]["verified_count"],
+            len(DEFAULT_CAPABILITIES),
+        )
+        self.assertEqual(
+            report["checks"]["rite_registry"]["verified_count"],
+            len(DEFAULT_RITES),
+        )
 
 
 if __name__ == "__main__":

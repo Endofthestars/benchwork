@@ -234,6 +234,33 @@ class CapabilityRegistry:
         validate_instance("capability-registry-1.1.json", registry)
         return capabilities
 
+    def verify_existing(self) -> dict[str, dict[str, Any]]:
+        """Validate the stored Registry without initializing or repairing it."""
+        if not self.path.is_file():
+            raise AthanorError("Capability Registry is missing")
+        try:
+            registry = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise AthanorError("invalid Capability Registry") from error
+        registry_version = registry.get("schema_version")
+        if registry_version == "capability-registry/1.0":
+            raise AthanorError(
+                "MIGRATION_REQUIRED: Capability Registry v1.0 must be migrated"
+            )
+        if registry_version != "capability-registry/1.1":
+            raise AthanorError("unsupported Capability Registry version")
+        from .schema_validation import validate_instance
+
+        validate_instance("capability-registry-1.1.json", registry)
+        capabilities = registry["capabilities"]
+        missing = sorted(set(DEFAULT_CAPABILITIES) - set(capabilities))
+        if missing:
+            raise AthanorError(
+                "Capability Registry is missing default Capabilities: "
+                + ", ".join(missing)
+            )
+        return capabilities
+
     def get(self, capability: str) -> dict[str, Any]:
         try:
             return self.capabilities()[capability]

@@ -58,6 +58,12 @@ using `rite/1.1`; changing an installed Rite in place remains forbidden.
 `computational-study@0.2.0` remains available for replay compatibility, while
 new M10 Workings use `computational-study@0.2.1`.
 
+The supported M10 profile for `computational-study@0.2.1` binds one Working to
+one Pilot Experiment. Multiple comparisons may refer to that Experiment, but a
+single Working spanning multiple Pilot Experiments is outside the v0.2.1
+contract. Such studies must use separate Workings until the analysis contract
+scopes Pilot Run registration by Experiment.
+
 ## Rejected Alternatives
 
 Inline URI and hash claims are not sufficient evidence of canonical progress.

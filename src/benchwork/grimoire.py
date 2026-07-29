@@ -126,9 +126,18 @@ class GrimoireRegistry:
         with _exclusive_lock(self.lock_path):
             return self._read_unlocked()["grimoires"]
 
-    def rite_entries(self) -> dict[str, dict[str, Any]]:
+    def verify_existing(self) -> dict[str, dict[str, Any]]:
+        """Validate the stored Registry without creating or rewriting it."""
+        if not self.path.is_file():
+            raise AthanorError("Grimoire Registry is missing")
+        return self._read_unlocked()["grimoires"]
+
+    @staticmethod
+    def _rite_entries(
+        grimoires: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
         entries: dict[str, dict[str, Any]] = {}
-        for grimoire_ref, record in self.grimoires().items():
+        for grimoire_ref, record in grimoires.items():
             for rite_id, rite in record["rites"].items():
                 if rite_id in entries:
                     raise AthanorError(f"Rite collision between installed Grimoires: {rite_id}")
@@ -139,6 +148,12 @@ class GrimoireRegistry:
                     "manifest_sigil": record["manifest_sigil"],
                 }
         return entries
+
+    def rite_entries(self) -> dict[str, dict[str, Any]]:
+        return self._rite_entries(self.grimoires())
+
+    def verify_existing_rite_entries(self) -> dict[str, dict[str, Any]]:
+        return self._rite_entries(self.verify_existing())
 
     def install(
         self, source: Path, reserved_rite_ids: set[str] | None = None
