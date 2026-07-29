@@ -26,6 +26,7 @@ English is the canonical source for all Benchwork documentation.
 - [First Rite: Computational Study](architecture/FIRST_RITE.md)
 - [Alembic](architecture/ALEMBIC.md)
 - [Scientific Canon](architecture/SCIENTIFIC_CANON.md)
+- [Integrity and Recovery](architecture/INTEGRITY_RECOVERY.md)
 - [Open Grimoire](architecture/OPEN_GRIMOIRE.md)
 - [Integrity Repair](architecture/INTEGRITY_REPAIR.md)
 

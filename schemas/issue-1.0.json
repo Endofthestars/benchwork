@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/issue/1.0",
+  "title": "Research Issue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "issue_id", "program_id", "subject_ids", "severity", "title", "description", "status", "opened_at", "open_receipt", "resolution", "resolved_at", "resolution_receipt"],
+  "properties": {
+    "schema_version": {"const": "issue/1.0"},
+    "issue_id": {"type": "string", "pattern": "^IS-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "subject_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "severity": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "title": {"type": "string", "minLength": 1},
+    "description": {"type": "string", "minLength": 1},
+    "status": {"enum": ["OPEN", "RESOLVED"]},
+    "opened_at": {"type": "string", "format": "date-time"},
+    "open_receipt": {"type": "string", "pattern": "^RC-"},
+    "resolution": {"type": ["string", "null"]},
+    "resolved_at": {"type": ["string", "null"], "format": "date-time"},
+    "resolution_receipt": {"type": ["string", "null"], "pattern": "^RC-"}
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "RESOLVED"}}},
+    "then": {
+      "properties": {
+        "resolution": {"type": "string", "minLength": 1},
+        "resolved_at": {"type": "string", "format": "date-time"},
+        "resolution_receipt": {"type": "string", "pattern": "^RC-"}
+      }
+    }
+  }]
+}

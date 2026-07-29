@@ -240,6 +240,65 @@ def _parser() -> argparse.ArgumentParser:
     decision_show = decision_commands.add_parser("show", help="show a Decision")
     decision_show.add_argument("decision_id")
 
+    artifact = subparsers.add_parser("artifact", help="register and inspect canonical Artifacts")
+    artifact_commands = artifact.add_subparsers(dest="artifact_command", required=True)
+    artifact_register = artifact_commands.add_parser(
+        "register", help="register a content-addressed Artifact"
+    )
+    artifact_register.add_argument("artifact_id")
+    artifact_register.add_argument("--program", required=True)
+    artifact_register.add_argument("--kind", required=True)
+    artifact_register.add_argument("--location", required=True, metavar="URI|SHA256")
+    artifact_register.add_argument("--producer", required=True)
+    artifact_register.add_argument("--input", action="append", default=[])
+    artifact_commands.add_parser("list", help="list canonical Artifacts")
+    artifact_show = artifact_commands.add_parser("show", help="show an Artifact")
+    artifact_show.add_argument("artifact_id")
+
+    issue = subparsers.add_parser("issue", help="manage research Issues")
+    issue_commands = issue.add_subparsers(dest="issue_command", required=True)
+    issue_open = issue_commands.add_parser("open", help="open a traceable Issue")
+    issue_open.add_argument("issue_id")
+    issue_open.add_argument("--program", required=True)
+    issue_open.add_argument("--subject", action="append", required=True)
+    issue_open.add_argument(
+        "--severity",
+        required=True,
+        choices=("LOW", "MEDIUM", "HIGH", "CRITICAL"),
+    )
+    issue_open.add_argument("--title", required=True)
+    issue_open.add_argument("--description", required=True)
+    issue_resolve = issue_commands.add_parser("resolve", help="resolve an open Issue")
+    issue_resolve.add_argument("issue_id")
+    issue_resolve.add_argument("--resolution", required=True)
+    issue_commands.add_parser("list", help="list research Issues")
+    issue_show = issue_commands.add_parser("show", help="show an Issue")
+    issue_show.add_argument("issue_id")
+
+    deviation = subparsers.add_parser("deviation", help="record Protocol Deviations")
+    deviation_commands = deviation.add_subparsers(dest="deviation_command", required=True)
+    deviation_record = deviation_commands.add_parser(
+        "record", help="record a change after Protocol Seal"
+    )
+    deviation_record.add_argument("deviation_id")
+    deviation_record.add_argument("--protocol", required=True)
+    deviation_record.add_argument(
+        "--kind",
+        required=True,
+        choices=("PLANNED", "UNPLANNED"),
+    )
+    deviation_record.add_argument("--summary", required=True)
+    deviation_record.add_argument("--rationale", required=True)
+    deviation_record.add_argument(
+        "--impact",
+        required=True,
+        choices=("NONE", "MINOR", "MAJOR", "INVALIDATING"),
+    )
+    deviation_record.add_argument("--affected", action="append", default=[])
+    deviation_commands.add_parser("list", help="list Protocol Deviations")
+    deviation_show = deviation_commands.add_parser("show", help="show a Deviation")
+    deviation_show.add_argument("deviation_id")
+
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
     trace.add_argument("object_id")
     return parser
@@ -531,6 +590,84 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(decision, indent=2))
         elif args.command == "decision":
             print(json.dumps(athanor.decisions(), indent=2))
+        elif args.command == "artifact" and args.artifact_command == "register":
+            try:
+                uri, digest = args.location.split("|", 1)
+            except ValueError as error:
+                raise AthanorError("Artifact location must use URI|SHA256") from error
+            receipt = athanor.register_artifact(
+                args.artifact_id,
+                args.program,
+                args.kind,
+                {"uri": uri, "sigil": digest},
+                args.producer,
+                args.input,
+            )
+            _print_receipt(
+                f"Artifact {args.artifact_id} registered",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "artifact" and args.artifact_command == "show":
+            try:
+                artifact = athanor.artifacts()[args.artifact_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Artifact: {args.artifact_id}") from error
+            print(json.dumps(artifact, indent=2))
+        elif args.command == "artifact":
+            print(json.dumps(athanor.artifacts(), indent=2))
+        elif args.command == "issue" and args.issue_command == "open":
+            receipt = athanor.open_issue(
+                args.issue_id,
+                args.program,
+                args.subject,
+                args.severity,
+                args.title,
+                args.description,
+            )
+            _print_receipt(
+                f"Issue {args.issue_id} opened",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "issue" and args.issue_command == "resolve":
+            receipt = athanor.resolve_issue(args.issue_id, args.resolution)
+            _print_receipt(
+                f"Issue {args.issue_id} resolved",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "issue" and args.issue_command == "show":
+            try:
+                issue = athanor.issues()[args.issue_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Issue: {args.issue_id}") from error
+            print(json.dumps(issue, indent=2))
+        elif args.command == "issue":
+            print(json.dumps(athanor.issues(), indent=2))
+        elif args.command == "deviation" and args.deviation_command == "record":
+            receipt = athanor.record_deviation(
+                args.deviation_id,
+                args.protocol,
+                args.kind,
+                args.summary,
+                args.rationale,
+                args.impact,
+                args.affected,
+            )
+            _print_receipt(
+                f"Deviation {args.deviation_id} recorded",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "deviation" and args.deviation_command == "show":
+            try:
+                deviation = athanor.deviations()[args.deviation_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Deviation: {args.deviation_id}") from error
+            print(json.dumps(deviation, indent=2))
+        elif args.command == "deviation":
+            print(json.dumps(athanor.deviations(), indent=2))
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":

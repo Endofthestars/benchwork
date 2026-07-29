@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/deviation/1.0",
+  "title": "Protocol Deviation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "deviation_id", "program_id", "protocol_id", "kind", "summary", "rationale", "impact", "affected_object_ids", "status", "recorded_at", "record_receipt"],
+  "properties": {
+    "schema_version": {"const": "deviation/1.0"},
+    "deviation_id": {"type": "string", "pattern": "^DV-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
+    "kind": {"enum": ["PLANNED", "UNPLANNED"]},
+    "summary": {"type": "string", "minLength": 1},
+    "rationale": {"type": "string", "minLength": 1},
+    "impact": {"enum": ["NONE", "MINOR", "MAJOR", "INVALIDATING"]},
+    "affected_object_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "status": {"const": "RECORDED"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "record_receipt": {"type": "string", "pattern": "^RC-"}
+  }
+}

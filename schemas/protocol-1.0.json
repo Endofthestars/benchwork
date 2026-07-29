@@ -16,6 +16,11 @@
     "title": {"type": "string", "minLength": 1},
     "analysis_plan": {"type": "string", "minLength": 1},
     "status": {"enum": ["DRAFT", "FROZEN", "SUPERSEDED"]},
+    "deviations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^DV-"}
+    },
     "sealed_at": {"type": ["string", "null"], "format": "date-time"},
     "seal_receipt": {"type": ["string", "null"], "pattern": "^RC-"}
   },

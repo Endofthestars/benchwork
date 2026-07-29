@@ -35,6 +35,24 @@ EVIDENCE_VERIFICATION_KEYS = {
     "claim_relation_verified",
     "locally_reproduced",
 }
+ISSUE_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+DEVIATION_KINDS = {"PLANNED", "UNPLANNED"}
+DEVIATION_IMPACTS = {"NONE", "MINOR", "MAJOR", "INVALIDATING"}
+PROGRAM_OBJECT_COLLECTIONS = (
+    "evidence",
+    "claims",
+    "hypotheses",
+    "protocols",
+    "workings",
+    "experiments",
+    "runs",
+    "result_bundles",
+    "assessments",
+    "decisions",
+    "artifacts",
+    "issues",
+    "deviations",
+)
 PROGRAM_STATUS_ORDER = {
     status: index
     for index, status in enumerate(
@@ -65,6 +83,28 @@ def content_sigil(value: Any) -> str:
 def _advance_program(program: dict[str, Any], status: str) -> None:
     if PROGRAM_STATUS_ORDER[status] > PROGRAM_STATUS_ORDER[program["status"]]:
         program["status"] = status
+
+
+def _object_program_id(
+    object_id: str,
+    programs: dict[str, dict[str, Any]],
+    *collections: dict[str, dict[str, Any]],
+) -> str | None:
+    if object_id in programs:
+        return object_id
+    for collection in collections:
+        record = collection.get(object_id)
+        if record is not None:
+            return record.get("program_id")
+    return None
+
+
+def _state_object_program_id(state: dict[str, Any], object_id: str) -> str | None:
+    return _object_program_id(
+        object_id,
+        state["programs"],
+        *(state[name] for name in PROGRAM_OBJECT_COLLECTIONS),
+    )
 
 
 @contextmanager
@@ -232,6 +272,9 @@ class Athanor:
         hypotheses: dict[str, dict[str, Any]] = {}
         assessments: dict[str, dict[str, Any]] = {}
         decisions: dict[str, dict[str, Any]] = {}
+        artifacts: dict[str, dict[str, Any]] = {}
+        issues: dict[str, dict[str, Any]] = {}
+        deviations: dict[str, dict[str, Any]] = {}
         for event in events:
             payload = event["payload"]
             object_id = event["object_id"]
@@ -251,6 +294,9 @@ class Athanor:
                     "protocols": [],
                     "assessments": [],
                     "decisions": [],
+                    "artifacts": [],
+                    "issues": [],
+                    "deviations": [],
                 }
             elif event["type"] == "evidence.recorded":
                 program = programs.get(payload["program_id"])
@@ -358,6 +404,7 @@ class Athanor:
                     "title": payload["title"],
                     "analysis_plan": payload["analysis_plan"],
                     "status": "DRAFT",
+                    "deviations": [],
                     "sealed_at": None,
                     "seal_receipt": None,
                 }
@@ -575,6 +622,153 @@ class Athanor:
                     "seal_receipt": event["receipt"]["receipt_id"],
                 }
                 program["decisions"].append(object_id)
+            elif event["type"] == "artifact.registered":
+                program = programs.get(payload["program_id"])
+                related_ids = [payload["producer_id"], *payload["input_ids"]]
+                collections = (
+                    evidence,
+                    claims,
+                    hypotheses,
+                    protocols,
+                    workings,
+                    experiments,
+                    runs,
+                    result_bundles,
+                    assessments,
+                    decisions,
+                    artifacts,
+                    issues,
+                    deviations,
+                )
+                if (
+                    object_id in artifacts
+                    or program is None
+                    or len(set(payload["input_ids"])) != len(payload["input_ids"])
+                    or any(
+                        _object_program_id(reference_id, programs, *collections)
+                        != payload["program_id"]
+                        for reference_id in related_ids
+                    )
+                ):
+                    raise AthanorError(f"invalid Artifact registration: {object_id}")
+                artifacts[object_id] = {
+                    "schema_version": "artifact/1.0",
+                    "artifact_id": object_id,
+                    "program_id": payload["program_id"],
+                    "kind": payload["kind"],
+                    "location": payload["location"],
+                    "producer_id": payload["producer_id"],
+                    "input_ids": payload["input_ids"],
+                    "status": "REGISTERED",
+                    "registered_at": event["occurred_at"],
+                    "registration_receipt": event["receipt"]["receipt_id"],
+                }
+                program["artifacts"].append(object_id)
+            elif event["type"] == "issue.opened":
+                program = programs.get(payload["program_id"])
+                collections = (
+                    evidence,
+                    claims,
+                    hypotheses,
+                    protocols,
+                    workings,
+                    experiments,
+                    runs,
+                    result_bundles,
+                    assessments,
+                    decisions,
+                    artifacts,
+                    issues,
+                    deviations,
+                )
+                if (
+                    object_id in issues
+                    or program is None
+                    or len(set(payload["subject_ids"])) != len(payload["subject_ids"])
+                    or any(
+                        _object_program_id(subject_id, programs, *collections)
+                        != payload["program_id"]
+                        for subject_id in payload["subject_ids"]
+                    )
+                ):
+                    raise AthanorError(f"invalid Issue opening: {object_id}")
+                issues[object_id] = {
+                    "schema_version": "issue/1.0",
+                    "issue_id": object_id,
+                    "program_id": payload["program_id"],
+                    "subject_ids": payload["subject_ids"],
+                    "severity": payload["severity"],
+                    "title": payload["title"],
+                    "description": payload["description"],
+                    "status": "OPEN",
+                    "opened_at": event["occurred_at"],
+                    "open_receipt": event["receipt"]["receipt_id"],
+                    "resolution": None,
+                    "resolved_at": None,
+                    "resolution_receipt": None,
+                }
+                program["issues"].append(object_id)
+            elif event["type"] == "issue.resolved":
+                issue = issues.get(object_id)
+                if (
+                    issue is None
+                    or issue["status"] != "OPEN"
+                    or payload["program_id"] != issue["program_id"]
+                ):
+                    raise AthanorError(f"invalid Issue resolution: {object_id}")
+                issue["status"] = "RESOLVED"
+                issue["resolution"] = payload["resolution"]
+                issue["resolved_at"] = event["occurred_at"]
+                issue["resolution_receipt"] = event["receipt"]["receipt_id"]
+            elif event["type"] == "deviation.recorded":
+                program = programs.get(payload["program_id"])
+                protocol = protocols.get(payload["protocol_id"])
+                collections = (
+                    evidence,
+                    claims,
+                    hypotheses,
+                    protocols,
+                    workings,
+                    experiments,
+                    runs,
+                    result_bundles,
+                    assessments,
+                    decisions,
+                    artifacts,
+                    issues,
+                    deviations,
+                )
+                if (
+                    object_id in deviations
+                    or program is None
+                    or protocol is None
+                    or protocol["program_id"] != payload["program_id"]
+                    or protocol["status"] != "FROZEN"
+                    or len(set(payload["affected_object_ids"]))
+                    != len(payload["affected_object_ids"])
+                    or any(
+                        _object_program_id(affected_id, programs, *collections)
+                        != payload["program_id"]
+                        for affected_id in payload["affected_object_ids"]
+                    )
+                ):
+                    raise AthanorError(f"invalid Deviation record: {object_id}")
+                deviations[object_id] = {
+                    "schema_version": "deviation/1.0",
+                    "deviation_id": object_id,
+                    "program_id": payload["program_id"],
+                    "protocol_id": payload["protocol_id"],
+                    "kind": payload["kind"],
+                    "summary": payload["summary"],
+                    "rationale": payload["rationale"],
+                    "impact": payload["impact"],
+                    "affected_object_ids": payload["affected_object_ids"],
+                    "status": "RECORDED",
+                    "recorded_at": event["occurred_at"],
+                    "record_receipt": event["receipt"]["receipt_id"],
+                }
+                protocol["deviations"].append(object_id)
+                program["deviations"].append(object_id)
             else:
                 raise AthanorError(f"unsupported Chronicle event type: {event['type']}")
         from .schema_validation import validate_instance
@@ -601,6 +795,12 @@ class Athanor:
             validate_instance("assessment-1.1.json", assessment)
         for decision in decisions.values():
             validate_instance("decision-1.1.json", decision)
+        for artifact in artifacts.values():
+            validate_instance("artifact-1.0.json", artifact)
+        for issue in issues.values():
+            validate_instance("issue-1.0.json", issue)
+        for deviation in deviations.values():
+            validate_instance("deviation-1.0.json", deviation)
         return {
             "programs": programs,
             "protocols": protocols,
@@ -614,6 +814,9 @@ class Athanor:
             "hypotheses": hypotheses,
             "assessments": assessments,
             "decisions": decisions,
+            "artifacts": artifacts,
+            "issues": issues,
+            "deviations": deviations,
         }
 
     def replay(self) -> dict[str, Any]:
@@ -654,6 +857,15 @@ class Athanor:
 
     def decisions(self) -> dict[str, dict[str, Any]]:
         return self.replay()["decisions"]
+
+    def artifacts(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["artifacts"]
+
+    def issues(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["issues"]
+
+    def deviations(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["deviations"]
 
     def create_program(self, slug: str, title: str, problem: dict[str, Any] | None = None) -> tuple[str, Receipt]:
         if not SLUG.fullmatch(slug) or not title.strip():
@@ -1235,6 +1447,190 @@ class Athanor:
 
         event, receipt = self.chronicle.transact(build)
         return event["object_id"], receipt
+
+    def register_artifact(
+        self,
+        artifact_id: str,
+        program_id: str,
+        kind: str,
+        location: dict[str, str],
+        producer_id: str,
+        input_ids: list[str] | None = None,
+    ) -> Receipt:
+        normalized_inputs = [] if input_ids is None else input_ids
+        if (
+            not isinstance(artifact_id, str)
+            or not IDENTIFIER.fullmatch(artifact_id)
+            or not artifact_id.startswith("AR-")
+        ):
+            raise AthanorError("Artifact ID must use the form AR-<identifier>")
+        if not isinstance(kind, str) or not kind.strip():
+            raise AthanorError("Artifact requires a non-empty kind")
+        if (
+            not isinstance(location, dict)
+            or set(location) != {"uri", "sigil"}
+            or not isinstance(location["uri"], str)
+            or not location["uri"].strip()
+            or not isinstance(location["sigil"], str)
+            or not SIGIL.fullmatch(location["sigil"])
+        ):
+            raise AthanorError("Artifact location must be a content-addressed URI reference")
+        if not isinstance(producer_id, str) or not producer_id:
+            raise AthanorError("Artifact requires a producer object")
+        if (
+            not isinstance(normalized_inputs, list)
+            or any(not isinstance(input_id, str) or not input_id for input_id in normalized_inputs)
+            or len(set(normalized_inputs)) != len(normalized_inputs)
+        ):
+            raise AthanorError("Artifact input IDs must be unique object references")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if artifact_id in state["artifacts"]:
+                raise AthanorError(f"Artifact already exists: {artifact_id}")
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            for reference_id in [producer_id, *normalized_inputs]:
+                if _state_object_program_id(state, reference_id) != program_id:
+                    raise AthanorError(
+                        f"Artifact reference does not belong to Program {program_id}: {reference_id}"
+                    )
+            return "artifact.registered", artifact_id, {
+                "program_id": program_id,
+                "kind": kind,
+                "location": location,
+                "producer_id": producer_id,
+                "input_ids": normalized_inputs,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def open_issue(
+        self,
+        issue_id: str,
+        program_id: str,
+        subject_ids: list[str],
+        severity: str,
+        title: str,
+        description: str,
+    ) -> Receipt:
+        if (
+            not isinstance(issue_id, str)
+            or not IDENTIFIER.fullmatch(issue_id)
+            or not issue_id.startswith("IS-")
+        ):
+            raise AthanorError("Issue ID must use the form IS-<identifier>")
+        if severity not in ISSUE_SEVERITIES:
+            raise AthanorError(f"unknown Issue severity: {severity}")
+        if not isinstance(title, str) or not title.strip():
+            raise AthanorError("Issue requires a non-empty title")
+        if not isinstance(description, str) or not description.strip():
+            raise AthanorError("Issue requires a non-empty description")
+        if (
+            not isinstance(subject_ids, list)
+            or not subject_ids
+            or any(not isinstance(subject_id, str) or not subject_id for subject_id in subject_ids)
+            or len(set(subject_ids)) != len(subject_ids)
+        ):
+            raise AthanorError("Issue requires unique subject object IDs")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if issue_id in state["issues"]:
+                raise AthanorError(f"Issue already exists: {issue_id}")
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            for subject_id in subject_ids:
+                if _state_object_program_id(state, subject_id) != program_id:
+                    raise AthanorError(
+                        f"Issue subject does not belong to Program {program_id}: {subject_id}"
+                    )
+            return "issue.opened", issue_id, {
+                "program_id": program_id,
+                "subject_ids": subject_ids,
+                "severity": severity,
+                "title": title,
+                "description": description,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def resolve_issue(self, issue_id: str, resolution: str) -> Receipt:
+        if not isinstance(resolution, str) or not resolution.strip():
+            raise AthanorError("Issue resolution cannot be empty")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            issue = self._project(events)["issues"].get(issue_id)
+            if issue is None:
+                raise AthanorError(f"unknown Issue: {issue_id}")
+            if issue["status"] != "OPEN":
+                raise AthanorError(f"Issue is not open: {issue_id}")
+            return "issue.resolved", issue_id, {
+                "program_id": issue["program_id"],
+                "resolution": resolution,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def record_deviation(
+        self,
+        deviation_id: str,
+        protocol_id: str,
+        kind: str,
+        summary: str,
+        rationale: str,
+        impact: str,
+        affected_object_ids: list[str] | None = None,
+    ) -> Receipt:
+        normalized_affected = [] if affected_object_ids is None else affected_object_ids
+        if (
+            not isinstance(deviation_id, str)
+            or not IDENTIFIER.fullmatch(deviation_id)
+            or not deviation_id.startswith("DV-")
+        ):
+            raise AthanorError("Deviation ID must use the form DV-<identifier>")
+        if kind not in DEVIATION_KINDS:
+            raise AthanorError(f"unknown Deviation kind: {kind}")
+        if impact not in DEVIATION_IMPACTS:
+            raise AthanorError(f"unknown Deviation impact: {impact}")
+        if not isinstance(summary, str) or not summary.strip():
+            raise AthanorError("Deviation requires a non-empty summary")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise AthanorError("Deviation requires a non-empty rationale")
+        if (
+            not isinstance(normalized_affected, list)
+            or any(
+                not isinstance(object_id, str) or not object_id
+                for object_id in normalized_affected
+            )
+            or len(set(normalized_affected)) != len(normalized_affected)
+        ):
+            raise AthanorError("Deviation affected object IDs must be unique")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            protocol = state["protocols"].get(protocol_id)
+            if protocol is None or protocol["status"] != "FROZEN":
+                raise AthanorError(f"Deviation requires a frozen Protocol: {protocol_id}")
+            if deviation_id in state["deviations"]:
+                raise AthanorError(f"Deviation already exists: {deviation_id}")
+            for affected_id in normalized_affected:
+                if _state_object_program_id(state, affected_id) != protocol["program_id"]:
+                    raise AthanorError(
+                        "Deviation affected objects must belong to the Protocol Program: "
+                        f"{affected_id}"
+                    )
+            return "deviation.recorded", deviation_id, {
+                "program_id": protocol["program_id"],
+                "protocol_id": protocol_id,
+                "kind": kind,
+                "summary": summary,
+                "rationale": rationale,
+                "impact": impact,
+                "affected_object_ids": normalized_affected,
+            }
+
+        return self.chronicle.transact(build)[1]
 
     def trace(self, object_id: str) -> list[dict[str, Any]]:
         def contains(value: Any) -> bool:

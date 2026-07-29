@@ -8,7 +8,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.2.0a1` 公开 Alpha。M0–M7 里程碑已经实现。
+> 项目状态：`0.2.0a2` 公开 Alpha。M0–M8 里程碑已经实现。
 
 ## 为什么需要 Benchwork
 
@@ -45,6 +45,8 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
   `result-bundle/1.0` 分析产物。
 - **Assessment 与 Decision** 将解释绑定到 Result Bundle，并让最终科研承诺
   由人类 Seal 且可回放。
+- **Artifact、Issue 与 Deviation** 保存内容寻址产物、可恢复的问题，以及不改写
+  历史的 Protocol 封存后变更。
 - **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
@@ -164,6 +166,32 @@ bwork trace CL-001
 bwork working advance WK-001 \
   --reason "实现已经审查。" \
   --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
+  --producer WK-001 \
+  --input PT-001
+
+bwork issue open IS-001 \
+  --program RP-001 \
+  --subject AR-001 \
+  --severity HIGH \
+  --title "环境元数据不完整" \
+  --description "缺少一个依赖版本。"
+
+bwork deviation record DV-001 \
+  --protocol PT-001 \
+  --kind UNPLANNED \
+  --summary "Protocol 封存后补充环境元数据。" \
+  --rationale "精确回放需要缺失的版本。" \
+  --impact MINOR \
+  --affected AR-001 \
+  --affected IS-001
+
+bwork issue resolve IS-001 \
+  --resolution "在保留原始 Artifact 的前提下登记缺失版本。"
 ```
 
 全零摘要只是在文档中使用的、语法有效的占位符。正式记录应使用对应 Artifact
@@ -221,6 +249,9 @@ bwork --help
 | `bwork assessment` | 查看已完成的 Assessment |
 | `bwork decide` | 由人类 Seal 科研 Decision |
 | `bwork decision` | 查看已 Seal 的 Decision |
+| `bwork artifact` | 登记和查看内容寻址 Artifact |
+| `bwork issue` | 打开、解决和查看科研 Issue |
+| `bwork deviation` | 记录和查看 Protocol 封存后的 Deviation |
 | `bwork trace` | 查看一个对象对应的 Chronicle 事件 |
 
 使用 `bwork <command> --help` 查看具体参数。

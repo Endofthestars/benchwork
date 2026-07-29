@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/artifact/1.0",
+  "title": "Canonical Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_id", "program_id", "kind", "location", "producer_id", "input_ids", "status", "registered_at", "registration_receipt"],
+  "properties": {
+    "schema_version": {"const": "artifact/1.0"},
+    "artifact_id": {"type": "string", "pattern": "^AR-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "kind": {"type": "string", "minLength": 1},
+    "location": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/artifact_ref"},
+    "producer_id": {"type": "string", "minLength": 1},
+    "input_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "status": {"const": "REGISTERED"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "registration_receipt": {"type": "string", "pattern": "^RC-"}
+  }
+}

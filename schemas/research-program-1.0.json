@@ -16,7 +16,10 @@
     "hypotheses": {"type": "array", "items": {"type": "string", "pattern": "^HY-"}},
     "protocols": {"type": "array", "items": {"type": "string", "pattern": "^PT-"}},
     "assessments": {"type": "array", "items": {"type": "string", "pattern": "^AS-"}},
-    "decisions": {"type": "array", "items": {"type": "string", "pattern": "^DE-"}}
+    "decisions": {"type": "array", "items": {"type": "string", "pattern": "^DE-"}},
+    "artifacts": {"type": "array", "items": {"type": "string", "pattern": "^AR-"}},
+    "issues": {"type": "array", "items": {"type": "string", "pattern": "^IS-"}},
+    "deviations": {"type": "array", "items": {"type": "string", "pattern": "^DV-"}}
   },
   "additionalProperties": false
 }

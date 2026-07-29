@@ -47,3 +47,9 @@ Working execution from copied, inspectable definitions.
 Completed: sourced and monotonically verified Evidence; explicit Claim
 relations; Claim-backed, Protocol-registered Hypotheses; Result Bundle
 Assessments; human-Sealed Decisions; and cross-object Chronicle lineage.
+
+## M8: Integrity and Recovery
+
+Completed: canonical, content-addressed Artifacts with producer and input
+lineage; open-to-resolved research Issues; and immutable Deviations that record
+post-Seal changes without rewriting the Protocol commitment.

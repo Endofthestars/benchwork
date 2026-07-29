@@ -9,7 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.2.0a1` public Alpha. Milestones M0–M7 are implemented.
+> Project status: `0.2.0a2` public Alpha. Milestones M0–M8 are implemented.
 
 ## Why Benchwork
 
@@ -50,6 +50,8 @@ scientific state.
   deterministic `result-bundle/1.0` analysis artifacts.
 - **Assessments and Decisions** bind interpretation to Result Bundles and keep
   final scientific commitments human-sealed and replayable.
+- **Artifacts, Issues, and Deviations** preserve content-addressed outputs,
+  recoverable problems, and post-Seal changes without rewriting history.
 - **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
   without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
@@ -175,6 +177,32 @@ Every Working transition must provide the artifact required by the pinned Rite:
 bwork working advance WK-001 \
   --reason "Implementation reviewed." \
   --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
+  --producer WK-001 \
+  --input PT-001
+
+bwork issue open IS-001 \
+  --program RP-001 \
+  --subject AR-001 \
+  --severity HIGH \
+  --title "Environment metadata is incomplete" \
+  --description "One dependency version was not captured."
+
+bwork deviation record DV-001 \
+  --protocol PT-001 \
+  --kind UNPLANNED \
+  --summary "Environment metadata repaired after Seal." \
+  --rationale "Exact replay requires the missing version." \
+  --impact MINOR \
+  --affected AR-001 \
+  --affected IS-001
+
+bwork issue resolve IS-001 \
+  --resolution "Registered the missing version without replacing the original Artifact."
 ```
 
 The zero digest is only a syntactically valid documentation placeholder.
@@ -233,6 +261,9 @@ bwork --help
 | `bwork assessment` | Inspect completed Assessments |
 | `bwork decide` | Human-Seal a scientific Decision |
 | `bwork decision` | Inspect sealed Decisions |
+| `bwork artifact` | Register and inspect content-addressed Artifacts |
+| `bwork issue` | Open, resolve, and inspect research Issues |
+| `bwork deviation` | Record and inspect post-Seal Protocol Deviations |
 | `bwork trace` | Show Chronicle events for an object |
 
 Use `bwork <command> --help` for command-specific arguments.
