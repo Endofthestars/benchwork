@@ -19,12 +19,12 @@ advances a matching Working when, and only when, an accepted event satisfies
 the declared event type, object type, Program, Protocol, and optional kind,
 phase, or status constraints.
 
-The built-in `computational-study@0.2.0` Rite uses this sequence:
+The built-in `computational-study@0.2.1` Rite uses this sequence:
 
 | Stage | Required canonical event |
 | --- | --- |
 | `IMPLEMENTATION` | `artifact.registered`, kind `implementation` |
-| `PILOT` | `run.recorded`, phase `PILOT`, status `COMPLETED` |
+| `PILOT` | `experiment.pilot_completed` |
 | `ANALYSIS` | `analysis.computed` |
 | `REVIEW` | `assessment.recorded` |
 | `DECISION` | `decision.sealed` |
@@ -38,6 +38,11 @@ terminal stage.
 
 - Rite content is pinned by its Sigil when the Working is created.
 - A v1.1 exit event must belong to the same Program and Protocol.
+- An Experiment records its owning `working_id`. If multiple matching Workings
+  are active, Experiment creation requires that ID explicitly.
+- An exit event advances only the single Working identified by Artifact
+  producer or Experiment-derived lineage. Ambiguous or absent lineage advances
+  no Working.
 - Artifact registration verifies the referenced local blob and Sigil before
   Chronicle accepts the event.
 - One canonical event can advance a Working by at most one stage.
@@ -50,6 +55,8 @@ terminal stage.
 `rite/1.0` definitions and legacy Workings remain readable. They do not gain
 event exit contracts retroactively. Authors should publish a new Rite version
 using `rite/1.1`; changing an installed Rite in place remains forbidden.
+`computational-study@0.2.0` remains available for replay compatibility, while
+new M10 Workings use `computational-study@0.2.1`.
 
 ## Rejected Alternatives
 

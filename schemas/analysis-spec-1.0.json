@@ -49,6 +49,12 @@
       "propertyNames": {"minLength": 1},
       "additionalProperties": {"type": "number", "minimum": 0}
     },
+    "pilot_run_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^RUN-"}
+    },
     "expected_run_ids": {
       "type": "array",
       "uniqueItems": true,

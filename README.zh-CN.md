@@ -133,7 +133,7 @@ bwork protocol draft PT-001 \
 
 bwork protocol seal PT-001
 
-bwork working start computational-study@0.2.0 \
+bwork working start computational-study@0.2.1 \
   --program RP-001 \
   --protocol PT-001
 

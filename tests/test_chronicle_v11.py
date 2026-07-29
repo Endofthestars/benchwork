@@ -181,6 +181,43 @@ class ChronicleV11Test(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "already v1.1"):
             self.athanor.migrate_chronicle_v10_to_v11()
 
+    def test_v10_migration_resumes_from_every_commit_point(self) -> None:
+        for fault_point in (
+            "after_backup",
+            "after_ledger_replace",
+            "before_head_replace",
+            "after_head_replace_before_report",
+        ):
+            with self.subTest(fault_point=fault_point):
+                old_events = self._write_v10_program()
+                expected_projection = self.athanor._project(old_events)
+
+                def inject(point: str) -> None:
+                    if point == fault_point:
+                        raise OSError(f"injected migration failure at {point}")
+
+                with patch.object(
+                    self.athanor.chronicle,
+                    "_migration_fault",
+                    side_effect=inject,
+                ):
+                    with self.assertRaisesRegex(OSError, fault_point):
+                        self.athanor.migrate_chronicle_v10_to_v11()
+
+                pending = self.root / ".benchwork" / "migration.pending"
+                self.assertTrue(pending.is_file())
+                report = self.athanor.migrate_chronicle_v10_to_v11()
+                self.assertTrue(report["projection_preserved"])
+                self.assertEqual(self.athanor.replay(), expected_projection)
+                self.assertFalse(pending.exists())
+                backup = self.root / ".benchwork" / report["backup_directory"]
+                self.assertTrue((backup / "migration-report.json").is_file())
+
+                self.directory.cleanup()
+                self.directory = tempfile.TemporaryDirectory()
+                self.root = Path(self.directory.name)
+                self.athanor = Athanor(self.root)
+
     def test_malformed_v10_input_fails_closed_without_backup(self) -> None:
         self._write_v10_program()
         event = json.loads(self.ledger.read_text(encoding="utf-8"))

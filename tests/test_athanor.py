@@ -69,12 +69,12 @@ class AthanorTest(unittest.TestCase):
     def test_working_requires_frozen_protocol_and_replays_lifecycle(self) -> None:
         program_id, _ = self.athanor.create_program("memory", "Memory")
         with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
-            self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+            self.athanor.create_working("computational-study@0.2.1", program_id, "PT-001")
         self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute pre-registered metrics.")
         with self.assertRaisesRegex(AthanorError, "frozen Protocol"):
-            self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+            self.athanor.create_working("computational-study@0.2.1", program_id, "PT-001")
         self.athanor.seal_protocol("PT-001")
-        working_id, _ = self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+        working_id, _ = self.athanor.create_working("computational-study@0.2.1", program_id, "PT-001")
         artifact_path = self.root / "artifact.json"
         artifact_path.write_text("implementation", encoding="utf-8")
         self.athanor.register_artifact(
@@ -174,7 +174,7 @@ class AthanorTest(unittest.TestCase):
         program_id, _ = self.athanor.create_program("memory", "Memory")
         self.athanor.draft_protocol("PT-001", program_id, "Memory", "Compute metrics.")
         self.athanor.seal_protocol("PT-001")
-        working_id, _ = self.athanor.create_working("computational-study@0.2.0", program_id, "PT-001")
+        working_id, _ = self.athanor.create_working("computational-study@0.2.1", program_id, "PT-001")
         with self.assertRaisesRegex(AthanorError, "manual Working advancement is deprecated"):
             self.athanor.advance_working(working_id, "skip", [])
 

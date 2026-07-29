@@ -23,6 +23,12 @@ PLANNED -> IMPLEMENTED -> PILOT_RUNNING -> PILOT_COMPLETED
 `experiment.cancelled` may terminate any non-terminal state. Re-entry,
 skipping, and transitions from a terminal state fail before append.
 
+`experiment.pilot_completed` is the only Pilot exit for a v1.1 Working. It
+requires the Protocol to register `pilot_run_ids`, every registered Pilot Run
+to exist in the same Experiment, Program, Protocol, and PILOT phase, and every
+Arm required by the Experiment comparisons to be represented. Individual Run
+records never declare the Pilot complete.
+
 The event vocabulary is:
 
 - `experiment.planned`
@@ -62,7 +68,7 @@ Protocols declare `study_mode: confirmatory | exploratory`.
 Canonical events make all terminal phase-one statuses reachable:
 
 - implementation Artifact: `IMPLEMENTED`
-- pilot completion or completed pilot Run: `PILOTED`
+- explicit Experiment pilot completion: `PILOTED`
 - formal start or formal Run: `RUNNING`
 - Result Bundle: `RESULT_READY`
 - Assessment: `EVALUATED`

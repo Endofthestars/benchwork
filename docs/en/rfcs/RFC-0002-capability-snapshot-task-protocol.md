@@ -99,6 +99,14 @@ Agent Result v1.1 repeats the Snapshot and Capability Contract Sigils. Each
 output declares a schema, URI, and byte-level Blob Sigil. `COMPLETED` requires
 at least one output; `FAILED` and `CANCELLED` may have none.
 
+Every built-in output schema combines the common envelope with a
+Capability-specific `data` contract. For example, Evidence Discovery requires
+queries, sources, screened count, candidate Evidence, unresolved queries, and
+limitations. Study Design requires a Protocol proposal, Hypotheses, estimand,
+validity threats, and open Issues. Code Modification requires a patch, changed
+files, tests, validation, and residual risks. An empty `data` object is not a
+valid completed proposal.
+
 Acceptance requires:
 
 1. the Agent Result schema is valid;

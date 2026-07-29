@@ -3,6 +3,6 @@
   "$id": "https://benchwork.dev/schemas/hypothesis-framing-result/1.0",
   "allOf": [
     {"$ref": "https://benchwork.dev/schemas/capability-output/1.0"},
-    {"properties": {"schema_version": {"const": "hypothesis-framing-result/1.0"}}}
+    {"properties": {"schema_version": {"const": "hypothesis-framing-result/1.0"}, "data": {"$ref": "https://benchwork.dev/schemas/capability-data-contracts/1.0#/$defs/hypothesis_framing"}}}
   ]
 }

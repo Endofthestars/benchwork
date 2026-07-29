@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from benchwork.athanor import Athanor, AthanorError
+from benchwork.circle import CapabilityRegistry
 from benchwork.rites import RiteRegistry
 
 
@@ -28,6 +29,7 @@ def build(root: Path) -> dict:
 
     athanor = Athanor(root)
     athanor.initialize()
+    CapabilityRegistry(root).initialize()
     RiteRegistry(root).initialize()
     program_id, _ = athanor.create_program(
         "m10-repair-study",
@@ -76,6 +78,7 @@ def build(root: Path) -> dict:
         ],
         "multiple_comparison_policy": "none",
         "practical_significance_thresholds": {"score": 0.02},
+        "pilot_run_ids": ["RUN-B1", "RUN-T1"],
         "expected_run_ids": [
             "RUN-B1",
             "RUN-T1",
@@ -96,7 +99,7 @@ def build(root: Path) -> dict:
     )
     athanor.seal_protocol("PT-001")
     working_id, _ = athanor.create_working(
-        "computational-study@0.2.0",
+        "computational-study@0.2.1",
         program_id,
         "PT-001",
     )

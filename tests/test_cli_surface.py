@@ -130,7 +130,23 @@ class CliSurfaceTest(unittest.TestCase):
             "schema_version": "evidence-discovery-result/1.0",
             "task_id": task_id,
             "summary": "Discovery proposal completed.",
-            "data": {},
+            "data": {
+                "queries": ["alias evidence query"],
+                "sources": [
+                    {"uri": "https://example.test/source", "title": "Alias source"}
+                ],
+                "screened_count": 1,
+                "candidate_evidence": [
+                    {
+                        "source_uri": "https://example.test/source",
+                        "claim": "A candidate result.",
+                        "relevance": "Matches the alias task.",
+                        "uncertainty": "Requires canonical inspection.",
+                    }
+                ],
+                "unresolved_queries": [],
+                "limitations": [],
+            },
         }
         blob = json.dumps(output_document, sort_keys=True).encode()
         output_path.write_bytes(blob)

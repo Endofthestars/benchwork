@@ -39,12 +39,13 @@ class LifecycleV11Test(unittest.TestCase):
                 ],
                 "multiple_comparison_policy": "none",
                 "practical_significance_thresholds": {},
+                "pilot_run_ids": ["RUN-BASELINE", "RUN-001"],
                 "expected_run_ids": ["RUN-BASELINE", "RUN-001"],
             },
         )
         self.athanor.seal_protocol("PT-001")
         working_id, _ = self.athanor.create_working(
-            "computational-study@0.2.0",
+            "computational-study@0.2.1",
             program_id,
             "PT-001",
         )
@@ -99,6 +100,15 @@ class LifecycleV11Test(unittest.TestCase):
             phase="PILOT",
             arm="baseline",
         )
+        self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
+        event_count = len(self.athanor.chronicle.events())
+        with self.assertRaisesRegex(
+            AthanorError,
+            "all registered Pilot Runs",
+        ):
+            self.athanor.transition_experiment(experiment_id, "pilot-completed")
+        self.assertEqual(len(self.athanor.chronicle.events()), event_count)
+        self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
         self.athanor.record_run(
             "RUN-001",
             experiment_id,
@@ -109,9 +119,10 @@ class LifecycleV11Test(unittest.TestCase):
             phase="PILOT",
             arm="treatment",
         )
+        self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
+        self.athanor.transition_experiment(experiment_id, "pilot-completed")
         self.assertEqual(self.athanor.workings()[working_id]["stage"], "ANALYSIS")
         self.assertEqual(self.athanor.programs()[program_id]["status"], "PILOTED")
-        self.athanor.transition_experiment(experiment_id, "pilot-completed")
         self.athanor.transition_experiment(experiment_id, "formal-started")
         self.assertEqual(self.athanor.programs()[program_id]["status"], "RUNNING")
 
@@ -147,6 +158,28 @@ class LifecycleV11Test(unittest.TestCase):
         for transition, status in (
             ("implemented", "IMPLEMENTED"),
             ("pilot-started", "PILOT_RUNNING"),
+        ):
+            self.athanor.transition_experiment(experiment_id, transition)
+            self.assertEqual(self.athanor.experiments()[experiment_id]["status"], status)
+        self.athanor.record_run(
+            "RUN-BASELINE",
+            experiment_id,
+            "COMPLETED",
+            True,
+            {"score": 0.5},
+            phase="PILOT",
+            arm="baseline",
+        )
+        self.athanor.record_run(
+            "RUN-001",
+            experiment_id,
+            "COMPLETED",
+            True,
+            {"score": 0.6},
+            phase="PILOT",
+            arm="treatment",
+        )
+        for transition, status in (
             ("pilot-completed", "PILOT_COMPLETED"),
             ("formal-started", "FORMAL_RUNNING"),
             ("completed", "COMPLETED"),
@@ -155,6 +188,52 @@ class LifecycleV11Test(unittest.TestCase):
             self.assertEqual(self.athanor.experiments()[experiment_id]["status"], status)
         with self.assertRaisesRegex(AthanorError, "invalid Experiment transition"):
             self.athanor.transition_experiment(experiment_id, "cancelled")
+
+    def test_canonical_event_advances_only_its_bound_working(self) -> None:
+        program_id, protocol_id, first_working_id, _ = self._exploratory_study()
+        second_working_id, _ = self.athanor.create_working(
+            "computational-study@0.2.1",
+            program_id,
+            protocol_id,
+        )
+        implementation = self.root / "bound-implementation.bin"
+        implementation.write_bytes(b"working-specific implementation")
+        self.athanor.register_artifact(
+            "AR-BOUND",
+            program_id,
+            "implementation",
+            {
+                "uri": "bound-implementation.bin",
+                "sigil": "sha256:"
+                + hashlib.sha256(b"working-specific implementation").hexdigest(),
+            },
+            first_working_id,
+            [protocol_id],
+        )
+        workings = self.athanor.workings()
+        self.assertEqual(workings[first_working_id]["stage"], "PILOT")
+        self.assertEqual(workings[second_working_id]["stage"], "IMPLEMENTATION")
+
+    def test_pilot_completion_requires_every_registered_arm(self) -> None:
+        _, _, _, experiment_id = self._exploratory_study()
+        self.athanor.transition_experiment(experiment_id, "implemented")
+        self.athanor.transition_experiment(experiment_id, "pilot-started")
+        for run_id, score in (("RUN-BASELINE", 0.5), ("RUN-001", 0.6)):
+            self.athanor.record_run(
+                run_id,
+                experiment_id,
+                "COMPLETED",
+                True,
+                {"score": score},
+                phase="PILOT",
+                arm="baseline",
+            )
+        with self.assertRaisesRegex(AthanorError, "comparison Arms"):
+            self.athanor.transition_experiment(experiment_id, "pilot-completed")
+        self.assertEqual(
+            self.athanor.experiments()[experiment_id]["status"],
+            "PILOT_RUNNING",
+        )
 
     def test_confirmatory_and_exploratory_hypothesis_contracts(self) -> None:
         program_id, _ = self.athanor.create_program("study-modes", "Study modes")

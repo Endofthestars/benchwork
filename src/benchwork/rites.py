@@ -80,7 +80,61 @@ DEFAULT_RITES: dict[str, dict[str, Any]] = {
             },
             {"name": "COMPLETED"},
         ],
-        "description": "A canonical-event-driven computational research study.",
+        "description": "Legacy per-Run Pilot exit retained for replay compatibility.",
+    },
+    "computational-study@0.2.1": {
+        "schema_version": "rite/1.1",
+        "rite_id": "computational-study@0.2.1",
+        "stages": [
+            {
+                "name": "IMPLEMENTATION",
+                "exit_contract": {
+                    "event_type": "artifact.registered",
+                    "object_type": "artifact",
+                    "kind": "implementation",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "PILOT",
+                "exit_contract": {
+                    "event_type": "experiment.pilot_completed",
+                    "object_type": "experiment",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "ANALYSIS",
+                "exit_contract": {
+                    "event_type": "analysis.computed",
+                    "object_type": "result-bundle",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "REVIEW",
+                "exit_contract": {
+                    "event_type": "assessment.recorded",
+                    "object_type": "assessment",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {
+                "name": "DECISION",
+                "exit_contract": {
+                    "event_type": "decision.sealed",
+                    "object_type": "decision",
+                    "same_program": True,
+                    "same_protocol": True,
+                },
+            },
+            {"name": "COMPLETED"},
+        ],
+        "description": "A Working-bound canonical-event computational research study.",
     }
 }
 

@@ -16,5 +16,6 @@
   "practical_significance_thresholds": {
     "score": 0.02
   },
+  "pilot_run_ids": ["RUN-000", "RUN-001"],
   "expected_run_ids": ["RUN-000", "RUN-001"]
 }

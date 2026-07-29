@@ -309,6 +309,7 @@ def _parser() -> argparse.ArgumentParser:
     experiment_create.add_argument("--protocol", required=True)
     experiment_create.add_argument("--question", required=True)
     experiment_create.add_argument("--hypothesis")
+    experiment_create.add_argument("--working")
     experiment_transition = experiment_commands.add_parser(
         "transition",
         help="record a monotonic Experiment lifecycle transition",
@@ -634,10 +635,18 @@ def main(
                 command_error = CommandError(
                     "WAITING_FOR_APPROVAL"
                     if exit_code == 3
-                    else "COMMAND_REJECTED",
+                    else (
+                        "INTEGRITY_FAILURE"
+                        if exit_code == 4
+                        else "COMMAND_REJECTED"
+                    ),
                     "Task is waiting for explicit approval"
                     if exit_code == 3
-                    else "Command was rejected",
+                    else (
+                        "Deep doctor detected integrity failures"
+                        if exit_code == 4
+                        else "Command was rejected"
+                    ),
                     exit_code,
                     {"result": result},
                 )
@@ -979,6 +988,7 @@ def main(
                 args.protocol,
                 args.question,
                 args.hypothesis,
+                args.working,
             )
             _print_receipt(f"Experiment {args.experiment_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "run" and args.run_command is None:
@@ -1256,28 +1266,23 @@ def main(
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":
-            event_count = len(athanor.chronicle.events())
             if args.deep:
-                state = athanor.replay()
-                object_count = sum(
-                    len(collection)
-                    for collection in state.values()
-                    if isinstance(collection, dict)
-                )
-                print(
-                    json.dumps(
-                        {
-                            "schema_version": "doctor-report/1.0",
-                            "mode": "deep",
-                            "chronicle_verified": True,
-                            "event_count": event_count,
-                            "all_objects_replayable": True,
-                            "object_count": object_count,
-                        },
-                        indent=2,
-                    )
-                )
+                from ..doctor import deep_doctor
+
+                report = deep_doctor(root)
+                if not report["ok"]:
+                    if _machine_capture:
+                        raise ProjectContextError(
+                            "INTEGRITY_FAILURE",
+                            "Deep doctor detected integrity failures",
+                            exit_code=4,
+                            details={"report": report},
+                        )
+                    print(json.dumps(report, indent=2))
+                    return 4
+                print(json.dumps(report, indent=2))
             else:
+                event_count = len(athanor.chronicle.events())
                 print(
                     f"Chronicle healthy: {event_count} verified event(s), "
                     "receipt chain intact"

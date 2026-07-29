@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/chronicle-migration-transaction/1.0",
+  "title": "Chronicle Migration Transaction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "migration",
+    "stage",
+    "event_count",
+    "source_terminal_sigil",
+    "target_terminal_receipt_sigil",
+    "backup_directory",
+    "projection_preserved"
+  ],
+  "properties": {
+    "schema_version": {"const": "chronicle-migration-transaction/1.0"},
+    "migration": {"const": "chronicle-v1.0-to-v1.1"},
+    "stage": {"enum": ["PREPARED", "LEDGER_REPLACED", "HEAD_REPLACED"]},
+    "event_count": {"type": "integer", "minimum": 0},
+    "source_terminal_sigil": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "target_terminal_receipt_sigil": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "backup_directory": {"type": "string", "pattern": "^migrations/[^/]+$"},
+    "projection_preserved": {"const": true}
+  }
+}

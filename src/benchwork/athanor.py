@@ -148,6 +148,54 @@ def _record_protocol_id(
     return None
 
 
+def _validate_pilot_completion(
+    experiment_id: str,
+    experiment: dict[str, Any],
+    protocol: dict[str, Any],
+    runs: dict[str, dict[str, Any]],
+) -> None:
+    analysis_spec = protocol.get("analysis_spec")
+    if analysis_spec is None:
+        raise AthanorError("Pilot completion requires a registered analysis_spec")
+    pilot_run_ids = analysis_spec.get("pilot_run_ids")
+    if not pilot_run_ids:
+        raise AthanorError("Pilot completion requires registered pilot_run_ids")
+    registered_runs = [runs.get(run_id) for run_id in pilot_run_ids]
+    if any(run is None for run in registered_runs):
+        missing = [
+            run_id
+            for run_id, run in zip(pilot_run_ids, registered_runs)
+            if run is None
+        ]
+        raise AthanorError(
+            "Pilot completion requires all registered Pilot Runs: "
+            + ", ".join(missing)
+        )
+    pilot_runs = [run for run in registered_runs if run is not None]
+    if any(
+        run["experiment_id"] != experiment_id
+        or run["program_id"] != experiment["program_id"]
+        or run["protocol_id"] != experiment["protocol_id"]
+        or run.get("phase") != "PILOT"
+        for run in pilot_runs
+    ):
+        raise AthanorError(
+            "registered Pilot Runs must match the Experiment, Program, "
+            "Protocol, and PILOT phase"
+        )
+    required_arms = {
+        arm
+        for comparison in analysis_spec["comparisons"]
+        if comparison["experiment_id"] == experiment_id
+        for arm in comparison["arms"]
+    }
+    recorded_arms = {
+        run.get("arm") for run in pilot_runs if run.get("arm") is not None
+    }
+    if not required_arms.issubset(recorded_arms):
+        raise AthanorError("Pilot completion requires all registered comparison Arms")
+
+
 def _advance_workings_for_event(
     event: dict[str, Any],
     workings: dict[str, dict[str, Any]],
@@ -164,6 +212,7 @@ def _advance_workings_for_event(
     object_id = event["object_id"]
     object_types = {
         "artifact.registered": "artifact",
+        "experiment.pilot_completed": "experiment",
         "run.recorded": "run",
         "analysis.computed": "result-bundle",
         "assessment.recorded": "assessment",
@@ -175,6 +224,7 @@ def _advance_workings_for_event(
 
     record_collections = {
         "artifact": artifacts,
+        "experiment": experiments,
         "run": runs,
         "result-bundle": result_bundles,
         "assessment": assessments,
@@ -207,6 +257,54 @@ def _advance_workings_for_event(
             for assessment_id in record["assessment_ids"]
         )
 
+    target_working_ids: set[str] = set()
+
+    def add_bundle_lineage(bundle: dict[str, Any]) -> bool:
+        comparisons = bundle.get("comparisons")
+        if not isinstance(comparisons, list) or not comparisons:
+            return False
+        for comparison in comparisons:
+            experiment = experiments.get(comparison["experiment_id"])
+            working_id = experiment.get("working_id") if experiment is not None else None
+            if working_id is None:
+                return False
+            target_working_ids.add(working_id)
+        return True
+
+    lineage_complete = True
+    if object_type == "artifact":
+        producer_id = record["producer_id"]
+        if producer_id in workings:
+            target_working_ids.add(producer_id)
+        elif producer_id in experiments:
+            working_id = experiments[producer_id].get("working_id")
+            if working_id is not None:
+                target_working_ids.add(working_id)
+    elif object_type in {"experiment", "run"}:
+        experiment = (
+            record
+            if object_type == "experiment"
+            else experiments.get(record["experiment_id"])
+        )
+        if experiment is not None and experiment.get("working_id") is not None:
+            target_working_ids.add(experiment["working_id"])
+    elif object_type == "result-bundle":
+        lineage_complete = add_bundle_lineage(record)
+    elif object_type == "assessment":
+        bundle = result_bundles.get(record["result_bundle_id"])
+        lineage_complete = bundle is not None and add_bundle_lineage(bundle)
+    elif object_type == "decision":
+        for assessment_id in record["assessment_ids"]:
+            assessment = assessments[assessment_id]
+            bundle = result_bundles.get(assessment["result_bundle_id"])
+            if bundle is None or not add_bundle_lineage(bundle):
+                lineage_complete = False
+                break
+
+    if not lineage_complete or len(target_working_ids) != 1:
+        return
+    target_working_id = next(iter(target_working_ids))
+
     for working in workings.values():
         if working["schema_version"] != "working/1.1" or working["status"] != "ACTIVE":
             continue
@@ -218,6 +316,7 @@ def _advance_workings_for_event(
             contract is None
             or contract["event_type"] != event_type
             or contract["object_type"] != object_type
+            or working["working_id"] != target_working_id
             or working["program_id"] != program_id
             or working["protocol_id"] not in protocol_ids
             or ("kind" in contract and payload.get("kind") != contract["kind"])
@@ -304,6 +403,7 @@ class Chronicle:
         self.path = base / "chronicle.jsonl"
         self.head_path = base / "chronicle.head"
         self.lock_path = base / "chronicle.lock"
+        self.migration_path = base / "migration.pending"
 
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -333,6 +433,136 @@ class Chronicle:
             os.fsync(directory)
         finally:
             os.close(directory)
+
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        directory = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def _atomic_write_bytes(self, path: Path, blob: bytes) -> None:
+        temporary = path.with_name(path.name + ".migration.tmp")
+        temporary.write_bytes(blob)
+        with temporary.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        self._fsync_directory(path.parent)
+
+    def _write_migration_transaction(self, transaction: dict[str, Any]) -> None:
+        from .schema_validation import validate_instance
+
+        validate_instance("chronicle-migration-transaction-1.0.json", transaction)
+        self._atomic_write_bytes(
+            self.migration_path,
+            (canonical_json(transaction) + "\n").encode(),
+        )
+
+    def _migration_fault(self, point: str) -> None:
+        del point
+
+    def _load_migration_transaction(self) -> dict[str, Any]:
+        from .schema_validation import validate_instance
+
+        try:
+            transaction = json.loads(self.migration_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            raise AthanorError("invalid Chronicle migration transaction") from error
+        if not isinstance(transaction, dict):
+            raise AthanorError("Chronicle migration transaction must be an object")
+        validate_instance("chronicle-migration-transaction-1.0.json", transaction)
+        return transaction
+
+    def _migration_backup_directory(self, transaction: dict[str, Any]) -> Path:
+        migrations = (self.path.parent / "migrations").resolve()
+        backup_directory = (self.path.parent / transaction["backup_directory"]).resolve()
+        try:
+            backup_directory.relative_to(migrations)
+        except ValueError as error:
+            raise AthanorError("Chronicle migration backup escapes the project") from error
+        return backup_directory
+
+    @staticmethod
+    def _migration_report(transaction: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "schema_version": "chronicle-migration-report/1.0",
+            "migration": transaction["migration"],
+            "event_count": transaction["event_count"],
+            "source_terminal_sigil": transaction["source_terminal_sigil"],
+            "target_terminal_receipt_sigil": transaction[
+                "target_terminal_receipt_sigil"
+            ],
+            "backup_directory": transaction["backup_directory"],
+            "projection_preserved": transaction["projection_preserved"],
+        }
+
+    def _finish_migration_transaction(
+        self,
+        transaction: dict[str, Any],
+        projector: ProjectionBuilder,
+    ) -> dict[str, Any]:
+        backup_directory = self._migration_backup_directory(transaction)
+        old_ledger = backup_directory / "chronicle.jsonl.v1.0"
+        old_head = backup_directory / "chronicle.head.v1.0"
+        new_ledger = backup_directory / "chronicle.jsonl.v1.1"
+        new_head = backup_directory / "chronicle.head.v1.1"
+        if not all(path.is_file() for path in (old_ledger, old_head, new_ledger, new_head)):
+            raise AthanorError("Chronicle migration transaction files are incomplete")
+
+        old_events = self._parse_v10(old_ledger.read_text(encoding="utf-8"))
+        new_events = self._parse_v11(new_ledger.read_text(encoding="utf-8"))
+        try:
+            source_head = json.loads(old_head.read_text(encoding="utf-8"))
+            target_head = json.loads(new_head.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            raise AthanorError("invalid Chronicle migration transaction head") from error
+        source_sigil = old_events[-1]["receipt"]["sigil"] if old_events else None
+        target_sigil = (
+            new_events[-1]["receipt"]["receipt_sigil"] if new_events else None
+        )
+        if (
+            source_head != {"count": len(old_events), "sigil": source_sigil}
+            or target_head
+            != {
+                "schema_version": "chronicle-head/1.1",
+                "event_count": len(new_events),
+                "terminal_receipt_sigil": target_sigil,
+            }
+            or transaction["event_count"] != len(new_events)
+            or transaction["source_terminal_sigil"] != source_sigil
+            or transaction["target_terminal_receipt_sigil"] != target_sigil
+            or projector(old_events) != projector(new_events)
+        ):
+            raise AthanorError("Chronicle migration transaction verification failed")
+
+        current_ledger = self.path.read_bytes()
+        if current_ledger == old_ledger.read_bytes():
+            self._atomic_write_bytes(self.path, new_ledger.read_bytes())
+        elif current_ledger != new_ledger.read_bytes():
+            raise AthanorError("Chronicle ledger diverged during migration")
+        transaction["stage"] = "LEDGER_REPLACED"
+        self._write_migration_transaction(transaction)
+        self._migration_fault("after_ledger_replace")
+        self._migration_fault("before_head_replace")
+
+        current_head = self.head_path.read_bytes()
+        if current_head == old_head.read_bytes():
+            self._atomic_write_bytes(self.head_path, new_head.read_bytes())
+        elif current_head != new_head.read_bytes():
+            raise AthanorError("Chronicle head diverged during migration")
+        transaction["stage"] = "HEAD_REPLACED"
+        self._write_migration_transaction(transaction)
+        self._migration_fault("after_head_replace_before_report")
+
+        report = self._migration_report(transaction)
+        self._atomic_write_bytes(
+            backup_directory / "migration-report.json",
+            (canonical_json(report) + "\n").encode(),
+        )
+        self.migration_path.unlink()
+        self._fsync_directory(self.migration_path.parent)
+        return report
 
     @staticmethod
     def _decode_event(line: str, line_number: int) -> dict[str, Any]:
@@ -578,6 +808,11 @@ class Chronicle:
     def migrate_v10_to_v11(self, projector: ProjectionBuilder) -> dict[str, Any]:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with _exclusive_lock(self.lock_path):
+            if self.migration_path.exists():
+                return self._finish_migration_transaction(
+                    self._load_migration_transaction(),
+                    projector,
+                )
             if not self.path.exists() or not self.head_path.exists():
                 raise AthanorError("Chronicle v1.0 ledger and head are required for migration")
             text = self.path.read_text(encoding="utf-8")
@@ -648,26 +883,40 @@ class Chronicle:
             backup_directory.mkdir(parents=True)
             shutil.copy2(self.path, backup_directory / "chronicle.jsonl.v1.0")
             shutil.copy2(self.head_path, backup_directory / "chronicle.head.v1.0")
+            for backup_path in (
+                backup_directory / "chronicle.jsonl.v1.0",
+                backup_directory / "chronicle.head.v1.0",
+            ):
+                with backup_path.open("rb") as handle:
+                    os.fsync(handle.fileno())
+            self._fsync_directory(backup_directory)
 
-            report = {
-                "schema_version": "chronicle-migration-report/1.0",
+            transaction = {
+                "schema_version": "chronicle-migration-transaction/1.0",
                 "migration": "chronicle-v1.0-to-v1.1",
+                "stage": "PREPARED",
                 "event_count": len(new_events),
                 "source_terminal_sigil": expected_old_sigil,
                 "target_terminal_receipt_sigil": previous_receipt_sigil,
                 "backup_directory": str(backup_directory.relative_to(self.path.parent)),
                 "projection_preserved": True,
             }
-            report_path = backup_directory / "migration-report.json"
-            report_path.write_text(canonical_json(report) + "\n", encoding="utf-8")
-
-            ledger_temporary = self.path.with_suffix(".jsonl.tmp")
-            ledger_temporary.write_text(migrated_text, encoding="utf-8")
-            with ledger_temporary.open("rb") as handle:
-                os.fsync(handle.fileno())
-            os.replace(ledger_temporary, self.path)
-            self._write_head(len(new_events), previous_receipt_sigil)
-            return report
+            target_head = {
+                "schema_version": "chronicle-head/1.1",
+                "event_count": len(new_events),
+                "terminal_receipt_sigil": previous_receipt_sigil,
+            }
+            self._atomic_write_bytes(
+                backup_directory / "chronicle.jsonl.v1.1",
+                migrated_text.encode(),
+            )
+            self._atomic_write_bytes(
+                backup_directory / "chronicle.head.v1.1",
+                (canonical_json(target_head) + "\n").encode(),
+            )
+            self._write_migration_transaction(transaction)
+            self._migration_fault("after_backup")
+            return self._finish_migration_transaction(transaction, projector)
 
 
 class Athanor:
@@ -1139,9 +1388,14 @@ class Athanor:
                     raise AthanorError(f"invalid Experiment creation: {object_id}")
                 planned_experiment = {
                     "schema_version": (
-                        "experiment/1.1"
+                        "experiment/1.2"
                         if event["type"] == "experiment.planned"
-                        else "experiment/1.0"
+                        and "working_id" in payload
+                        else (
+                            "experiment/1.1"
+                            if event["type"] == "experiment.planned"
+                            else "experiment/1.0"
+                        )
                     ),
                     "experiment_id": object_id,
                     "program_id": payload["program_id"],
@@ -1150,6 +1404,8 @@ class Athanor:
                     "question": payload["question"],
                     "status": "PLANNED",
                 }
+                if "working_id" in payload:
+                    planned_experiment["working_id"] = payload["working_id"]
                 if event["type"] == "experiment.planned":
                     planned_experiment["history"] = [
                         {
@@ -1173,7 +1429,8 @@ class Athanor:
                 if event["type"] == "experiment.cancelled":
                     valid = (
                         transitioned_experiment is not None
-                        and transitioned_experiment["schema_version"] == "experiment/1.1"
+                        and transitioned_experiment["schema_version"]
+                        in {"experiment/1.1", "experiment/1.2"}
                         and transitioned_experiment["status"]
                         not in {"COMPLETED", "CANCELLED"}
                     )
@@ -1182,12 +1439,31 @@ class Athanor:
                     expected, next_status = transitions.get(event["type"], (None, None))
                     valid = (
                         transitioned_experiment is not None
-                        and transitioned_experiment["schema_version"] == "experiment/1.1"
+                        and transitioned_experiment["schema_version"]
+                        in {"experiment/1.1", "experiment/1.2"}
                         and transitioned_experiment["status"] == expected
                     )
                 if not valid or next_status is None:
                     raise AthanorError(f"invalid Experiment transition: {object_id}")
                 assert transitioned_experiment is not None
+                if (
+                    payload.get("program_id") != transitioned_experiment["program_id"]
+                    or payload.get("protocol_id")
+                    != transitioned_experiment["protocol_id"]
+                    or (
+                        transitioned_experiment["schema_version"] == "experiment/1.2"
+                        and payload.get("working_id")
+                        != transitioned_experiment["working_id"]
+                    )
+                ):
+                    raise AthanorError(f"invalid Experiment lineage: {object_id}")
+                if event["type"] == "experiment.pilot_completed":
+                    _validate_pilot_completion(
+                        object_id,
+                        transitioned_experiment,
+                        protocols[transitioned_experiment["protocol_id"]],
+                        runs,
+                    )
                 transitioned_experiment["status"] = next_status
                 transitioned_experiment["history"].append(
                     {
@@ -1243,10 +1519,8 @@ class Athanor:
                     if "arm" in payload:
                         run["arm"] = payload["arm"]
                 runs[object_id] = run
-                _advance_program(
-                    programs[payload["program_id"]],
-                    "PILOTED" if payload.get("phase") == "PILOT" else "RUNNING",
-                )
+                if payload.get("phase") != "PILOT":
+                    _advance_program(programs[payload["program_id"]], "RUNNING")
             elif event["type"] == "analysis.computed":
                 from .alembic import (
                     build_legacy_result_bundle,
@@ -1672,9 +1946,11 @@ class Athanor:
             )
         for experiment in experiments.values():
             validate_instance(
-                "experiment-1.1.json"
-                if experiment["schema_version"] == "experiment/1.1"
-                else "experiment-1.0.json",
+                {
+                    "experiment/1.0": "experiment-1.0.json",
+                    "experiment/1.1": "experiment-1.1.json",
+                    "experiment/1.2": "experiment-1.2.json",
+                }[experiment["schema_version"]],
                 experiment,
             )
         for run in runs.values():
@@ -2436,6 +2712,7 @@ class Athanor:
         protocol_id: str,
         question: str,
         hypothesis_id: str | None = None,
+        working_id: str | None = None,
     ) -> Receipt:
         if not IDENTIFIER.fullmatch(experiment_id) or not experiment_id.startswith("EX-"):
             raise AthanorError("Experiment ID must use the form EX-<identifier>")
@@ -2455,6 +2732,29 @@ class Athanor:
                 raise AthanorError(f"Experiment Program does not match Protocol: {program_id}")
             if experiment_id in state["experiments"]:
                 raise AthanorError(f"Experiment already exists: {experiment_id}")
+            matching_workings = [
+                working
+                for working in state["workings"].values()
+                if working["schema_version"] == "working/1.1"
+                and working["status"] == "ACTIVE"
+                and working["program_id"] == program_id
+                and working["protocol_id"] == protocol_id
+            ]
+            selected_working_id = working_id
+            if selected_working_id is None and len(matching_workings) == 1:
+                selected_working_id = matching_workings[0]["working_id"]
+            elif selected_working_id is None and len(matching_workings) > 1:
+                raise AthanorError(
+                    "Experiment requires an explicit Working when multiple matching "
+                    "Workings are active"
+                )
+            if selected_working_id is not None and not any(
+                working["working_id"] == selected_working_id
+                for working in matching_workings
+            ):
+                raise AthanorError(
+                    f"Experiment Working is not active for the Protocol: {selected_working_id}"
+                )
             if hypothesis_id is not None:
                 hypothesis = state["hypotheses"].get(hypothesis_id)
                 if (
@@ -2468,6 +2768,7 @@ class Athanor:
             return "experiment.planned", experiment_id, {
                 "program_id": program_id,
                 "protocol_id": protocol_id,
+                "working_id": selected_working_id,
                 "hypothesis_id": hypothesis_id,
                 "question": question,
             }
@@ -2503,7 +2804,8 @@ class Athanor:
         }
 
         def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
-            experiment = self._project(events)["experiments"].get(experiment_id)
+            state = self._project(events)
+            experiment = state["experiments"].get(experiment_id)
             if experiment is None:
                 raise AthanorError(f"unknown Experiment: {experiment_id}")
             if experiment["status"] not in expected_statuses[transition]:
@@ -2511,9 +2813,18 @@ class Athanor:
                     f"invalid Experiment transition from {experiment['status']}: "
                     f"{transition}"
                 )
+            if transition == "pilot-completed":
+                protocol = state["protocols"][experiment["protocol_id"]]
+                _validate_pilot_completion(
+                    experiment_id,
+                    experiment,
+                    protocol,
+                    state["runs"],
+                )
             return event_type, experiment_id, {
                 "program_id": experiment["program_id"],
                 "protocol_id": experiment["protocol_id"],
+                "working_id": experiment.get("working_id"),
             }
 
         return self.chronicle.transact(build)[1]

@@ -21,6 +21,9 @@ dev = [
   "ruff>=0.8",
   "twine>=5.1",
 ]
+oracle = [
+  "scipy>=1.12",
+]
 
 [project.scripts]
 bwork = "benchwork.cli:main"

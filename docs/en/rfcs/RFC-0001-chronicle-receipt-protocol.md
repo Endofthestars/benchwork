@@ -135,6 +135,22 @@ Recovery never edits `chronicle.jsonl`.
 Receipt and Event IDs are preserved. Sigils and chain references necessarily
 change because v1.1 covers more data.
 
+Migration is a recoverable two-file transaction. Before replacing either live
+file, Benchwork writes verified v1.1 Ledger and Head candidates beside the
+v1.0 backup and records `.benchwork/migration.pending`. The transaction marker
+identifies the backup directory, both terminal Sigils, event count, and commit
+stage. Re-running the migration command:
+
+- accepts only a live Ledger and Head that byte-match the v1.0 backup or the
+  prepared v1.1 candidate;
+- revalidates both chains and projection equivalence;
+- completes any missing Ledger or Head replacement;
+- writes the report, then removes the transaction marker.
+
+Crashes after backup, after Ledger replacement, before Head replacement, and
+after Head replacement are therefore resumable. Divergent live content fails
+closed and retains the backup and transaction marker for inspection.
+
 ## Compatibility
 
 The v1.0 Schemas remain published for inspection and migration. A project uses

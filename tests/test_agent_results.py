@@ -54,11 +54,50 @@ class AgentResultTest(unittest.TestCase):
         outputs = []
         if status == "COMPLETED":
             output_schema = schema or capsule["expected_outputs"][0]["schema"]
+            semantic_data = {
+                "code-inspection-result/1.0": {
+                    "inspected_files": ["src/benchwork/athanor.py"],
+                    "findings": ["The inspected transition is deterministic."],
+                    "tests_considered": ["tests/test_agent_results.py"],
+                    "residual_risks": [],
+                },
+                "code-modification-result/1.0": {
+                    "patch": "diff --git a/example.py b/example.py",
+                    "changed_files": ["example.py"],
+                    "tests_run": ["python -m unittest"],
+                    "validation": "The bounded validation passed.",
+                    "residual_risks": [],
+                },
+                "evidence-discovery-result/1.0": {
+                    "queries": ["registered evidence query"],
+                    "sources": [
+                        {"uri": "https://example.test/source", "title": "Source"}
+                    ],
+                    "screened_count": 1,
+                    "candidate_evidence": [
+                        {
+                            "source_uri": "https://example.test/source",
+                            "claim": "A candidate claim.",
+                            "relevance": "Directly addresses the query.",
+                            "uncertainty": "Requires local inspection.",
+                        }
+                    ],
+                    "unresolved_queries": [],
+                    "limitations": ["Single-source proposal."],
+                },
+                "study-design-result/1.0": {
+                    "protocol_proposal": {"title": "Registered study proposal"},
+                    "hypotheses": ["The intervention changes the registered metric."],
+                    "estimand": "mean difference",
+                    "validity_threats": ["Measurement drift."],
+                    "open_issues": [],
+                },
+            }.get(output_schema, {"finding": "inspection complete"})
             output = {
                 "schema_version": output_schema,
                 "task_id": capsule["task_id"],
                 "summary": "A bounded Provider-neutral proposal.",
-                "data": {"finding": "inspection complete"},
+                "data": semantic_data,
             }
             path = self.root / "proposals" / f"{capsule['task_id']}.json"
             path.parent.mkdir(exist_ok=True)
@@ -82,6 +121,16 @@ class AgentResultTest(unittest.TestCase):
         if provenance is not None:
             result["provenance"] = provenance
         return result
+
+    def _replace_output_data(self, result: dict, data: dict) -> None:
+        output_path = self.root / result["outputs"][0]["uri"]
+        document = json.loads(output_path.read_text(encoding="utf-8"))
+        document["data"] = data
+        blob = json.dumps(document, sort_keys=True).encode()
+        output_path.write_bytes(blob)
+        result["outputs"][0]["blob_sigil"] = (
+            "sha256:" + hashlib.sha256(blob).hexdigest()
+        )
 
     def test_agent_result_is_accepted_once_and_replayable(self) -> None:
         capsule = self._capsule()
@@ -232,6 +281,35 @@ class AgentResultTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(AthanorError, "validation failed"):
             self.athanor.accept_agent_result(result)
+
+    def test_capability_outputs_reject_semantically_empty_data(self) -> None:
+        evidence_capsule = self._capsule("bench.evidence.discover")
+        evidence_result = self._result(evidence_capsule)
+        self._replace_output_data(evidence_result, {})
+        with self.assertRaisesRegex(AthanorError, "validation failed"):
+            self.athanor.accept_agent_result(evidence_result)
+
+        design_capsule = self._capsule("bench.study.design")
+        valid_design = {
+            "protocol_proposal": {"title": "Registered study proposal"},
+            "hypotheses": ["The intervention changes the metric."],
+            "estimand": "mean difference",
+            "validity_threats": ["Measurement drift."],
+            "open_issues": [],
+        }
+        for missing in ("hypotheses", "estimand", "validity_threats"):
+            with self.subTest(missing=missing):
+                design_result = self._result(design_capsule)
+                self._replace_output_data(
+                    design_result,
+                    {
+                        key: value
+                        for key, value in valid_design.items()
+                        if key != missing
+                    },
+                )
+                with self.assertRaisesRegex(AthanorError, "validation failed"):
+                    self.athanor.accept_agent_result(design_result)
 
     def test_registry_additively_migrates_legacy_capabilities(self) -> None:
         legacy_contract = {

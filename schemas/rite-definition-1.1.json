@@ -30,6 +30,7 @@
               "event_type": {
                 "enum": [
                   "artifact.registered",
+                  "experiment.pilot_completed",
                   "run.recorded",
                   "analysis.computed",
                   "assessment.recorded",
@@ -37,7 +38,7 @@
                 ]
               },
               "object_type": {
-                "enum": ["artifact", "run", "result-bundle", "assessment", "decision"]
+                "enum": ["artifact", "experiment", "run", "result-bundle", "assessment", "decision"]
               },
               "kind": {"type": "string", "minLength": 1},
               "phase": {"enum": ["PILOT", "FORMAL"]},
