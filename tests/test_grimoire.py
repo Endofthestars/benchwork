@@ -1,10 +1,16 @@
 import json
+import multiprocessing as mp
 import tempfile
 import unittest
 from pathlib import Path
 
 from benchwork.athanor import Athanor, AthanorError, content_sigil
 from benchwork.rites import RiteRegistry
+
+
+def _concurrent_install(argument: tuple[str, str]) -> bool:
+    root, source = argument
+    return RiteRegistry(Path(root)).install_grimoire(Path(source))[2]
 
 
 def _write_grimoire(
@@ -171,6 +177,34 @@ class GrimoireTest(unittest.TestCase):
         self.assertEqual(grimoire_ref, "endofthestars/example-methods@0.1.0")
         self.assertTrue(installed)
         self.assertIn("ablation-study@0.1.0", self.registry.rites())
+
+    def test_legacy_builtin_registry_is_normalized(self) -> None:
+        state = self.root / ".benchwork"
+        state.mkdir()
+        legacy = {
+            "schema_version": "rite-registry/1.0",
+            "rites": {
+                "legacy-study@1.0.0": {
+                    "description": "A pre-Grimoire Rite definition.",
+                    "stages": [{"name": "RUN", "exit_artifact": "run-record"}],
+                }
+            },
+        }
+        (state / "rites.json").write_text(json.dumps(legacy), encoding="utf-8")
+        definition = self.registry.get("legacy-study@1.0.0")
+        self.assertEqual(definition["schema_version"], "rite/1.0")
+        self.assertEqual(definition["rite_id"], "legacy-study@1.0.0")
+
+    def test_concurrent_install_is_idempotent(self) -> None:
+        _write_grimoire(self.source)
+        context = mp.get_context("fork")
+        with context.Pool(2) as pool:
+            installed = pool.map(
+                _concurrent_install,
+                [(str(self.root), str(self.source)), (str(self.root), str(self.source))],
+            )
+        self.assertEqual(sorted(installed), [False, True])
+        self.assertEqual(len(self.registry.grimoires()), 1)
 
     def test_registry_tampering_fails_closed(self) -> None:
         _write_grimoire(self.source)

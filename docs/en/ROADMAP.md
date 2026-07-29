@@ -33,9 +33,11 @@ machine.
 
 ## M5: Alembic
 
-In progress: canonical Run provenance and deterministic `result-bundle/1.0`
-analysis artifacts.
+Completed: canonical Experiment and Run provenance plus deterministic,
+Schema-validated `result-bundle/1.0` analysis artifacts.
 
 ## M6: Open Grimoire
 
-Add a pinned Grimoire extension ecosystem.
+Completed for public Alpha: local, data-only Grimoire manifests; exact API and
+SemVer pins; canonical Rite Sigils; collision and path-escape protection; and
+Working execution from copied, inspectable definitions.

@@ -9,8 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.1.0.dev0`. Milestones M0–M4 are implemented; M5
-> (deterministic analysis through Alembic) is in progress.
+> Project status: `0.1.0a1` public Alpha. Milestones M0–M6 are implemented.
 
 ## Why Benchwork
 
@@ -45,12 +44,16 @@ scientific state.
   proposals.
 - **Rites and Workings** pin workflow definitions and record protocol-bound
   stage transitions.
+- **Experiments, Runs, and Alembic** preserve all outcomes and produce
+  deterministic `result-bundle/1.0` analysis artifacts.
+- **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
+  without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
   events, tasks, runs, assessments, decisions, and result bundles.
 
-Alembic's deterministic `result-bundle/1.0` computation is the next active
-milestone. Benchwork does not yet provide a canonical remote Agent backend,
-automatic experiment execution, or the public Grimoire extension ecosystem.
+Benchwork does not yet provide a canonical remote Agent backend or automatic
+experiment execution. Alpha Grimoire installation is local and data-only;
+publisher signatures and remote distribution remain future work.
 
 ## Integrity model
 
@@ -103,6 +106,20 @@ bwork protocol draft PT-001 \
 
 bwork protocol seal PT-001
 
+bwork experiment create EX-001 \
+  --program RP-001 \
+  --protocol PT-001 \
+  --question "Does the treatment improve the registered score?"
+
+bwork run record RUN-001 \
+  --experiment EX-001 \
+  --status COMPLETED \
+  --include \
+  --seed 1 \
+  --metric score=0.82
+
+bwork analyze --program RP-001 --protocol PT-001
+
 bwork working start computational-study@0.1.0 \
   --program RP-001 \
   --protocol PT-001
@@ -148,6 +165,7 @@ Useful discovery commands:
 bwork capability list
 bwork host list
 bwork rite list
+bwork grimoire list
 bwork --help
 ```
 
@@ -155,7 +173,7 @@ bwork --help
 
 | Command | Purpose |
 |---|---|
-| `bwork init` | Initialize Chronicle, Capability contracts, and Rites |
+| `bwork init` | Initialize Chronicle, Capability contracts, Rites, and Grimoires |
 | `bwork status` | Rebuild and print canonical state |
 | `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
 | `bwork program` | Create Research Programs |
@@ -166,7 +184,11 @@ bwork --help
 | `bwork approval` | Record explicit human approval |
 | `bwork host` | Create Codex or Claude Code Host proposals |
 | `bwork rite` | Inspect pinned workflow definitions |
+| `bwork grimoire` | Compute Rite Sigils and install pinned local Grimoires |
 | `bwork working` | Start, inspect, and advance Rite executions |
+| `bwork experiment` | Create Protocol-bound Experiments |
+| `bwork run` | Record immutable Runs and analysis inclusion |
+| `bwork analyze` | Produce a deterministic Alembic Result Bundle |
 | `bwork trace` | Show Chronicle events for an object |
 
 Use `bwork <command> --help` for command-specific arguments.
@@ -182,6 +204,8 @@ Use `bwork <command> --help` for command-specific arguments.
 ├── chronicle.lock
 ├── capabilities.json
 ├── rites.json
+├── grimoires.json
+├── grimoires.lock
 └── capsules/
 ```
 
@@ -200,6 +224,7 @@ them.
 | Host symmetry | [Twin Gate](docs/en/architecture/TWIN_GATE.md) | — |
 | Working lifecycle | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | Analysis boundary | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
+| Extension boundary | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | Localization | [Policy](docs/LOCALIZATION.md) | — |
 
 English is the canonical documentation source. Missing translations fall back
@@ -208,7 +233,7 @@ to English; untranslated English pages are not copied into locale directories.
 ## Repository layout
 
 ```text
-src/benchwork/     Athanor kernel, CLI, Ward, Hosts, and Rites
+src/benchwork/     Athanor kernel, CLI, Ward, Hosts, Rites, and Grimoire
 schemas/           Public versioned JSON Schema contracts
 tests/             Deterministic unit and integrity tests
 docs/en/           Canonical English documentation

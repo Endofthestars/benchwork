@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
-from .athanor import AthanorError, content_sigil
+from .athanor import AthanorError, _exclusive_lock, canonical_json, content_sigil
 from .grimoire import GrimoireRegistry
 from .schema_validation import validate_instance
 
@@ -33,28 +34,35 @@ class RiteRegistry:
 
     def __init__(self, root: Path) -> None:
         self.path = root / ".benchwork" / "rites.json"
+        self.lock_path = root / ".benchwork" / "rites.lock"
         self.grimoire_registry = GrimoireRegistry(root)
 
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.path.exists():
-            self.path.write_text(
-                json.dumps(
-                    {"schema_version": "rite-registry/1.0", "rites": DEFAULT_RITES},
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
+        with _exclusive_lock(self.lock_path):
+            if not self.path.exists():
+                temporary = self.path.with_suffix(".json.tmp")
+                temporary.write_text(
+                    canonical_json({"schema_version": "rite-registry/1.0", "rites": DEFAULT_RITES}) + "\n",
+                    encoding="utf-8",
                 )
-                + "\n"
-            )
+                with temporary.open("rb") as handle:
+                    os.fsync(handle.fileno())
+                os.replace(temporary, self.path)
+                directory = os.open(self.path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
         self.grimoire_registry.initialize()
 
     def rites(self) -> dict[str, dict[str, Any]]:
         self.initialize()
-        try:
-            registry = json.loads(self.path.read_text())
-        except json.JSONDecodeError as error:
-            raise AthanorError("invalid Rite Registry") from error
+        with _exclusive_lock(self.lock_path):
+            try:
+                registry = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise AthanorError("invalid Rite Registry") from error
         if registry.get("schema_version") != "rite-registry/1.0":
             raise AthanorError("unsupported Rite Registry version")
         rites = registry.get("rites")

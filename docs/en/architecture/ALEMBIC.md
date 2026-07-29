@@ -27,4 +27,6 @@ must not invent a metric or edit the computed artifact.
 The first implementation will calculate per-metric `n`, arithmetic mean,
 sample standard deviation, and a normal-approximation 95% confidence interval
 over completed Runs explicitly marked for primary analysis. It will reject an
-analysis that has no such Runs.
+analysis that has no such Runs. With one eligible Run, the mean is reported but
+sample standard deviation and confidence bounds are `null`, because they are
+not estimable from one observation.

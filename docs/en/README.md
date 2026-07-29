@@ -25,6 +25,7 @@ English is the canonical source for all Benchwork documentation.
 - [Twin Gate](architecture/TWIN_GATE.md)
 - [First Rite: Computational Study](architecture/FIRST_RITE.md)
 - [Alembic](architecture/ALEMBIC.md)
+- [Open Grimoire](architecture/OPEN_GRIMOIRE.md)
 - [Integrity Repair](architecture/INTEGRITY_REPAIR.md)
 
 ## Project

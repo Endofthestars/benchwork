@@ -12,4 +12,5 @@ canonical: true
    accidental tail truncation and incomplete commits.
 3. Extend Circle policy from declarative checks to executor-enforced filesystem,
    budget, and network isolation.
-4. Finalize metric-level constraints in result-bundle/1.0 before Alembic ships.
+4. Define publisher identity, signature verification, and distribution policy
+   before Open Grimoire accepts remote sources or executable extension types.

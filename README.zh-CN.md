@@ -8,8 +8,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.1.0.dev0`。M0–M4 里程碑已经实现；M5
->（通过 Alembic 提供确定性分析）正在推进。
+> 项目状态：`0.1.0a1` 公开 Alpha。M0–M6 里程碑已经实现。
 
 ## 为什么需要 Benchwork
 
@@ -40,11 +39,14 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
   时间与审批。
 - **Codex 与 Claude Code Host** 生成对称、与 Provider 无关的任务提案。
 - **Rite 与 Working** 固定工作流定义，并记录受 Protocol 约束的阶段迁移。
+- **Experiment、Run 与 Alembic** 保留全部结果，并生成确定性的
+  `result-bundle/1.0` 分析产物。
+- **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
 
-下一项活跃里程碑是 Alembic 的确定性 `result-bundle/1.0` 计算。Benchwork
-目前尚未提供规范远程智能体后端、自动实验执行或公开的 Grimoire 扩展生态。
+Benchwork 目前尚未提供规范远程智能体后端或自动实验执行。Alpha 阶段的
+Grimoire 仅支持本地、仅数据安装；发布者签名和远程分发仍是后续工作。
 
 ## 完整性模型
 
@@ -93,6 +95,20 @@ bwork protocol draft PT-001 \
 
 bwork protocol seal PT-001
 
+bwork experiment create EX-001 \
+  --program RP-001 \
+  --protocol PT-001 \
+  --question "处理方法是否提高已注册指标？"
+
+bwork run record RUN-001 \
+  --experiment EX-001 \
+  --status COMPLETED \
+  --include \
+  --seed 1 \
+  --metric score=0.82
+
+bwork analyze --program RP-001 --protocol PT-001
+
 bwork working start computational-study@0.1.0 \
   --program RP-001 \
   --protocol PT-001
@@ -137,6 +153,7 @@ Ward ── REJECTED
 bwork capability list
 bwork host list
 bwork rite list
+bwork grimoire list
 bwork --help
 ```
 
@@ -144,7 +161,7 @@ bwork --help
 
 | 命令 | 用途 |
 |---|---|
-| `bwork init` | 初始化 Chronicle、Capability 契约与 Rite |
+| `bwork init` | 初始化 Chronicle、Capability 契约、Rite 与 Grimoire |
 | `bwork status` | 重建并输出规范状态 |
 | `bwork doctor` | 验证 Chronicle 事件、Sigil、head 与 Receipt 链 |
 | `bwork program` | 创建 Research Program |
@@ -155,7 +172,11 @@ bwork --help
 | `bwork approval` | 记录明确的人工审批 |
 | `bwork host` | 创建 Codex 或 Claude Code Host 提案 |
 | `bwork rite` | 查看固定版本的工作流定义 |
+| `bwork grimoire` | 计算 Rite Sigil 并安装固定版本的本地 Grimoire |
 | `bwork working` | 启动、查看和推进 Rite 执行 |
+| `bwork experiment` | 创建绑定 Protocol 的 Experiment |
+| `bwork run` | 记录不可变 Run 及其分析纳入状态 |
+| `bwork analyze` | 生成确定性的 Alembic Result Bundle |
 | `bwork trace` | 查看一个对象对应的 Chronicle 事件 |
 
 使用 `bwork <command> --help` 查看具体参数。
@@ -171,6 +192,8 @@ bwork --help
 ├── chronicle.lock
 ├── capabilities.json
 ├── rites.json
+├── grimoires.json
+├── grimoires.lock
 └── capsules/
 ```
 
@@ -188,6 +211,7 @@ Chronicle 是规范状态。Task Capsule 是不可变、可检查的提案；在
 | Host 对称性 | [Twin Gate](docs/en/architecture/TWIN_GATE.md) | — |
 | Working 生命周期 | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | 分析边界 | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
+| 扩展边界 | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | 本地化 | [规则](docs/LOCALIZATION.md) | — |
 
 英文是文档的规范来源。翻译缺失时回退到英文页面，不在语言目录中复制未经翻译
@@ -196,7 +220,7 @@ Chronicle 是规范状态。Task Capsule 是不可变、可检查的提案；在
 ## 仓库结构
 
 ```text
-src/benchwork/     Athanor 内核、CLI、Ward、Host 与 Rite
+src/benchwork/     Athanor 内核、CLI、Ward、Host、Rite 与 Grimoire
 schemas/           公开的版本化 JSON Schema 契约
 tests/             确定性单元测试与完整性测试
 docs/en/           规范英文文档
