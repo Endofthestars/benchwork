@@ -11,7 +11,12 @@
     "title": {"type": "string", "minLength": 1},
     "status": {"enum": ["IDEA", "EVIDENCE_READY", "GAP_SUPPORTED", "RQ_FROZEN", "DESIGN_FROZEN", "IMPLEMENTED", "PILOTED", "RUNNING", "RESULT_READY", "EVALUATED"]},
     "problem": {"type": "object"},
-    "protocols": {"type": "array", "items": {"type": "string", "pattern": "^PT-"}}
+    "evidence": {"type": "array", "items": {"type": "string", "pattern": "^EV-"}},
+    "claims": {"type": "array", "items": {"type": "string", "pattern": "^CL-"}},
+    "hypotheses": {"type": "array", "items": {"type": "string", "pattern": "^HY-"}},
+    "protocols": {"type": "array", "items": {"type": "string", "pattern": "^PT-"}},
+    "assessments": {"type": "array", "items": {"type": "string", "pattern": "^AS-"}},
+    "decisions": {"type": "array", "items": {"type": "string", "pattern": "^DE-"}}
   },
   "additionalProperties": false
 }

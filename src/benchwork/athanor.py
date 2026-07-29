@@ -28,6 +28,30 @@ class AthanorError(ValueError):
 IDENTIFIER = re.compile(r"^[A-Z][A-Z0-9_]*-[A-Z0-9][A-Z0-9_-]*$")
 SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIGIL = re.compile(r"^sha256:[a-f0-9]{64}$")
+EVIDENCE_RELATIONS = {"SUPPORTS", "CONTRADICTS", "LIMITS", "REPRODUCES", "UNRESOLVED"}
+EVIDENCE_VERIFICATION_KEYS = {
+    "source_resolved",
+    "content_inspected",
+    "claim_relation_verified",
+    "locally_reproduced",
+}
+PROGRAM_STATUS_ORDER = {
+    status: index
+    for index, status in enumerate(
+        (
+            "IDEA",
+            "EVIDENCE_READY",
+            "GAP_SUPPORTED",
+            "RQ_FROZEN",
+            "DESIGN_FROZEN",
+            "IMPLEMENTED",
+            "PILOTED",
+            "RUNNING",
+            "RESULT_READY",
+            "EVALUATED",
+        )
+    )
+}
 
 
 def canonical_json(value: Any) -> str:
@@ -36,6 +60,11 @@ def canonical_json(value: Any) -> str:
 
 def content_sigil(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(value).encode()).hexdigest()
+
+
+def _advance_program(program: dict[str, Any], status: str) -> None:
+    if PROGRAM_STATUS_ORDER[status] > PROGRAM_STATUS_ORDER[program["status"]]:
+        program["status"] = status
 
 
 @contextmanager
@@ -198,6 +227,11 @@ class Athanor:
         experiments: dict[str, dict[str, Any]] = {}
         runs: dict[str, dict[str, Any]] = {}
         result_bundles: dict[str, dict[str, Any]] = {}
+        evidence: dict[str, dict[str, Any]] = {}
+        claims: dict[str, dict[str, Any]] = {}
+        hypotheses: dict[str, dict[str, Any]] = {}
+        assessments: dict[str, dict[str, Any]] = {}
+        decisions: dict[str, dict[str, Any]] = {}
         for event in events:
             payload = event["payload"]
             object_id = event["object_id"]
@@ -211,15 +245,116 @@ class Athanor:
                     "title": payload["title"],
                     "problem": payload["problem"],
                     "status": "IDEA",
+                    "evidence": [],
+                    "claims": [],
+                    "hypotheses": [],
                     "protocols": [],
+                    "assessments": [],
+                    "decisions": [],
                 }
+            elif event["type"] == "evidence.recorded":
+                program = programs.get(payload["program_id"])
+                if program is None or object_id in evidence:
+                    raise AthanorError(f"invalid Evidence record: {object_id}")
+                evidence[object_id] = {
+                    "schema_version": "evidence/1.1",
+                    "evidence_id": object_id,
+                    "program_id": payload["program_id"],
+                    "source": payload["source"],
+                    "observation": payload["observation"],
+                    "claim_relations": [],
+                    "verification": payload["verification"],
+                }
+                program["evidence"].append(object_id)
+                _advance_program(program, "EVIDENCE_READY")
+            elif event["type"] == "evidence.verified":
+                record = evidence.get(object_id)
+                verification = payload["verification"]
+                if record is None or any(
+                    record["verification"][key] and not verification[key]
+                    for key in EVIDENCE_VERIFICATION_KEYS
+                ):
+                    raise AthanorError(f"invalid Evidence verification: {object_id}")
+                record["verification"] = verification
+            elif event["type"] == "claim.created":
+                program = programs.get(payload["program_id"])
+                relations = payload["evidence_relations"]
+                related_evidence = [evidence.get(relation["evidence_id"]) for relation in relations]
+                if (
+                    program is None
+                    or object_id in claims
+                    or len({relation["evidence_id"] for relation in relations}) != len(relations)
+                    or any(
+                        record is None
+                        or record["program_id"] != payload["program_id"]
+                        or not record["verification"]["source_resolved"]
+                        or not record["verification"]["content_inspected"]
+                        for record in related_evidence
+                    )
+                ):
+                    raise AthanorError(f"invalid Claim creation: {object_id}")
+                claims[object_id] = {
+                    "schema_version": "claim/1.1",
+                    "claim_id": object_id,
+                    "program_id": payload["program_id"],
+                    "type": payload["type"],
+                    "statement": payload["statement"],
+                    "status": "PROPOSED",
+                    "evidence_relations": relations,
+                }
+                for relation, record in zip(relations, related_evidence, strict=True):
+                    record["claim_relations"].append(
+                        {"claim_id": object_id, "relation": relation["relation"]}
+                    )
+                    record["verification"]["claim_relation_verified"] = True
+                program["claims"].append(object_id)
+                if any(
+                    relation["relation"] in {"SUPPORTS", "REPRODUCES"}
+                    for relation in relations
+                ):
+                    _advance_program(program, "GAP_SUPPORTED")
+            elif event["type"] == "hypothesis.created":
+                program = programs.get(payload["program_id"])
+                related_claims = [claims.get(claim_id) for claim_id in payload["claim_ids"]]
+                if (
+                    program is None
+                    or object_id in hypotheses
+                    or len(set(payload["claim_ids"])) != len(payload["claim_ids"])
+                    or any(
+                        claim is None or claim["program_id"] != payload["program_id"]
+                        for claim in related_claims
+                    )
+                ):
+                    raise AthanorError(f"invalid Hypothesis creation: {object_id}")
+                hypotheses[object_id] = {
+                    "schema_version": "hypothesis/1.0",
+                    "hypothesis_id": object_id,
+                    "program_id": payload["program_id"],
+                    "claim_ids": payload["claim_ids"],
+                    "statement": payload["statement"],
+                    "prediction": payload["prediction"],
+                    "status": "PROPOSED",
+                }
+                program["hypotheses"].append(object_id)
+                _advance_program(program, "RQ_FROZEN")
             elif event["type"] == "protocol.drafted":
-                if payload["program_id"] not in programs or object_id in protocols:
+                hypothesis_ids = payload.get("hypothesis_ids", [])
+                if (
+                    payload["program_id"] not in programs
+                    or object_id in protocols
+                    or len(set(hypothesis_ids)) != len(hypothesis_ids)
+                    or any(
+                        hypothesis_id not in hypotheses
+                        or hypotheses[hypothesis_id]["program_id"] != payload["program_id"]
+                        for hypothesis_id in hypothesis_ids
+                    )
+                ):
                     raise AthanorError(f"invalid Protocol draft: {object_id}")
                 protocols[object_id] = {
                     "schema_version": "study-protocol/1.0",
                     "protocol_id": object_id,
                     "program_id": payload["program_id"],
+                    "hypothesis_ids": hypothesis_ids,
                     "title": payload["title"],
                     "analysis_plan": payload["analysis_plan"],
                     "status": "DRAFT",
@@ -235,7 +370,7 @@ class Athanor:
                 protocol["seal_receipt"] = event["receipt"]["receipt_id"]
                 program = programs[protocol["program_id"]]
                 program["protocols"].append(object_id)
-                program["status"] = "DESIGN_FROZEN"
+                _advance_program(program, "DESIGN_FROZEN")
             elif event["type"] == "approval.granted":
                 if object_id in approvals:
                     raise AthanorError(f"duplicate approval for Task: {object_id}")
@@ -287,11 +422,22 @@ class Athanor:
                 )
             elif event["type"] == "experiment.created":
                 protocol = protocols.get(payload["protocol_id"])
+                hypothesis_id = payload["hypothesis_id"]
+                hypothesis = hypotheses.get(hypothesis_id) if hypothesis_id is not None else None
                 if (
                     object_id in experiments
                     or protocol is None
                     or protocol["status"] != "FROZEN"
                     or protocol["program_id"] != payload["program_id"]
+                    or (
+                        hypothesis_id is not None
+                        and protocol["hypothesis_ids"]
+                        and (
+                            hypothesis is None
+                            or hypothesis["program_id"] != payload["program_id"]
+                            or hypothesis_id not in protocol["hypothesis_ids"]
+                        )
+                    )
                 ):
                     raise AthanorError(f"invalid Experiment creation: {object_id}")
                 experiments[object_id] = {
@@ -303,6 +449,8 @@ class Athanor:
                     "question": payload["question"],
                     "status": "PLANNED",
                 }
+                if hypothesis is not None:
+                    hypothesis["status"] = "ACTIVE"
             elif event["type"] == "run.recorded":
                 experiment = experiments.get(payload["experiment_id"])
                 if (
@@ -326,6 +474,7 @@ class Athanor:
                     "metrics": payload["metrics"],
                     "artifacts": payload["artifacts"],
                 }
+                _advance_program(programs[payload["program_id"]], "RUNNING")
             elif event["type"] == "analysis.computed":
                 from .alembic import build_result_bundle
 
@@ -343,6 +492,89 @@ class Athanor:
                 ):
                     raise AthanorError(f"invalid Result Bundle: {object_id}")
                 result_bundles[object_id] = bundle
+                _advance_program(programs[bundle["program_id"]], "RESULT_READY")
+            elif event["type"] == "assessment.recorded":
+                bundle = result_bundles.get(payload["result_bundle_id"])
+                program = programs.get(payload["program_id"])
+                protocol = protocols.get(payload["protocol_id"])
+                claim_findings = payload["claim_findings"]
+                hypothesis_findings = payload["hypothesis_findings"]
+                if (
+                    object_id in assessments
+                    or bundle is None
+                    or program is None
+                    or protocol is None
+                    or bundle["program_id"] != payload["program_id"]
+                    or bundle["protocol_id"] != payload["protocol_id"]
+                    or len({finding["claim_id"] for finding in claim_findings}) != len(claim_findings)
+                    or len({finding["hypothesis_id"] for finding in hypothesis_findings})
+                    != len(hypothesis_findings)
+                    or any(
+                        finding["claim_id"] not in claims
+                        or claims[finding["claim_id"]]["program_id"] != payload["program_id"]
+                        for finding in claim_findings
+                    )
+                    or any(
+                        finding["hypothesis_id"] not in hypotheses
+                        or hypotheses[finding["hypothesis_id"]]["program_id"] != payload["program_id"]
+                        or finding["hypothesis_id"] not in protocol["hypothesis_ids"]
+                        for finding in hypothesis_findings
+                    )
+                ):
+                    raise AthanorError(f"invalid Assessment: {object_id}")
+                assessments[object_id] = {
+                    "schema_version": "assessment/1.1",
+                    "assessment_id": object_id,
+                    "program_id": payload["program_id"],
+                    "protocol_id": payload["protocol_id"],
+                    "result_bundle_id": payload["result_bundle_id"],
+                    "result_bundle": {
+                        "uri": f".benchwork/results/{payload['result_bundle_id']}.json",
+                        "sigil": content_sigil(bundle),
+                    },
+                    "summary": payload["summary"],
+                    "limitations": payload["limitations"],
+                    "claim_findings": claim_findings,
+                    "hypothesis_findings": hypothesis_findings,
+                    "status": "COMPLETE",
+                    "reviewed_at": event["occurred_at"],
+                    "review_receipt": event["receipt"]["receipt_id"],
+                }
+                for finding in claim_findings:
+                    claims[finding["claim_id"]]["status"] = finding["status"]
+                for finding in hypothesis_findings:
+                    hypotheses[finding["hypothesis_id"]]["status"] = finding["status"]
+                program["assessments"].append(object_id)
+                _advance_program(program, "EVALUATED")
+            elif event["type"] == "decision.sealed":
+                program = programs.get(payload["program_id"])
+                related_assessments = [
+                    assessments.get(assessment_id) for assessment_id in payload["assessment_ids"]
+                ]
+                if (
+                    object_id in decisions
+                    or program is None
+                    or len(set(payload["assessment_ids"])) != len(payload["assessment_ids"])
+                    or any(
+                        assessment is None
+                        or assessment["program_id"] != payload["program_id"]
+                        or assessment["status"] != "COMPLETE"
+                        for assessment in related_assessments
+                    )
+                ):
+                    raise AthanorError(f"invalid Decision Seal: {object_id}")
+                decisions[object_id] = {
+                    "schema_version": "decision/1.1",
+                    "decision_id": object_id,
+                    "program_id": payload["program_id"],
+                    "outcome": payload["outcome"],
+                    "assessment_ids": payload["assessment_ids"],
+                    "rationale": payload["rationale"],
+                    "status": "SEALED",
+                    "sealed_at": event["occurred_at"],
+                    "seal_receipt": event["receipt"]["receipt_id"],
+                }
+                program["decisions"].append(object_id)
             else:
                 raise AthanorError(f"unsupported Chronicle event type: {event['type']}")
         from .schema_validation import validate_instance
@@ -359,6 +591,16 @@ class Athanor:
             validate_instance("run-1.0.json", run)
         for bundle in result_bundles.values():
             validate_instance("result-bundle-1.0.json", bundle)
+        for record in evidence.values():
+            validate_instance("evidence-1.1.json", record)
+        for claim in claims.values():
+            validate_instance("claim-1.1.json", claim)
+        for hypothesis in hypotheses.values():
+            validate_instance("hypothesis-1.0.json", hypothesis)
+        for assessment in assessments.values():
+            validate_instance("assessment-1.1.json", assessment)
+        for decision in decisions.values():
+            validate_instance("decision-1.1.json", decision)
         return {
             "programs": programs,
             "protocols": protocols,
@@ -367,6 +609,11 @@ class Athanor:
             "experiments": experiments,
             "runs": runs,
             "result_bundles": result_bundles,
+            "evidence": evidence,
+            "claims": claims,
+            "hypotheses": hypotheses,
+            "assessments": assessments,
+            "decisions": decisions,
         }
 
     def replay(self) -> dict[str, Any]:
@@ -393,6 +640,21 @@ class Athanor:
     def result_bundles(self) -> dict[str, dict[str, Any]]:
         return self.replay()["result_bundles"]
 
+    def evidence(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["evidence"]
+
+    def claims(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["claims"]
+
+    def hypotheses(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["hypotheses"]
+
+    def assessments(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["assessments"]
+
+    def decisions(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["decisions"]
+
     def create_program(self, slug: str, title: str, problem: dict[str, Any] | None = None) -> tuple[str, Receipt]:
         if not SLUG.fullmatch(slug) or not title.strip():
             raise AthanorError("Program requires a lowercase hyphenated slug and non-empty title")
@@ -407,11 +669,197 @@ class Athanor:
         event, receipt = self.chronicle.transact(build)
         return event["object_id"], receipt
 
-    def draft_protocol(self, protocol_id: str, program_id: str, title: str, analysis_plan: str) -> Receipt:
+    def record_evidence(
+        self,
+        evidence_id: str,
+        program_id: str,
+        source: dict[str, str],
+        observation: str,
+        verification: dict[str, bool] | None = None,
+    ) -> Receipt:
+        if not isinstance(evidence_id, str) or not IDENTIFIER.fullmatch(evidence_id) or not evidence_id.startswith("EV-"):
+            raise AthanorError("Evidence ID must use the form EV-<identifier>")
+        if (
+            not isinstance(source, dict)
+            or set(source) != {"uri", "sigil"}
+            or not isinstance(source["uri"], str)
+            or not source["uri"]
+            or not isinstance(source["sigil"], str)
+            or not SIGIL.fullmatch(source["sigil"])
+        ):
+            raise AthanorError("Evidence source must be a content-addressed URI reference")
+        if not isinstance(observation, str) or not observation.strip():
+            raise AthanorError("Evidence requires a non-empty observation")
+        normalized_verification = (
+            verification
+            if verification is not None
+            else {key: False for key in EVIDENCE_VERIFICATION_KEYS}
+        )
+        if (
+            not isinstance(normalized_verification, dict)
+            or set(normalized_verification) != EVIDENCE_VERIFICATION_KEYS
+            or any(not isinstance(value, bool) for value in normalized_verification.values())
+        ):
+            raise AthanorError("Evidence verification requires all four boolean checks")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            if evidence_id in state["evidence"]:
+                raise AthanorError(f"Evidence already exists: {evidence_id}")
+            return "evidence.recorded", evidence_id, {
+                "program_id": program_id,
+                "source": source,
+                "observation": observation,
+                "verification": normalized_verification,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def verify_evidence(self, evidence_id: str, checks: list[str]) -> Receipt:
+        requested = set(checks)
+        if not requested or not requested.issubset(EVIDENCE_VERIFICATION_KEYS):
+            raise AthanorError("Evidence verification requires one or more known checks")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            record = self._project(events)["evidence"].get(evidence_id)
+            if record is None:
+                raise AthanorError(f"unknown Evidence: {evidence_id}")
+            verification = record["verification"].copy()
+            for check in requested:
+                verification[check] = True
+            if verification == record["verification"]:
+                raise AthanorError(f"Evidence checks are already verified: {evidence_id}")
+            return "evidence.verified", evidence_id, {"verification": verification}
+
+        return self.chronicle.transact(build)[1]
+
+    def create_claim(
+        self,
+        claim_id: str,
+        program_id: str,
+        claim_type: str,
+        statement: str,
+        evidence_relations: list[dict[str, str]],
+    ) -> Receipt:
+        claim_types = {"empirical", "theoretical", "methodological", "operational"}
+        if not isinstance(claim_id, str) or not IDENTIFIER.fullmatch(claim_id) or not claim_id.startswith("CL-"):
+            raise AthanorError("Claim ID must use the form CL-<identifier>")
+        if claim_type not in claim_types:
+            raise AthanorError(f"unknown Claim type: {claim_type}")
+        if not isinstance(statement, str) or not statement.strip():
+            raise AthanorError("Claim requires a non-empty statement")
+        if not evidence_relations or any(
+            not isinstance(relation, dict)
+            or set(relation) != {"evidence_id", "relation"}
+            or not isinstance(relation["evidence_id"], str)
+            or not relation["evidence_id"].startswith("EV-")
+            or relation["relation"] not in EVIDENCE_RELATIONS
+            for relation in evidence_relations
+        ):
+            raise AthanorError("Claim requires typed Evidence relations")
+        if len({relation["evidence_id"] for relation in evidence_relations}) != len(
+            evidence_relations
+        ):
+            raise AthanorError("Claim Evidence relations must be unique")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            if claim_id in state["claims"]:
+                raise AthanorError(f"Claim already exists: {claim_id}")
+            for relation in evidence_relations:
+                record = state["evidence"].get(relation["evidence_id"])
+                if record is None or record["program_id"] != program_id:
+                    raise AthanorError(f"unknown Program Evidence: {relation['evidence_id']}")
+                if not (
+                    record["verification"]["source_resolved"]
+                    and record["verification"]["content_inspected"]
+                ):
+                    raise AthanorError(
+                        f"Claim requires resolved and inspected Evidence: {relation['evidence_id']}"
+                    )
+            return "claim.created", claim_id, {
+                "program_id": program_id,
+                "type": claim_type,
+                "statement": statement,
+                "evidence_relations": evidence_relations,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def create_hypothesis(
+        self,
+        hypothesis_id: str,
+        program_id: str,
+        claim_ids: list[str],
+        statement: str,
+        prediction: str,
+    ) -> Receipt:
+        if (
+            not isinstance(hypothesis_id, str)
+            or not IDENTIFIER.fullmatch(hypothesis_id)
+            or not hypothesis_id.startswith("HY-")
+        ):
+            raise AthanorError("Hypothesis ID must use the form HY-<identifier>")
+        if (
+            not isinstance(claim_ids, list)
+            or not claim_ids
+            or any(
+                not isinstance(claim_id, str) or not claim_id.startswith("CL-")
+                for claim_id in claim_ids
+            )
+            or len(set(claim_ids)) != len(claim_ids)
+        ):
+            raise AthanorError("Hypothesis requires one or more Claim IDs")
+        if not isinstance(statement, str) or not statement.strip() or not isinstance(prediction, str) or not prediction.strip():
+            raise AthanorError("Hypothesis requires a statement and falsifiable prediction")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            if hypothesis_id in state["hypotheses"]:
+                raise AthanorError(f"Hypothesis already exists: {hypothesis_id}")
+            if any(
+                claim_id not in state["claims"]
+                or state["claims"][claim_id]["program_id"] != program_id
+                for claim_id in claim_ids
+            ):
+                raise AthanorError("Hypothesis Claims must belong to its Research Program")
+            return "hypothesis.created", hypothesis_id, {
+                "program_id": program_id,
+                "claim_ids": claim_ids,
+                "statement": statement,
+                "prediction": prediction,
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def draft_protocol(
+        self,
+        protocol_id: str,
+        program_id: str,
+        title: str,
+        analysis_plan: str,
+        hypothesis_ids: list[str] | None = None,
+    ) -> Receipt:
         if not IDENTIFIER.fullmatch(protocol_id) or not protocol_id.startswith("PT-"):
             raise AthanorError("Protocol ID must use the form PT-<identifier>")
         if not title.strip() or not analysis_plan.strip():
             raise AthanorError("Protocol requires a title and deterministic analysis plan")
+
+        if hypothesis_ids is not None and not isinstance(hypothesis_ids, list):
+            raise AthanorError("Protocol Hypotheses must be a list")
+        normalized_hypotheses = hypothesis_ids or []
+        if any(
+            not isinstance(hypothesis_id, str)
+            or not hypothesis_id.startswith("HY-")
+            for hypothesis_id in normalized_hypotheses
+        ):
+            raise AthanorError("Protocol Hypotheses must use HY- identifiers")
 
         def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
             state = self._project(events)
@@ -419,8 +867,15 @@ class Athanor:
                 raise AthanorError(f"unknown Research Program: {program_id}")
             if protocol_id in state["protocols"]:
                 raise AthanorError(f"Protocol already exists: {protocol_id}")
+            if len(set(normalized_hypotheses)) != len(normalized_hypotheses) or any(
+                hypothesis_id not in state["hypotheses"]
+                or state["hypotheses"][hypothesis_id]["program_id"] != program_id
+                for hypothesis_id in normalized_hypotheses
+            ):
+                raise AthanorError("Protocol Hypotheses must belong to its Research Program")
             return "protocol.drafted", protocol_id, {
                 "program_id": program_id,
+                "hypothesis_ids": normalized_hypotheses,
                 "title": title,
                 "analysis_plan": analysis_plan,
             }
@@ -539,6 +994,16 @@ class Athanor:
                 raise AthanorError(f"Experiment Program does not match Protocol: {program_id}")
             if experiment_id in state["experiments"]:
                 raise AthanorError(f"Experiment already exists: {experiment_id}")
+            if hypothesis_id is not None and protocol["hypothesis_ids"]:
+                hypothesis = state["hypotheses"].get(hypothesis_id)
+                if (
+                    hypothesis is None
+                    or hypothesis["program_id"] != program_id
+                    or hypothesis_id not in protocol["hypothesis_ids"]
+                ):
+                    raise AthanorError(
+                        f"Experiment Hypothesis was not registered by Protocol: {hypothesis_id}"
+                    )
             return "experiment.created", experiment_id, {
                 "program_id": program_id,
                 "protocol_id": protocol_id,
@@ -635,5 +1100,154 @@ class Athanor:
         path = export_result_bundle(self.root, bundle)
         return bundle, event["payload"]["bundle_sigil"], receipt, path
 
+    def review_result(
+        self,
+        result_bundle_id: str,
+        summary: str,
+        limitations: list[str],
+        claim_findings: list[dict[str, str]],
+        hypothesis_findings: list[dict[str, str]],
+    ) -> tuple[str, Receipt]:
+        claim_statuses = {"SUPPORTED", "CONTESTED", "REJECTED", "UNRESOLVED"}
+        hypothesis_statuses = {"SUPPORTED", "NOT_SUPPORTED", "INCONCLUSIVE", "REJECTED"}
+        if not isinstance(summary, str) or not summary.strip():
+            raise AthanorError("Assessment requires a non-empty summary")
+        if not isinstance(limitations, list) or any(
+            not isinstance(item, str) or not item.strip() for item in limitations
+        ):
+            raise AthanorError("Assessment limitations must be non-empty strings")
+        if not isinstance(claim_findings, list) or any(
+            not isinstance(finding, dict)
+            or set(finding) != {"claim_id", "status", "rationale"}
+            or not isinstance(finding["claim_id"], str)
+            or not finding["claim_id"].startswith("CL-")
+            or finding["status"] not in claim_statuses
+            or not isinstance(finding["rationale"], str)
+            or not finding["rationale"].strip()
+            for finding in claim_findings
+        ):
+            raise AthanorError("Assessment Claim findings are invalid")
+        if (
+            len({finding["claim_id"] for finding in claim_findings})
+            != len(claim_findings)
+        ):
+            raise AthanorError("Assessment Claim findings must be unique")
+        if not isinstance(hypothesis_findings, list) or not hypothesis_findings or any(
+            not isinstance(finding, dict)
+            or set(finding) != {"hypothesis_id", "status", "rationale"}
+            or not isinstance(finding["hypothesis_id"], str)
+            or not finding["hypothesis_id"].startswith("HY-")
+            or finding["status"] not in hypothesis_statuses
+            or not isinstance(finding["rationale"], str)
+            or not finding["rationale"].strip()
+            for finding in hypothesis_findings
+        ):
+            raise AthanorError("Assessment requires valid Hypothesis findings")
+        if (
+            len({finding["hypothesis_id"] for finding in hypothesis_findings})
+            != len(hypothesis_findings)
+        ):
+            raise AthanorError("Assessment Hypothesis findings must be unique")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            bundle = state["result_bundles"].get(result_bundle_id)
+            if bundle is None:
+                raise AthanorError(f"unknown Result Bundle: {result_bundle_id}")
+            for finding in claim_findings:
+                claim = state["claims"].get(finding["claim_id"])
+                if claim is None or claim["program_id"] != bundle["program_id"]:
+                    raise AthanorError(f"unknown Program Claim: {finding['claim_id']}")
+            protocol = state["protocols"][bundle["protocol_id"]]
+            for finding in hypothesis_findings:
+                hypothesis = state["hypotheses"].get(finding["hypothesis_id"])
+                if (
+                    hypothesis is None
+                    or hypothesis["program_id"] != bundle["program_id"]
+                    or finding["hypothesis_id"] not in protocol["hypothesis_ids"]
+                ):
+                    raise AthanorError(
+                        f"Hypothesis was not registered by Protocol: {finding['hypothesis_id']}"
+                    )
+            assessment_id = f"AS-{len(state['assessments']) + 1:03d}"
+            return "assessment.recorded", assessment_id, {
+                "program_id": bundle["program_id"],
+                "protocol_id": bundle["protocol_id"],
+                "result_bundle_id": result_bundle_id,
+                "summary": summary,
+                "limitations": limitations,
+                "claim_findings": claim_findings,
+                "hypothesis_findings": hypothesis_findings,
+            }
+
+        event, receipt = self.chronicle.transact(build)
+        return event["object_id"], receipt
+
+    def seal_decision(
+        self,
+        program_id: str,
+        outcome: str,
+        assessment_ids: list[str],
+        rationale: str,
+    ) -> tuple[str, Receipt]:
+        outcomes = {
+            "CONTINUE",
+            "REPAIR",
+            "PIVOT",
+            "STOP",
+            "INSUFFICIENT_EVIDENCE",
+            "REVIEW_REQUIRED",
+        }
+        if outcome not in outcomes:
+            raise AthanorError(f"unknown Decision outcome: {outcome}")
+        if (
+            not isinstance(assessment_ids, list)
+            or not assessment_ids
+            or any(
+                not isinstance(assessment_id, str)
+                or not assessment_id.startswith("AS-")
+                for assessment_id in assessment_ids
+            )
+            or len(set(assessment_ids)) != len(assessment_ids)
+        ):
+            raise AthanorError("Decision requires unique Assessment IDs")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise AthanorError("Decision requires a non-empty rationale")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            if any(
+                assessment_id not in state["assessments"]
+                or state["assessments"][assessment_id]["program_id"] != program_id
+                or state["assessments"][assessment_id]["status"] != "COMPLETE"
+                for assessment_id in assessment_ids
+            ):
+                raise AthanorError("Decision Assessments must be complete and belong to the Program")
+            decision_id = f"DE-{len(state['decisions']) + 1:03d}"
+            return "decision.sealed", decision_id, {
+                "program_id": program_id,
+                "outcome": outcome,
+                "assessment_ids": assessment_ids,
+                "rationale": rationale,
+            }
+
+        event, receipt = self.chronicle.transact(build)
+        return event["object_id"], receipt
+
     def trace(self, object_id: str) -> list[dict[str, Any]]:
-        return [event for event in self.chronicle.events() if event["object_id"] == object_id]
+        def contains(value: Any) -> bool:
+            if value == object_id:
+                return True
+            if isinstance(value, dict):
+                return any(contains(item) for item in value.values())
+            if isinstance(value, list):
+                return any(contains(item) for item in value)
+            return False
+
+        return [
+            event
+            for event in self.chronicle.events()
+            if event["object_id"] == object_id or contains(event["payload"])
+        ]

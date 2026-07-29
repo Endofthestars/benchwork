@@ -8,7 +8,7 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.1.0a1` 公开 Alpha。M0–M6 里程碑已经实现。
+> 项目状态：`0.2.0a1` 公开 Alpha。M0–M7 里程碑已经实现。
 
 ## 为什么需要 Benchwork
 
@@ -35,12 +35,16 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 - **Sigil 与 Receipt** 使用 SHA-256 内容摘要绑定获准事件。
 - **Research Program 与 Protocol** 支持受保护的
   `DRAFT → FROZEN` 生命周期。
+- **Evidence、Claim 与 Hypothesis** 保存带来源的观察、验证检查、明确关系和
+  可证伪预测。
 - **Capability、Task Capsule、Circle 与 Ward** 在委派前约束工具、网络、
   时间与审批。
 - **Codex 与 Claude Code Host** 生成对称、与 Provider 无关的任务提案。
 - **Rite 与 Working** 固定工作流定义，并记录受 Protocol 约束的阶段迁移。
 - **Experiment、Run 与 Alembic** 保留全部结果，并生成确定性的
   `result-bundle/1.0` 分析产物。
+- **Assessment 与 Decision** 将解释绑定到 Result Bundle，并让最终科研承诺
+  由人类 Seal 且可回放。
 - **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
@@ -88,16 +92,41 @@ bwork program create robust-agent-memory \
   --title "可靠的智能体记忆" \
   --problem "测量长上下文条件下的检索可靠性。"
 
+bwork evidence record EV-001 \
+  --program RP-001 \
+  --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
+  --observation "既有工作报告了检索提升。" \
+  --source-resolved \
+  --content-inspected
+
+bwork claim create CL-001 \
+  --program RP-001 \
+  --type empirical \
+  --statement "处理方法可以提高检索表现。" \
+  --evidence "EV-001|SUPPORTS"
+
+bwork hypothesis create HY-001 \
+  --program RP-001 \
+  --claim CL-001 \
+  --statement "处理方法提高注册检索指标。" \
+  --prediction "平均指标高于基线平均值。"
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "记忆检索研究" \
-  --analysis-plan "计算跨随机种子的效应量与不确定性。"
+  --analysis-plan "计算跨随机种子的效应量与不确定性。" \
+  --hypothesis HY-001
 
 bwork protocol seal PT-001
+
+bwork working start computational-study@0.1.0 \
+  --program RP-001 \
+  --protocol PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
   --protocol PT-001 \
+  --hypothesis HY-001 \
   --question "处理方法是否提高已注册指标？"
 
 bwork run record RUN-001 \
@@ -109,17 +138,25 @@ bwork run record RUN-001 \
 
 bwork analyze --program RP-001 --protocol PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork review RB-001 \
+  --summary "注册结果支持该假设。" \
+  --limitation "目前只有一次 Run。" \
+  --claim-finding "CL-001|SUPPORTED|观察方向与 Claim 一致。" \
+  --hypothesis-finding "HY-001|SUPPORTED|预测得到满足。"
+
+bwork decide \
   --program RP-001 \
-  --protocol PT-001
+  --outcome CONTINUE \
+  --assessment AS-001 \
+  --rationale "继续收集注册 Run。"
 
 bwork status
 bwork doctor
-bwork trace PT-001
+bwork trace CL-001
 ```
 
-在新项目中，上述命令会创建 `RP-001`、冻结 `PT-001`，并让 `WK-001`
-从 `IMPLEMENTATION` 阶段开始。
+在新项目中，上述命令会建立从 `EV-001` 到已 Seal 的 `DE-001` 的完整追踪，
+同时让 `WK-001` 从 `IMPLEMENTATION` 阶段开始。
 
 每次 Working 迁移都必须提供固定 Rite 所要求的 Artifact：
 
@@ -165,6 +202,9 @@ bwork --help
 | `bwork status` | 重建并输出规范状态 |
 | `bwork doctor` | 验证 Chronicle 事件、Sigil、head 与 Receipt 链 |
 | `bwork program` | 创建 Research Program |
+| `bwork evidence` | 记录、验证和查看有来源的 Evidence |
+| `bwork claim` | 创建和查看由 Evidence 支撑的 Claim |
+| `bwork hypothesis` | 创建和查看可证伪 Hypothesis |
 | `bwork protocol` | 起草并封存 Protocol |
 | `bwork capability` | 查看已安装的 Capability 契约 |
 | `bwork task` | 创建和查看有边界的 Task Capsule |
@@ -177,6 +217,10 @@ bwork --help
 | `bwork experiment` | 创建绑定 Protocol 的 Experiment |
 | `bwork run` | 记录不可变 Run 及其分析纳入状态 |
 | `bwork analyze` | 生成确定性的 Alembic Result Bundle |
+| `bwork review` | 记录 Result Bundle Assessment |
+| `bwork assessment` | 查看已完成的 Assessment |
+| `bwork decide` | 由人类 Seal 科研 Decision |
+| `bwork decision` | 查看已 Seal 的 Decision |
 | `bwork trace` | 查看一个对象对应的 Chronicle 事件 |
 
 使用 `bwork <command> --help` 查看具体参数。
@@ -211,6 +255,7 @@ Chronicle 是规范状态。Task Capsule 是不可变、可检查的提案；在
 | Host 对称性 | [Twin Gate](docs/en/architecture/TWIN_GATE.md) | — |
 | Working 生命周期 | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | 分析边界 | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
+| 科研规范对象 | [Scientific Canon](docs/en/architecture/SCIENTIFIC_CANON.md) | — |
 | 扩展边界 | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | 本地化 | [规则](docs/LOCALIZATION.md) | — |
 

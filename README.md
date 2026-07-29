@@ -9,7 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.1.0a1` public Alpha. Milestones M0–M6 are implemented.
+> Project status: `0.2.0a1` public Alpha. Milestones M0–M7 are implemented.
 
 ## Why Benchwork
 
@@ -38,6 +38,8 @@ scientific state.
 - **Sigils and Receipts** bind accepted events to SHA-256 content digests.
 - **Research Programs and Protocols** support a guarded
   `DRAFT → FROZEN` lifecycle.
+- **Evidence, Claims, and Hypotheses** preserve sourced observations,
+  verification checks, explicit relations, and falsifiable predictions.
 - **Capabilities, Task Capsules, Circles, and Ward** bound tools, network
   access, time, and approval before delegation.
 - **Codex and Claude Code Hosts** produce equivalent, provider-neutral task
@@ -46,6 +48,8 @@ scientific state.
   stage transitions.
 - **Experiments, Runs, and Alembic** preserve all outcomes and produce
   deterministic `result-bundle/1.0` analysis artifacts.
+- **Assessments and Decisions** bind interpretation to Result Bundles and keep
+  final scientific commitments human-sealed and replayable.
 - **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
   without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
@@ -99,16 +103,41 @@ bwork program create robust-agent-memory \
   --title "Reliable agent memory" \
   --problem "Measure retrieval reliability under long context."
 
+bwork evidence record EV-001 \
+  --program RP-001 \
+  --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
+  --observation "Prior work reports improved retrieval." \
+  --source-resolved \
+  --content-inspected
+
+bwork claim create CL-001 \
+  --program RP-001 \
+  --type empirical \
+  --statement "The treatment can improve retrieval." \
+  --evidence "EV-001|SUPPORTS"
+
+bwork hypothesis create HY-001 \
+  --program RP-001 \
+  --claim CL-001 \
+  --statement "The treatment improves registered retrieval score." \
+  --prediction "Mean score exceeds the baseline mean."
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "Memory retrieval study" \
-  --analysis-plan "Compute effect sizes and uncertainty across seeds."
+  --analysis-plan "Compute effect sizes and uncertainty across seeds." \
+  --hypothesis HY-001
 
 bwork protocol seal PT-001
+
+bwork working start computational-study@0.1.0 \
+  --program RP-001 \
+  --protocol PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
   --protocol PT-001 \
+  --hypothesis HY-001 \
   --question "Does the treatment improve the registered score?"
 
 bwork run record RUN-001 \
@@ -120,17 +149,25 @@ bwork run record RUN-001 \
 
 bwork analyze --program RP-001 --protocol PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork review RB-001 \
+  --summary "The registered result supports the hypothesis." \
+  --limitation "Only one run is available." \
+  --claim-finding "CL-001|SUPPORTED|The observed direction matches the claim." \
+  --hypothesis-finding "HY-001|SUPPORTED|The prediction was satisfied."
+
+bwork decide \
   --program RP-001 \
-  --protocol PT-001
+  --outcome CONTINUE \
+  --assessment AS-001 \
+  --rationale "Collect more registered runs."
 
 bwork status
 bwork doctor
-bwork trace PT-001
+bwork trace CL-001
 ```
 
-In a new project, the commands above create `RP-001`, freeze `PT-001`, and
-start `WK-001` at the `IMPLEMENTATION` stage.
+In a new project, the commands above create a complete trace from `EV-001` to
+the Sealed `DE-001`, while `WK-001` starts at the `IMPLEMENTATION` stage.
 
 Every Working transition must provide the artifact required by the pinned Rite:
 
@@ -177,6 +214,9 @@ bwork --help
 | `bwork status` | Rebuild and print canonical state |
 | `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
 | `bwork program` | Create Research Programs |
+| `bwork evidence` | Record, verify, and inspect sourced Evidence |
+| `bwork claim` | Create and inspect Evidence-backed Claims |
+| `bwork hypothesis` | Create and inspect falsifiable Hypotheses |
 | `bwork protocol` | Draft and Seal Protocols |
 | `bwork capability` | Inspect installed Capability contracts |
 | `bwork task` | Create and inspect bounded Task Capsules |
@@ -189,6 +229,10 @@ bwork --help
 | `bwork experiment` | Create Protocol-bound Experiments |
 | `bwork run` | Record immutable Runs and analysis inclusion |
 | `bwork analyze` | Produce a deterministic Alembic Result Bundle |
+| `bwork review` | Record a Result Bundle Assessment |
+| `bwork assessment` | Inspect completed Assessments |
+| `bwork decide` | Human-Seal a scientific Decision |
+| `bwork decision` | Inspect sealed Decisions |
 | `bwork trace` | Show Chronicle events for an object |
 
 Use `bwork <command> --help` for command-specific arguments.
@@ -224,6 +268,7 @@ them.
 | Host symmetry | [Twin Gate](docs/en/architecture/TWIN_GATE.md) | — |
 | Working lifecycle | [First Rite](docs/en/architecture/FIRST_RITE.md) | — |
 | Analysis boundary | [Alembic](docs/en/architecture/ALEMBIC.md) | — |
+| Scientific canon | [Scientific Canon](docs/en/architecture/SCIENTIFIC_CANON.md) | — |
 | Extension boundary | [Open Grimoire](docs/en/architecture/OPEN_GRIMOIRE.md) | — |
 | Localization | [Policy](docs/LOCALIZATION.md) | — |
 

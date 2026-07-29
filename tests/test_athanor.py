@@ -83,7 +83,8 @@ class AthanorTest(unittest.TestCase):
         for schema_path in schemas.glob("*.json"):
             schema = json.loads(schema_path.read_text())
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
-            self.assertIn("/1.0", schema["$id"])
+            version = schema_path.stem.rsplit("-", 1)[1]
+            self.assertTrue(schema["$id"].endswith(f"/{version}"))
             Draft202012Validator.check_schema(schema)
 
     def test_ward_requires_approval_before_gated_task_can_pass(self) -> None:

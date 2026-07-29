@@ -14,3 +14,5 @@ canonical: true
    budget, and network isolation.
 4. Define publisher identity, signature verification, and distribution policy
    before Open Grimoire accepts remote sources or executable extension types.
+5. Define Decision supersession and Program branching semantics before a
+   `PIVOT` outcome automatically creates lineage.

@@ -41,3 +41,9 @@ Schema-validated `result-bundle/1.0` analysis artifacts.
 Completed for public Alpha: local, data-only Grimoire manifests; exact API and
 SemVer pins; canonical Rite Sigils; collision and path-escape protection; and
 Working execution from copied, inspectable definitions.
+
+## M7: Scientific Canon
+
+Completed: sourced and monotonically verified Evidence; explicit Claim
+relations; Claim-backed, Protocol-registered Hypotheses; Result Bundle
+Assessments; human-Sealed Decisions; and cross-object Chronicle lineage.

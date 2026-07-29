@@ -35,8 +35,66 @@ def _parser() -> argparse.ArgumentParser:
     draft.add_argument("--program", required=True)
     draft.add_argument("--title", required=True)
     draft.add_argument("--analysis-plan", required=True)
+    draft.add_argument("--hypothesis", action="append", default=[])
     seal = protocol_commands.add_parser("seal", help="seal a drafted Protocol")
     seal.add_argument("protocol_id")
+
+    evidence = subparsers.add_parser("evidence", help="record and verify Evidence")
+    evidence_commands = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_record = evidence_commands.add_parser("record", help="record a sourced observation")
+    evidence_record.add_argument("evidence_id")
+    evidence_record.add_argument("--program", required=True)
+    evidence_record.add_argument("--source", required=True, metavar="URI|SHA256")
+    evidence_record.add_argument("--observation", required=True)
+    evidence_record.add_argument("--source-resolved", action="store_true")
+    evidence_record.add_argument("--content-inspected", action="store_true")
+    evidence_record.add_argument("--locally-reproduced", action="store_true")
+    evidence_verify = evidence_commands.add_parser("verify", help="mark Evidence checks complete")
+    evidence_verify.add_argument("evidence_id")
+    evidence_verify.add_argument(
+        "--check",
+        action="append",
+        required=True,
+        choices=(
+            "source_resolved",
+            "content_inspected",
+            "claim_relation_verified",
+            "locally_reproduced",
+        ),
+    )
+    evidence_show = evidence_commands.add_parser("show", help="show an Evidence projection")
+    evidence_show.add_argument("evidence_id")
+
+    claim = subparsers.add_parser("claim", help="manage evidence-backed Claims")
+    claim_commands = claim.add_subparsers(dest="claim_command", required=True)
+    claim_create = claim_commands.add_parser("create", help="create a Claim from verified Evidence")
+    claim_create.add_argument("claim_id")
+    claim_create.add_argument("--program", required=True)
+    claim_create.add_argument(
+        "--type",
+        required=True,
+        choices=("empirical", "theoretical", "methodological", "operational"),
+    )
+    claim_create.add_argument("--statement", required=True)
+    claim_create.add_argument(
+        "--evidence",
+        action="append",
+        required=True,
+        metavar="EV-ID|RELATION",
+    )
+    claim_show = claim_commands.add_parser("show", help="show a Claim projection")
+    claim_show.add_argument("claim_id")
+
+    hypothesis = subparsers.add_parser("hypothesis", help="manage Claim-backed Hypotheses")
+    hypothesis_commands = hypothesis.add_subparsers(dest="hypothesis_command", required=True)
+    hypothesis_create = hypothesis_commands.add_parser("create", help="create a falsifiable Hypothesis")
+    hypothesis_create.add_argument("hypothesis_id")
+    hypothesis_create.add_argument("--program", required=True)
+    hypothesis_create.add_argument("--claim", action="append", required=True)
+    hypothesis_create.add_argument("--statement", required=True)
+    hypothesis_create.add_argument("--prediction", required=True)
+    hypothesis_show = hypothesis_commands.add_parser("show", help="show a Hypothesis projection")
+    hypothesis_show.add_argument("hypothesis_id")
 
     capability = subparsers.add_parser("capability", help="inspect Capability contracts")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)
@@ -136,6 +194,52 @@ def _parser() -> argparse.ArgumentParser:
     analyze.add_argument("--program", required=True)
     analyze.add_argument("--protocol", required=True)
 
+    review = subparsers.add_parser("review", help="record a scientific Assessment")
+    review.add_argument("result_bundle_id")
+    review.add_argument("--summary", required=True)
+    review.add_argument("--limitation", action="append", default=[])
+    review.add_argument(
+        "--claim-finding",
+        action="append",
+        default=[],
+        metavar="CL-ID|STATUS|RATIONALE",
+    )
+    review.add_argument(
+        "--hypothesis-finding",
+        action="append",
+        required=True,
+        metavar="HY-ID|STATUS|RATIONALE",
+    )
+
+    assessment = subparsers.add_parser("assessment", help="inspect scientific Assessments")
+    assessment_commands = assessment.add_subparsers(dest="assessment_command", required=True)
+    assessment_commands.add_parser("list", help="list completed Assessments")
+    assessment_show = assessment_commands.add_parser("show", help="show an Assessment")
+    assessment_show.add_argument("assessment_id")
+
+    decide = subparsers.add_parser("decide", help="Seal a human scientific Decision")
+    decide.add_argument("--program", required=True)
+    decide.add_argument(
+        "--outcome",
+        required=True,
+        choices=(
+            "CONTINUE",
+            "REPAIR",
+            "PIVOT",
+            "STOP",
+            "INSUFFICIENT_EVIDENCE",
+            "REVIEW_REQUIRED",
+        ),
+    )
+    decide.add_argument("--assessment", action="append", required=True)
+    decide.add_argument("--rationale", required=True)
+
+    decision = subparsers.add_parser("decision", help="inspect sealed Decisions")
+    decision_commands = decision.add_subparsers(dest="decision_command", required=True)
+    decision_commands.add_parser("list", help="list sealed Decisions")
+    decision_show = decision_commands.add_parser("show", help="show a Decision")
+    decision_show.add_argument("decision_id")
+
     trace = subparsers.add_parser("trace", help="show Chronicle events for an object")
     trace.add_argument("object_id")
     return parser
@@ -163,11 +267,86 @@ def main(argv: Sequence[str] | None = None) -> int:
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
             _print_receipt(f"Research Program {program_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol" and args.protocol_command == "draft":
-            receipt = athanor.draft_protocol(args.protocol_id, args.program, args.title, args.analysis_plan)
+            receipt = athanor.draft_protocol(
+                args.protocol_id,
+                args.program,
+                args.title,
+                args.analysis_plan,
+                args.hypothesis,
+            )
             _print_receipt(f"Protocol {args.protocol_id} drafted", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol":
             receipt = athanor.seal_protocol(args.protocol_id)
             _print_receipt(f"Protocol {args.protocol_id} sealed", receipt.receipt_id, receipt.sigil)
+        elif args.command == "evidence" and args.evidence_command == "record":
+            try:
+                uri, digest = args.source.split("|", 1)
+            except ValueError as error:
+                raise AthanorError("Evidence source must use URI|SHA256") from error
+            verification = {
+                "source_resolved": args.source_resolved,
+                "content_inspected": args.content_inspected,
+                "claim_relation_verified": False,
+                "locally_reproduced": args.locally_reproduced,
+            }
+            receipt = athanor.record_evidence(
+                args.evidence_id,
+                args.program,
+                {"uri": uri, "sigil": digest},
+                args.observation,
+                verification,
+            )
+            _print_receipt(f"Evidence {args.evidence_id} recorded", receipt.receipt_id, receipt.sigil)
+        elif args.command == "evidence" and args.evidence_command == "verify":
+            receipt = athanor.verify_evidence(args.evidence_id, args.check)
+            _print_receipt(f"Evidence {args.evidence_id} verified", receipt.receipt_id, receipt.sigil)
+        elif args.command == "evidence":
+            try:
+                record = athanor.evidence()[args.evidence_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Evidence: {args.evidence_id}") from error
+            print(json.dumps(record, indent=2))
+        elif args.command == "claim" and args.claim_command == "create":
+            relations = []
+            for value in args.evidence:
+                try:
+                    evidence_id, relation = value.split("|", 1)
+                except ValueError as error:
+                    raise AthanorError("Claim Evidence must use EV-ID|RELATION") from error
+                relations.append({"evidence_id": evidence_id, "relation": relation})
+            receipt = athanor.create_claim(
+                args.claim_id,
+                args.program,
+                args.type,
+                args.statement,
+                relations,
+            )
+            _print_receipt(f"Claim {args.claim_id} created", receipt.receipt_id, receipt.sigil)
+        elif args.command == "claim":
+            try:
+                claim = athanor.claims()[args.claim_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Claim: {args.claim_id}") from error
+            print(json.dumps(claim, indent=2))
+        elif args.command == "hypothesis" and args.hypothesis_command == "create":
+            receipt = athanor.create_hypothesis(
+                args.hypothesis_id,
+                args.program,
+                args.claim,
+                args.statement,
+                args.prediction,
+            )
+            _print_receipt(
+                f"Hypothesis {args.hypothesis_id} created",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "hypothesis":
+            try:
+                hypothesis = athanor.hypotheses()[args.hypothesis_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Hypothesis: {args.hypothesis_id}") from error
+            print(json.dumps(hypothesis, indent=2))
         elif args.command == "capability":
             print(json.dumps(registry.capabilities(), indent=2))
         elif args.command == "task" and args.task_command == "create":
@@ -285,6 +464,73 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt.receipt_id,
                 receipt.sigil,
             )
+        elif args.command == "review":
+            claim_findings = []
+            for value in args.claim_finding:
+                try:
+                    claim_id, status, rationale = value.split("|", 2)
+                except ValueError as error:
+                    raise AthanorError(
+                        "Claim finding must use CL-ID|STATUS|RATIONALE"
+                    ) from error
+                claim_findings.append(
+                    {"claim_id": claim_id, "status": status, "rationale": rationale}
+                )
+            hypothesis_findings = []
+            for value in args.hypothesis_finding:
+                try:
+                    hypothesis_id, status, rationale = value.split("|", 2)
+                except ValueError as error:
+                    raise AthanorError(
+                        "Hypothesis finding must use HY-ID|STATUS|RATIONALE"
+                    ) from error
+                hypothesis_findings.append(
+                    {
+                        "hypothesis_id": hypothesis_id,
+                        "status": status,
+                        "rationale": rationale,
+                    }
+                )
+            assessment_id, receipt = athanor.review_result(
+                args.result_bundle_id,
+                args.summary,
+                args.limitation,
+                claim_findings,
+                hypothesis_findings,
+            )
+            _print_receipt(
+                f"Assessment {assessment_id} completed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "assessment" and args.assessment_command == "show":
+            try:
+                assessment = athanor.assessments()[args.assessment_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Assessment: {args.assessment_id}") from error
+            print(json.dumps(assessment, indent=2))
+        elif args.command == "assessment":
+            print(json.dumps(athanor.assessments(), indent=2))
+        elif args.command == "decide":
+            decision_id, receipt = athanor.seal_decision(
+                args.program,
+                args.outcome,
+                args.assessment,
+                args.rationale,
+            )
+            _print_receipt(
+                f"Decision {decision_id} sealed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "decision" and args.decision_command == "show":
+            try:
+                decision = athanor.decisions()[args.decision_id]
+            except KeyError as error:
+                raise AthanorError(f"unknown Decision: {args.decision_id}") from error
+            print(json.dumps(decision, indent=2))
+        elif args.command == "decision":
+            print(json.dumps(athanor.decisions(), indent=2))
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":
