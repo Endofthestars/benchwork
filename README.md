@@ -108,6 +108,8 @@ bwork program create robust-agent-memory \
   --title "Reliable agent memory" \
   --problem "Measure retrieval reliability under long context."
 
+bwork program use RP-001
+
 bwork evidence record EV-001 \
   --program RP-001 \
   --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
@@ -284,14 +286,20 @@ bwork grimoire list
 bwork --help
 ```
 
+Commands discover the project root from subdirectories. Direct phase verbs may
+use `--program RP-001` or the explicit selection made by `bwork program use`;
+they never infer the newest Program. Use `bwork --json ...` for stable success
+and error envelopes.
+
 ## Command map
 
 | Command | Purpose |
 |---|---|
 | `bwork init` | Initialize Chronicle, Capability contracts, Rites, and Grimoires |
+| `bwork root` | Show the upward-discovered project root |
 | `bwork status` | Rebuild and print canonical state |
 | `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
-| `bwork program` | Create Research Programs |
+| `bwork program` | Create, close, select, and inspect Research Programs |
 | `bwork start` | Start a Research Program from an objective |
 | `bwork investigate`, `design`, `implement`, `pilot`, `run` | Prepare bounded phase Tasks |
 | `bwork scry`, `distill`, `invoke` | Prepare Arcana or explicit Capability Tasks |
@@ -335,6 +343,7 @@ Use `bwork <command> --help` for command-specific arguments.
 ├── chronicle.jsonl
 ├── chronicle.head
 ├── chronicle.lock
+├── context.json
 ├── capabilities.json
 ├── capabilities.lock
 ├── rites.json

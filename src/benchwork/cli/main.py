@@ -4,23 +4,37 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
+import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Sequence
 
-from .athanor import Athanor, AthanorError, content_sigil
-from .circle import CapsuleStore, CapabilityRegistry, Ward
-from .grimoire import rite_definition_sigil
-from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
-from .rites import RiteRegistry
-from .tasks import TaskService
+from ..athanor import Athanor, AthanorError, content_sigil
+from ..circle import CapsuleStore, CapabilityRegistry, Ward
+from ..errors import CommandError, ProjectContextError, classify_error
+from ..grimoire import rite_definition_sigil
+from ..hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
+from ..project import ProjectContext, discover_project_root
+from ..rites import RiteRegistry
+from ..tasks import TaskService
+
+
+class _CommandArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise ProjectContextError(
+            "INVALID_ARGUMENTS",
+            message,
+            details={"usage": self.format_usage().strip()},
+        )
 
 
 def _add_task_boundary_arguments(
     parser: argparse.ArgumentParser,
     *,
-    program_required: bool = True,
+    program_required: bool = False,
 ) -> None:
     parser.add_argument("--program", required=program_required)
     parser.add_argument("--objective")
@@ -34,9 +48,19 @@ def _add_task_boundary_arguments(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bwork", description="Benchwork Athanor foundation")
+    parser = _CommandArgumentParser(
+        prog="bwork",
+        description="Benchwork Athanor foundation",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="emit a stable machine-readable response envelope",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init", help="initialize a local Benchwork project")
+    subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
     subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
 
@@ -80,6 +104,9 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("--problem", default="")
     close = program_commands.add_parser("close", help="close an evaluated Research Program")
     close.add_argument("program_id")
+    use = program_commands.add_parser("use", help="set the explicit active Research Program")
+    use.add_argument("program_id")
+    program_commands.add_parser("current", help="show the explicit active Research Program")
 
     protocol = subparsers.add_parser("protocol", help="manage Protocols")
     protocol_commands = protocol.add_subparsers(dest="protocol_command", required=True)
@@ -536,7 +563,35 @@ def _prepare_task(
     )
     decision = Ward(registry, athanor.approvals()).evaluate(capsule)
     print(json.dumps({"task_id": capsule["task_id"], "ward": decision.as_dict()}, indent=2))
-    return 0 if decision.status == "PASS" else 2
+    return 0 if decision.status == "PASS" else 3
+
+
+def _resolve_program_argument(
+    args: argparse.Namespace,
+    context: ProjectContext,
+) -> None:
+    if args.command == "run" and args.run_command is not None:
+        return
+    if not hasattr(args, "program") or args.program is not None:
+        return
+    active_program = context.active_program()
+    if active_program is None:
+        raise ProjectContextError(
+            "PROGRAM_REQUIRED",
+            "this command requires --program or an explicit active Program",
+            details={"command": args.command},
+        )
+    args.program = active_program
+
+
+def _machine_result(output: str) -> dict:
+    rendered = output.strip()
+    if not rendered:
+        return {}
+    try:
+        return json.loads(rendered)
+    except json.JSONDecodeError:
+        return {"message": rendered}
 
 
 def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
@@ -551,14 +606,54 @@ def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
         raise AthanorError(f"unknown Working: {working_id}") from error
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    root = Path.cwd()
-    athanor = Athanor(root)
-    registry = CapabilityRegistry(root)
-    capsules = CapsuleStore(root)
-    rites = RiteRegistry(root)
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    _machine_capture: bool = False,
+) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if "--json" in arguments and not _machine_capture:
+        forwarded = arguments.copy()
+        forwarded.remove("--json")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(forwarded, _machine_capture=True)
+        captured = output.getvalue()
+        if exit_code == 0:
+            print(json.dumps({"ok": True, "result": _machine_result(captured)}, indent=2))
+        else:
+            result = _machine_result(captured)
+            if isinstance(result, dict) and result.get("ok") is False:
+                print(json.dumps(result, indent=2))
+            else:
+                command_error = CommandError(
+                    "WAITING_FOR_APPROVAL"
+                    if exit_code == 3
+                    else "COMMAND_REJECTED",
+                    "Task is waiting for explicit approval"
+                    if exit_code == 3
+                    else "Command was rejected",
+                    exit_code,
+                    {"result": result},
+                )
+                print(json.dumps(command_error.envelope(), indent=2))
+        return exit_code
+
     try:
+        args = _parser().parse_args(arguments)
+        standalone = args.command == "init" or (
+            args.command == "sigil" and args.sigil_command == "verify"
+        )
+        root = Path.cwd().resolve() if standalone else discover_project_root()
+        if args.command == "root":
+            print(root)
+            return 0
+        athanor = Athanor(root)
+        registry = CapabilityRegistry(root)
+        capsules = CapsuleStore(root)
+        rites = RiteRegistry(root)
+        context = ProjectContext(root)
+        _resolve_program_argument(args, context)
         if args.command == "init":
             athanor.initialize()
             registry.initialize()
@@ -625,6 +720,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt.receipt_id,
                 receipt.sigil,
             )
+        elif args.command == "program" and args.program_command == "use":
+            if args.program_id not in athanor.programs():
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    f"unknown Research Program: {args.program_id}",
+                    exit_code=6,
+                    details={"program_id": args.program_id},
+                )
+            context.use_program(args.program_id)
+            print(args.program_id)
+        elif args.command == "program" and args.program_command == "current":
+            active_program = context.active_program()
+            if active_program is None:
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    "no active Research Program is configured",
+                    exit_code=6,
+                )
+            if active_program not in athanor.programs():
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    f"active Research Program does not exist: {active_program}",
+                    exit_code=6,
+                    details={"program_id": active_program},
+                )
+            print(active_program)
         elif args.command == "program":
             problem = {"statement": args.problem} if args.problem else {}
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
@@ -1158,9 +1279,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"trace type does not match object ID: {args.object_type_or_id} {object_id}"
                     )
             print(json.dumps(athanor.trace(object_id), indent=2))
-    except AthanorError as error:
-        print(f"Athanor rejected transition: {error}")
-        return 2
+    except (AthanorError, ProjectContextError) as error:
+        command_error = classify_error(error)
+        if _machine_capture:
+            print(json.dumps(command_error.envelope(), indent=2))
+        else:
+            print(f"Benchwork rejected command [{command_error.code}]: {command_error.message}")
+        return command_error.exit_code
     return 0
 
 

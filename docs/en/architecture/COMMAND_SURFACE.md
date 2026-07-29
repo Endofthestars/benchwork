@@ -15,12 +15,14 @@ Provider as completed work.
 Capabilities. `scry`, `distill`, and `invoke` expose the same mechanism through
 Arcana and explicit Capability language.
 
-Each direct verb requires `--program`. It creates an immutable Research
-Snapshot and pins the complete Capability Contract Sigil; there is no
-creation-order or "latest Program" fallback. Tool, time, and network boundaries
-default to the Capability contract and can be narrowed on the command line.
-Ward evaluates every proposal. Write and execution Capabilities remain
-`WAITING_FOR_APPROVAL` until a matching approval Receipt exists.
+Each direct verb requires either `--program` or an active Program selected by
+`bwork program use RP-001`. It creates an immutable Research Snapshot and pins
+the complete Capability Contract Sigil; there is no creation-order or "latest
+Program" fallback. `bwork program current` exposes the local explicit choice.
+Tool, time, and network boundaries default to the Capability contract and can
+be narrowed on the command line. Ward evaluates every proposal. Write and
+execution Capabilities remain `WAITING_FOR_APPROVAL` until a matching approval
+Receipt exists.
 
 These verbs prepare bounded work; they do not claim that a Provider ran.
 Automatic Provider invocation remains an open design decision.
@@ -52,3 +54,27 @@ The RFC names `grimoire add|inspect`, `rite search|install|run`, and
 `working list|inspect|resume` are available as local, inspectable operations.
 Remote Grimoire sources remain disabled until publisher identity and signature
 policy are defined.
+
+## Project and machine context
+
+Except for initialization and standalone file-Sigil verification, commands
+search from the current directory upward for `.benchwork/` or
+`benchwork.toml`. This makes a project opened from any subdirectory resolve the
+same Chronicle. The active Program is a local convenience stored in
+`.benchwork/context.json`; it is explicit, schema-versioned, and never inferred
+from creation order.
+
+`bwork --json COMMAND ...` emits one stable response envelope. Successful
+responses use `{"ok": true, "result": ...}`. Rejections use
+`{"ok": false, "error": {"code": "...", "message": "...", "details": {}}}`.
+
+| Exit | Meaning |
+|---:|---|
+| `0` | Success |
+| `2` | Validation or command arguments rejected |
+| `3` | Waiting for explicit approval |
+| `4` | Chronicle or integrity failure |
+| `5` | Stale Snapshot or Task state |
+| `6` | Project or object not found |
+| `7` | Conflict or duplicate |
+| `8` | Unsupported persisted version |

@@ -96,6 +96,8 @@ bwork program create robust-agent-memory \
   --title "可靠的智能体记忆" \
   --problem "测量长上下文条件下的检索可靠性。"
 
+bwork program use RP-001
+
 bwork evidence record EV-001 \
   --program RP-001 \
   --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
@@ -269,14 +271,19 @@ bwork grimoire list
 bwork --help
 ```
 
+命令会从子目录向上发现项目根目录。直接阶段动词可使用 `--program RP-001`，
+也可使用 `bwork program use` 显式选中的 Program；它们绝不会推断最新创建的
+Program。机器调用可使用 `bwork --json ...` 获取稳定的成功或错误信封。
+
 ## 命令地图
 
 | 命令 | 用途 |
 |---|---|
 | `bwork init` | 初始化 Chronicle、Capability 契约、Rite 与 Grimoire |
+| `bwork root` | 输出向上发现的项目根目录 |
 | `bwork status` | 重建并输出规范状态 |
 | `bwork doctor` | 验证 Chronicle 事件、Sigil、head 与 Receipt 链 |
-| `bwork program` | 创建 Research Program |
+| `bwork program` | 创建、关闭、选择和查看 Research Program |
 | `bwork start` | 从研究目标启动 Research Program |
 | `bwork investigate`、`design`、`implement`、`pilot`、`run` | 准备有边界的阶段 Task |
 | `bwork scry`、`distill`、`invoke` | 准备 Arcana 或显式 Capability Task |
@@ -320,6 +327,7 @@ bwork --help
 ├── chronicle.jsonl
 ├── chronicle.head
 ├── chronicle.lock
+├── context.json
 ├── capabilities.json
 ├── capabilities.lock
 ├── rites.json

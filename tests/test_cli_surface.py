@@ -7,8 +7,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from benchwork.athanor import Athanor
+from benchwork.athanor import Athanor, AthanorError
 from benchwork.cli import _parser, main
+from benchwork.errors import classify_error
 
 
 class CliSurfaceTest(unittest.TestCase):
@@ -108,11 +109,11 @@ class CliSurfaceTest(unittest.TestCase):
         self.assertTrue(capsule["circle"]["network"])
 
         code, output = self._run("implement", "--program", "RP-001")
-        self.assertEqual(code, 2)
+        self.assertEqual(code, 3)
         self.assertEqual(json.loads(output)["ward"]["status"], "WAITING_FOR_APPROVAL")
 
         code, output = self._run("run", "--program", "RP-001")
-        self.assertEqual(code, 2)
+        self.assertEqual(code, 3)
         self.assertEqual(json.loads(output)["ward"]["status"], "WAITING_FOR_APPROVAL")
 
     def test_aliases_and_agent_result_acceptance(self) -> None:
@@ -197,3 +198,116 @@ class CliSurfaceTest(unittest.TestCase):
         code, output = self._run("sigil", "verify", str(path), "--expected", expected)
         self.assertEqual(code, 0)
         self.assertEqual(output.strip(), expected)
+
+    def test_project_root_is_discovered_from_a_subdirectory(self) -> None:
+        self.assertEqual(self._run("init")[0], 0)
+        nested = self.root / "experiments" / "pilot"
+        nested.mkdir(parents=True)
+        os.chdir(nested)
+
+        code, output = self._run("root")
+        self.assertEqual(code, 0)
+        self.assertEqual(Path(output.strip()), self.root)
+        self.assertEqual(self._run("status")[0], 0)
+
+    def test_project_manifest_is_also_a_root_marker(self) -> None:
+        (self.root / "benchwork.toml").write_text("", encoding="utf-8")
+        nested = self.root / "notes"
+        nested.mkdir()
+        os.chdir(nested)
+
+        code, output = self._run("root")
+        self.assertEqual(code, 0)
+        self.assertEqual(Path(output.strip()), self.root)
+
+    def test_active_program_is_explicit_and_used_by_direct_verbs(self) -> None:
+        self._run("init")
+        self._run("program", "create", "first", "--title", "First")
+        self._run("program", "create", "second", "--title", "Second")
+
+        code, output = self._run("investigate")
+        self.assertEqual(code, 2)
+        self.assertIn("[PROGRAM_REQUIRED]", output)
+
+        self.assertEqual(self._run("program", "use", "RP-001")[0], 0)
+        self.assertEqual(self._run("program", "current"), (0, "RP-001\n"))
+        code, output = self._run("investigate")
+        self.assertEqual(code, 0)
+        task_id = json.loads(output)["task_id"]
+        capsule = json.loads(
+            (self.root / ".benchwork" / "capsules" / f"{task_id}.json").read_text()
+        )
+        self.assertEqual(capsule["program_id"], "RP-001")
+
+        code, output = self._run("investigate", "--program", "RP-002")
+        self.assertEqual(code, 0)
+        task_id = json.loads(output)["task_id"]
+        capsule = json.loads(
+            (self.root / ".benchwork" / "capsules" / f"{task_id}.json").read_text()
+        )
+        self.assertEqual(capsule["program_id"], "RP-002")
+
+        context_path = self.root / ".benchwork" / "context.json"
+        context = json.loads(context_path.read_text())
+        context["latest_program_id"] = "RP-002"
+        context_path.write_text(json.dumps(context), encoding="utf-8")
+        code, output = self._run("--json", "program", "current")
+        self.assertEqual(code, 2)
+        self.assertEqual(
+            json.loads(output)["error"]["code"],
+            "INVALID_PROJECT_CONTEXT",
+        )
+
+    def test_json_mode_has_stable_success_and_error_envelopes(self) -> None:
+        self._run("init")
+        code, output = self._run("--json", "status")
+        self.assertEqual(code, 0)
+        response = json.loads(output)
+        self.assertTrue(response["ok"])
+        self.assertIn("programs", response["result"])
+
+        code, output = self._run("--json", "investigate")
+        self.assertEqual(code, 2)
+        response = json.loads(output)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PROGRAM_REQUIRED")
+        self.assertEqual(response["error"]["details"]["command"], "investigate")
+
+        code, output = self._run("--json", "evidence", "show", "EV-404")
+        self.assertEqual(code, 6)
+        response = json.loads(output)
+        self.assertEqual(response["error"]["code"], "NOT_FOUND")
+
+        code, output = self._run("--json", "investigate", "--unknown-option")
+        self.assertEqual(code, 2)
+        response = json.loads(output)
+        self.assertEqual(response["error"]["code"], "INVALID_ARGUMENTS")
+        self.assertIn("usage", response["error"]["details"])
+
+    def test_json_waiting_for_approval_uses_error_envelope(self) -> None:
+        self._run("init")
+        self._run("program", "create", "approval", "--title", "Approval")
+        code, output = self._run("--json", "implement", "--program", "RP-001")
+        self.assertEqual(code, 3)
+        response = json.loads(output)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "WAITING_FOR_APPROVAL")
+        self.assertEqual(
+            response["error"]["details"]["result"]["ward"]["status"],
+            "WAITING_FOR_APPROVAL",
+        )
+
+    def test_stable_error_classes_cover_documented_exit_codes(self) -> None:
+        cases = {
+            "confirmatory Protocol requires Hypotheses": ("VALIDATION_REJECTED", 2),
+            "broken Chronicle chain at line 2": ("INTEGRITY_FAILURE", 4),
+            "STALE_TASK: snapshot no longer matches": ("STALE_TASK", 5),
+            "unknown Evidence: EV-404": ("NOT_FOUND", 6),
+            "duplicate Research Program slug": ("CONFLICT", 7),
+            "unsupported Capability Registry version": ("UNSUPPORTED_VERSION", 8),
+            "Chronicle v1.0 requires explicit migration": ("UNSUPPORTED_VERSION", 8),
+        }
+        for message, expected in cases.items():
+            with self.subTest(message=message):
+                classified = classify_error(AthanorError(message))
+                self.assertEqual((classified.code, classified.exit_code), expected)

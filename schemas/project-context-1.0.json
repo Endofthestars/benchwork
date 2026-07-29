@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/project-context/1.0",
+  "title": "Benchwork Project Context 1.0",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "active_program_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "project-context/1.0"
+    },
+    "active_program_id": {
+      "type": "string",
+      "pattern": "^RP-[0-9]{3,}$"
+    }
+  },
+  "additionalProperties": false
+}
