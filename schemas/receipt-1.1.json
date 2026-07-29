@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/receipt/1.1",
+  "title": "Chronicle Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "event_id",
+    "event_body_sigil",
+    "previous_receipt_sigil",
+    "accepted_at",
+    "receipt_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "receipt/1.1"},
+    "receipt_id": {"type": "string", "pattern": "^RC-[A-Z0-9]+$"},
+    "event_id": {"type": "string", "pattern": "^CE-[A-Z0-9]+$"},
+    "event_body_sigil": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "previous_receipt_sigil": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "accepted_at": {"type": "string", "format": "date-time"},
+    "receipt_sigil": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

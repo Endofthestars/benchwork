@@ -17,6 +17,7 @@ English is the canonical source for all Benchwork documentation.
 ## RFCs
 
 - [RFC-0000: The Arcana of Benchwork](rfcs/RFC-0000-arcana.md)
+- [RFC-0001: Chronicle and Receipt Protocol](rfcs/RFC-0001-chronicle-receipt-protocol.md)
 
 ## Architecture
 

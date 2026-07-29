@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/chronicle-head/1.1",
+  "title": "Chronicle Head",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_count", "terminal_receipt_sigil"],
+  "properties": {
+    "schema_version": {"const": "chronicle-head/1.1"},
+    "event_count": {"type": "integer", "minimum": 0},
+    "terminal_receipt_sigil": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}
