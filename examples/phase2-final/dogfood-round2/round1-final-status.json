@@ -1,0 +1,445 @@
+{
+  "programs": {
+    "RP-001": {
+      "schema_version": "research-program/1.1",
+      "program_id": "RP-001",
+      "slug": "trial-memory",
+      "title": "Benchwork dogfood trial",
+      "problem": {
+        "statement": "Verify the minimal canonical research workflow."
+      },
+      "status": "IMPLEMENTED",
+      "research_question": {
+        "statement": "Can Benchwork preserve a minimal research workflow across restart?",
+        "sealed_at": "2026-07-30T09:47:53.450632+00:00",
+        "seal_receipt": "RC-A11F46B334F6",
+        "actor": {
+          "actor_id": "local-user",
+          "actor_type": "human",
+          "authenticated_by": "local-session",
+          "host": "cli"
+        }
+      },
+      "evidence": [
+        "EV-001",
+        "EV-002"
+      ],
+      "claims": [
+        "CL-001",
+        "CL-002"
+      ],
+      "hypotheses": [
+        "HY-001",
+        "HY-002"
+      ],
+      "protocols": [
+        "PT-001"
+      ],
+      "assessments": [],
+      "decisions": [],
+      "artifacts": [
+        "AR-001"
+      ],
+      "issues": [],
+      "deviations": [],
+      "reproduction_records": []
+    }
+  },
+  "protocols": {
+    "PT-001": {
+      "schema_version": "study-protocol/1.3",
+      "protocol_id": "PT-001",
+      "program_id": "RP-001",
+      "hypothesis_ids": [
+        "HY-002"
+      ],
+      "title": "Minimal Chronicle replay trial",
+      "analysis_plan": "Compare registered replay outcomes between baseline and treatment runs.",
+      "status": "FROZEN",
+      "deviations": [],
+      "sealed_at": "2026-07-30T10:12:42.439410+00:00",
+      "seal_receipt": "RC-8CE15AA5E69F",
+      "seal_actor": {
+        "actor_id": "local-user",
+        "actor_type": "human",
+        "authenticated_by": "local-session",
+        "host": "cli"
+      },
+      "study_mode": "confirmatory",
+      "analysis_spec": {
+        "comparisons": [
+          {
+            "arms": [
+              "baseline",
+              "treatment"
+            ],
+            "comparison_id": "CMP-001",
+            "confidence_level": 0.95,
+            "estimand": "mean_difference",
+            "experiment_id": "EX-001",
+            "metric": "score",
+            "pairing": "paired",
+            "uncertainty_method": "student_t"
+          }
+        ],
+        "expected_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "multiple_comparison_policy": "none",
+        "pilot_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "practical_significance_thresholds": {
+          "score": 0.02
+        },
+        "schema_version": "analysis-spec/1.0"
+      }
+    }
+  },
+  "approvals": {},
+  "workings": {
+    "WK-001": {
+      "schema_version": "working/1.1",
+      "working_id": "WK-001",
+      "rite_id": "computational-study@0.2.1",
+      "rite_sigil": "sha256:1d942b9229ebd9ec54c3f6f1991e9a96efccdbc096bfc1776e78523632260ba8",
+      "rite": {
+        "description": "A Working-bound canonical-event computational research study.",
+        "rite_id": "computational-study@0.2.1",
+        "schema_version": "rite/1.1",
+        "stages": [
+          {
+            "exit_contract": {
+              "event_type": "artifact.registered",
+              "kind": "implementation",
+              "object_type": "artifact",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "IMPLEMENTATION"
+          },
+          {
+            "exit_contract": {
+              "event_type": "experiment.pilot_completed",
+              "object_type": "experiment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "PILOT"
+          },
+          {
+            "exit_contract": {
+              "event_type": "analysis.computed",
+              "object_type": "result-bundle",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "ANALYSIS"
+          },
+          {
+            "exit_contract": {
+              "event_type": "assessment.recorded",
+              "object_type": "assessment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "REVIEW"
+          },
+          {
+            "exit_contract": {
+              "event_type": "decision.sealed",
+              "object_type": "decision",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "DECISION"
+          },
+          {
+            "name": "COMPLETED"
+          }
+        ]
+      },
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "stage": "PILOT",
+      "status": "ACTIVE",
+      "history": [
+        {
+          "stage": "IMPLEMENTATION",
+          "at": "2026-07-30T10:13:15.842335+00:00",
+          "reason": "created",
+          "canonical_event_id": "CE-A53ADE916123",
+          "object_id": "WK-001"
+        },
+        {
+          "stage": "PILOT",
+          "at": "2026-07-30T10:15:40.615528+00:00",
+          "reason": "exit contract satisfied by artifact.registered",
+          "canonical_event_id": "CE-32EAC70BE810",
+          "object_id": "AR-001"
+        }
+      ]
+    }
+  },
+  "experiments": {
+    "EX-001": {
+      "schema_version": "experiment/1.2",
+      "experiment_id": "EX-001",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "hypothesis_id": "HY-002",
+      "question": "Does Benchwork preserve registered state after process restart?",
+      "status": "PILOT_RUNNING",
+      "working_id": "WK-001",
+      "history": [
+        {
+          "status": "PLANNED",
+          "event_id": "CE-D6F92F631780",
+          "at": "2026-07-30T10:16:19.738616+00:00"
+        },
+        {
+          "status": "IMPLEMENTED",
+          "event_id": "CE-004D35021E08",
+          "at": "2026-07-30T10:16:25.565867+00:00"
+        },
+        {
+          "status": "PILOT_RUNNING",
+          "event_id": "CE-0927A1F2A8EC",
+          "at": "2026-07-30T10:16:35.387817+00:00"
+        }
+      ]
+    }
+  },
+  "runs": {
+    "RUN-001": {
+      "schema_version": "run/1.2",
+      "run_id": "RUN-001",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "experiment_id": "EX-001",
+      "status": "COMPLETED",
+      "seed": 1,
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "artifacts": [],
+      "phase": "PILOT",
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline"
+    },
+    "RUN-002": {
+      "schema_version": "run/1.2",
+      "run_id": "RUN-002",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "experiment_id": "EX-001",
+      "status": "COMPLETED",
+      "seed": 1,
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "artifacts": [],
+      "phase": "PILOT",
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment"
+    },
+    "RUN-003": {
+      "schema_version": "run/1.2",
+      "run_id": "RUN-003",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "experiment_id": "EX-001",
+      "status": "COMPLETED",
+      "seed": 2,
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "artifacts": [],
+      "phase": "PILOT",
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline"
+    },
+    "RUN-004": {
+      "schema_version": "run/1.2",
+      "run_id": "RUN-004",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "experiment_id": "EX-001",
+      "status": "COMPLETED",
+      "seed": 2,
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "artifacts": [],
+      "phase": "PILOT",
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment"
+    },
+    "RUN-005": {
+      "schema_version": "run/1.2",
+      "run_id": "RUN-005",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "experiment_id": "EX-001",
+      "status": "FAILED",
+      "seed": 3,
+      "metrics": {},
+      "artifacts": [],
+      "phase": "PILOT",
+      "analysis_disposition": {
+        "included": false,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": "Synthetic failed run retained for negative-result validation."
+      },
+      "arm": "treatment"
+    }
+  },
+  "result_bundles": {},
+  "evidence": {
+    "EV-001": {
+      "schema_version": "evidence/1.2",
+      "evidence_id": "EV-001",
+      "program_id": "RP-001",
+      "source": {
+        "sigil": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "uri": "trial-source.txt"
+      },
+      "observation": "The trial records a minimal supported observation.",
+      "claim_relations": [
+        {
+          "claim_id": "CL-001",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "verification": {
+        "source_resolved": true,
+        "content_inspected": true
+      },
+      "reproduction_ids": []
+    },
+    "EV-002": {
+      "schema_version": "evidence/1.2",
+      "evidence_id": "EV-002",
+      "program_id": "RP-001",
+      "source": {
+        "sigil": "sha256:6a98fcb971fa3ec0e0ddcf8ff607093e2c730e6953a50bb7a0a6ea5582996f9a",
+        "uri": "trial-source.txt"
+      },
+      "observation": "The dogfood source defines the expected replay behavior.",
+      "claim_relations": [
+        {
+          "claim_id": "CL-002",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "verification": {
+        "source_resolved": true,
+        "content_inspected": true
+      },
+      "reproduction_ids": []
+    }
+  },
+  "claims": {
+    "CL-001": {
+      "schema_version": "claim/1.2",
+      "claim_id": "CL-001",
+      "program_id": "RP-001",
+      "type": "empirical",
+      "statement": "The minimal canonical workflow preserves research state.",
+      "status": "PROPOSED",
+      "evidence_relations": [
+        {
+          "evidence_id": "EV-001",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ]
+    },
+    "CL-002": {
+      "schema_version": "claim/1.2",
+      "claim_id": "CL-002",
+      "program_id": "RP-001",
+      "type": "empirical",
+      "statement": "Benchwork reconstructs canonical state from Chronicle after process restart.",
+      "status": "PROPOSED",
+      "evidence_relations": [
+        {
+          "evidence_id": "EV-002",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ]
+    }
+  },
+  "hypotheses": {
+    "HY-001": {
+      "schema_version": "hypothesis/1.0",
+      "hypothesis_id": "HY-001",
+      "program_id": "RP-001",
+      "claim_ids": [
+        "CL-001"
+      ],
+      "statement": "A sealed protocol can be replayed from Chronicle.",
+      "prediction": "The protocol remains present and unchanged after process restart.",
+      "status": "PROPOSED"
+    },
+    "HY-002": {
+      "schema_version": "hypothesis/1.0",
+      "hypothesis_id": "HY-002",
+      "program_id": "RP-001",
+      "claim_ids": [
+        "CL-002"
+      ],
+      "statement": "A frozen protocol remains identical after restarting the CLI process.",
+      "prediction": "The replayed protocol Sigil and canonical fields match the pre-restart state.",
+      "status": "ACTIVE"
+    }
+  },
+  "assessments": {},
+  "decisions": {},
+  "artifacts": {
+    "AR-001": {
+      "schema_version": "artifact/1.0",
+      "artifact_id": "AR-001",
+      "program_id": "RP-001",
+      "kind": "implementation",
+      "location": {
+        "sigil": "sha256:f7a488b0699838d9e5e13775bc45073773b0cc7e472f3a106fbd279d93894f3c",
+        "uri": "implementation-artifact.json"
+      },
+      "producer_id": "WK-001",
+      "input_ids": [
+        "PT-001"
+      ],
+      "status": "REGISTERED",
+      "registered_at": "2026-07-30T10:15:40.615528+00:00",
+      "registration_receipt": "RC-403698C05BBF"
+    }
+  },
+  "issues": {},
+  "deviations": {},
+  "reproduction_records": {},
+  "agent_results": {},
+  "review_requests": {},
+  "review_artifacts": {}
+}

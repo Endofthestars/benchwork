@@ -1,0 +1,371 @@
+[
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:8faad085418b195eb29fbafb514208a2a3f7e57cce1ea3526ffc67fd984d4721",
+    "event_id": "CE-6E3B11D855F0",
+    "object_id": "PT-001",
+    "occurred_at": "2026-07-30T10:07:40.719499+00:00",
+    "payload": {
+      "analysis_plan": "Compare registered replay outcomes between baseline and treatment runs.",
+      "analysis_spec": {
+        "comparisons": [
+          {
+            "arms": [
+              "baseline",
+              "treatment"
+            ],
+            "comparison_id": "CMP-001",
+            "confidence_level": 0.95,
+            "estimand": "mean_difference",
+            "experiment_id": "EX-001",
+            "metric": "score",
+            "pairing": "paired",
+            "uncertainty_method": "student_t"
+          }
+        ],
+        "expected_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "multiple_comparison_policy": "none",
+        "pilot_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "practical_significance_thresholds": {
+          "score": 0.02
+        },
+        "schema_version": "analysis-spec/1.0"
+      },
+      "hypothesis_ids": [
+        "HY-002"
+      ],
+      "program_id": "RP-001",
+      "study_mode": "confirmatory",
+      "title": "Minimal Chronicle replay trial"
+    },
+    "previous_receipt_sigil": "sha256:eeed9d327be1324abf5ee6c41bc021b7870436f54b249a6d4127a89d9957d248",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:07:40.719499+00:00",
+      "event_body_sigil": "sha256:8faad085418b195eb29fbafb514208a2a3f7e57cce1ea3526ffc67fd984d4721",
+      "event_id": "CE-6E3B11D855F0",
+      "previous_receipt_sigil": "sha256:eeed9d327be1324abf5ee6c41bc021b7870436f54b249a6d4127a89d9957d248",
+      "receipt_id": "RC-73463CFF25A7",
+      "receipt_sigil": "sha256:d2949007874a262d6016800fc9258a410d9b056ef83ea67632d3cd83838f5fc6",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 17,
+    "type": "protocol.drafted"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:f86b2910ae5ad5f159a1e5c49532e0c21de15a03f396f0e8d26b216bf8e217d4",
+    "event_id": "CE-D6F92F631780",
+    "object_id": "EX-001",
+    "occurred_at": "2026-07-30T10:16:19.738616+00:00",
+    "payload": {
+      "hypothesis_id": "HY-002",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "question": "Does Benchwork preserve registered state after process restart?",
+      "working_id": "WK-001"
+    },
+    "previous_receipt_sigil": "sha256:fead8789c4bbf87ada57d6bae528e1dce0ed13c158ae83b554311eb7f4a0128a",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:16:19.738616+00:00",
+      "event_body_sigil": "sha256:f86b2910ae5ad5f159a1e5c49532e0c21de15a03f396f0e8d26b216bf8e217d4",
+      "event_id": "CE-D6F92F631780",
+      "previous_receipt_sigil": "sha256:fead8789c4bbf87ada57d6bae528e1dce0ed13c158ae83b554311eb7f4a0128a",
+      "receipt_id": "RC-F77618CCBAD6",
+      "receipt_sigil": "sha256:254386d32ef0c4f203eeb16cdc1897f4ea7174dc42a22399d0db7836721b2c90",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 21,
+    "type": "experiment.planned"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:822d9b3301d656b57873d18f8ddbf039ec0548da805554bd65eff30a6902b551",
+    "event_id": "CE-004D35021E08",
+    "object_id": "EX-001",
+    "occurred_at": "2026-07-30T10:16:25.565867+00:00",
+    "payload": {
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "working_id": "WK-001"
+    },
+    "previous_receipt_sigil": "sha256:254386d32ef0c4f203eeb16cdc1897f4ea7174dc42a22399d0db7836721b2c90",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:16:25.565867+00:00",
+      "event_body_sigil": "sha256:822d9b3301d656b57873d18f8ddbf039ec0548da805554bd65eff30a6902b551",
+      "event_id": "CE-004D35021E08",
+      "previous_receipt_sigil": "sha256:254386d32ef0c4f203eeb16cdc1897f4ea7174dc42a22399d0db7836721b2c90",
+      "receipt_id": "RC-4B81C71211FA",
+      "receipt_sigil": "sha256:7142393671c8277a1482b4ebbff09149dfec763dcb03d8ee6da323783d294bf0",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 22,
+    "type": "experiment.implemented"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:56932badf8a29be7adf03667f9ab641c8fff6495d29cbf9ccff0b0ce9db3e2b9",
+    "event_id": "CE-0927A1F2A8EC",
+    "object_id": "EX-001",
+    "occurred_at": "2026-07-30T10:16:35.387817+00:00",
+    "payload": {
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "working_id": "WK-001"
+    },
+    "previous_receipt_sigil": "sha256:7142393671c8277a1482b4ebbff09149dfec763dcb03d8ee6da323783d294bf0",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:16:35.387817+00:00",
+      "event_body_sigil": "sha256:56932badf8a29be7adf03667f9ab641c8fff6495d29cbf9ccff0b0ce9db3e2b9",
+      "event_id": "CE-0927A1F2A8EC",
+      "previous_receipt_sigil": "sha256:7142393671c8277a1482b4ebbff09149dfec763dcb03d8ee6da323783d294bf0",
+      "receipt_id": "RC-EB5A23DB6635",
+      "receipt_sigil": "sha256:8f68435d9187270e0f3882d79e5b273d9ba96a7cd6d67a0959b0440c44d47241",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 23,
+    "type": "experiment.pilot_started"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:41e77d0bfb349138a9ae3573ac15919a8769fc4631ca9de050d02df1db3807f9",
+    "event_id": "CE-6FBB4DBF5FCD",
+    "object_id": "RUN-001",
+    "occurred_at": "2026-07-30T10:16:52.597949+00:00",
+    "payload": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "previous_receipt_sigil": "sha256:8f68435d9187270e0f3882d79e5b273d9ba96a7cd6d67a0959b0440c44d47241",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:16:52.597949+00:00",
+      "event_body_sigil": "sha256:41e77d0bfb349138a9ae3573ac15919a8769fc4631ca9de050d02df1db3807f9",
+      "event_id": "CE-6FBB4DBF5FCD",
+      "previous_receipt_sigil": "sha256:8f68435d9187270e0f3882d79e5b273d9ba96a7cd6d67a0959b0440c44d47241",
+      "receipt_id": "RC-4C539BB348F8",
+      "receipt_sigil": "sha256:69f74ec72f9483b5e5c8cb66e8554c2613a119f7cae1df76b1aaa55223ff5541",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 24,
+    "type": "run.recorded"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:84ac04b1eed12851c7fb450e83490cff62f9dcdd8180e549e35d970b7f35698d",
+    "event_id": "CE-19B11229E493",
+    "object_id": "RUN-002",
+    "occurred_at": "2026-07-30T10:17:00.303710+00:00",
+    "payload": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "previous_receipt_sigil": "sha256:69f74ec72f9483b5e5c8cb66e8554c2613a119f7cae1df76b1aaa55223ff5541",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:17:00.303710+00:00",
+      "event_body_sigil": "sha256:84ac04b1eed12851c7fb450e83490cff62f9dcdd8180e549e35d970b7f35698d",
+      "event_id": "CE-19B11229E493",
+      "previous_receipt_sigil": "sha256:69f74ec72f9483b5e5c8cb66e8554c2613a119f7cae1df76b1aaa55223ff5541",
+      "receipt_id": "RC-B608F4A0C1A3",
+      "receipt_sigil": "sha256:ec9d09fab3a5714bd1483cef1b7e4812da48c01ba3c96ef70039cd9496d6cdcc",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 25,
+    "type": "run.recorded"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:217dac3e61377db44a235415e94aa963958680ec12d8f61587cd4cafbec56707",
+    "event_id": "CE-9ECE15561681",
+    "object_id": "RUN-003",
+    "occurred_at": "2026-07-30T10:17:06.200168+00:00",
+    "payload": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "previous_receipt_sigil": "sha256:ec9d09fab3a5714bd1483cef1b7e4812da48c01ba3c96ef70039cd9496d6cdcc",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:17:06.200168+00:00",
+      "event_body_sigil": "sha256:217dac3e61377db44a235415e94aa963958680ec12d8f61587cd4cafbec56707",
+      "event_id": "CE-9ECE15561681",
+      "previous_receipt_sigil": "sha256:ec9d09fab3a5714bd1483cef1b7e4812da48c01ba3c96ef70039cd9496d6cdcc",
+      "receipt_id": "RC-6DF509FB2046",
+      "receipt_sigil": "sha256:4538a5f3a9b68591c0a471468b8f0419eaba99aa17c343c5c90a6e06a7f413c2",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 26,
+    "type": "run.recorded"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:5a23228d5ac5c5a9f9e2b4523b872032f1640bc47eb3733a457a8d0df0a3737d",
+    "event_id": "CE-5D1D65B9EA55",
+    "object_id": "RUN-004",
+    "occurred_at": "2026-07-30T10:17:11.902763+00:00",
+    "payload": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "previous_receipt_sigil": "sha256:4538a5f3a9b68591c0a471468b8f0419eaba99aa17c343c5c90a6e06a7f413c2",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:17:11.902763+00:00",
+      "event_body_sigil": "sha256:5a23228d5ac5c5a9f9e2b4523b872032f1640bc47eb3733a457a8d0df0a3737d",
+      "event_id": "CE-5D1D65B9EA55",
+      "previous_receipt_sigil": "sha256:4538a5f3a9b68591c0a471468b8f0419eaba99aa17c343c5c90a6e06a7f413c2",
+      "receipt_id": "RC-C481052CC390",
+      "receipt_sigil": "sha256:1dcbe4dfde550e6c52a2073c78a5db93e40b00be004869e1bcb5787021f1f098",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 27,
+    "type": "run.recorded"
+  },
+  {
+    "actor": {
+      "actor_id": "local-user",
+      "actor_type": "human",
+      "authenticated_by": "local-session",
+      "host": "cli"
+    },
+    "event_body_sigil": "sha256:454155cefe3b56b7ba18b778ac7388f751ef0bf1f4ec4d7b6e537ec283f423a3",
+    "event_id": "CE-B4D51F751581",
+    "object_id": "RUN-005",
+    "occurred_at": "2026-07-30T10:17:44.580559+00:00",
+    "payload": {
+      "analysis_disposition": {
+        "included": false,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": "Synthetic failed run retained for negative-result validation."
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {},
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "seed": 3,
+      "status": "FAILED"
+    },
+    "previous_receipt_sigil": "sha256:1dcbe4dfde550e6c52a2073c78a5db93e40b00be004869e1bcb5787021f1f098",
+    "receipt": {
+      "accepted_at": "2026-07-30T10:17:44.580559+00:00",
+      "event_body_sigil": "sha256:454155cefe3b56b7ba18b778ac7388f751ef0bf1f4ec4d7b6e537ec283f423a3",
+      "event_id": "CE-B4D51F751581",
+      "previous_receipt_sigil": "sha256:1dcbe4dfde550e6c52a2073c78a5db93e40b00be004869e1bcb5787021f1f098",
+      "receipt_id": "RC-F67C1592C79D",
+      "receipt_sigil": "sha256:51b35ed1c5db600134678bb0898d6220615300fb0807b2a64a246b598f540678",
+      "schema_version": "receipt/1.1"
+    },
+    "schema_version": "chronicle-event/1.1",
+    "sequence": 28,
+    "type": "run.recorded"
+  }
+]

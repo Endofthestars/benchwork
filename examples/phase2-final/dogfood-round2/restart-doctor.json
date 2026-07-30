@@ -1,0 +1,57 @@
+{
+  "schema_version": "doctor-report/1.1",
+  "mode": "deep",
+  "ok": true,
+  "chronicle_verified": true,
+  "all_objects_replayable": true,
+  "checks": {
+    "chronicle": {
+      "status": "PASS",
+      "event_count": 53
+    },
+    "projection": {
+      "status": "PASS",
+      "object_count": 37
+    },
+    "snapshots": {
+      "status": "PASS",
+      "verified_count": 6
+    },
+    "capsules": {
+      "status": "PASS",
+      "verified_count": 6
+    },
+    "capability_registry": {
+      "status": "PASS",
+      "verified_count": 21
+    },
+    "rite_registry": {
+      "status": "PASS",
+      "verified_count": 3
+    },
+    "grimoire_registry": {
+      "status": "PASS",
+      "verified_count": 0
+    },
+    "agent_outputs": {
+      "status": "PASS",
+      "verified_count": 3
+    },
+    "artifacts": {
+      "status": "PASS",
+      "verified_count": 2
+    },
+    "result_exports": {
+      "status": "PASS",
+      "verified_count": 1
+    },
+    "project_context": {
+      "status": "PASS",
+      "active_program_id": "RP-001"
+    },
+    "migration_state": {
+      "status": "PASS",
+      "residual_count": 0
+    }
+  }
+}
