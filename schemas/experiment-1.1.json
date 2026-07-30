@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/experiment/1.1",
+  "title": "Experiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_id", "program_id", "protocol_id", "hypothesis_id", "question", "status", "history"],
+  "properties": {
+    "schema_version": {"const": "experiment/1.1"},
+    "experiment_id": {"type": "string", "pattern": "^EX-"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"},
+    "protocol_id": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/protocol_id"},
+    "hypothesis_id": {"type": ["string", "null"], "pattern": "^HY-"},
+    "question": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": [
+        "PLANNED",
+        "IMPLEMENTED",
+        "PILOT_RUNNING",
+        "PILOT_COMPLETED",
+        "FORMAL_RUNNING",
+        "COMPLETED",
+        "CANCELLED"
+      ]
+    },
+    "history": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "event_id", "at"],
+        "properties": {
+          "status": {"type": "string", "minLength": 1},
+          "event_id": {"type": "string", "pattern": "^CE-"},
+          "at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

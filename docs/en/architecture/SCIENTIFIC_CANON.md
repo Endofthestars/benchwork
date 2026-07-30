@@ -14,18 +14,23 @@ Evidence -> Claim -> Hypothesis -> Protocol -> Experiment -> Run
 
 ## Evidence and Claims
 
-An `evidence/1.1` record binds a sourced observation to a content-addressed
-Artifact. Verification checks are monotonic: a completed check cannot later be
-removed. A Claim can only reference Evidence whose source was resolved and
-whose content was inspected. Each relation states whether the Evidence
-supports, contradicts, limits, reproduces, or leaves the Claim unresolved.
+An `evidence/1.2` record binds a sourced observation to a content-addressed
+Artifact. Source resolution and content inspection are separate, monotonic
+events. A Claim relation is first proposed and then explicitly verified; Claim
+creation itself never verifies Evidence. Verification requires the source to
+be resolved and the content inspected.
 
 ## Hypotheses and Protocols
 
 A Hypothesis must trace to one or more Claims and include a falsifiable
-prediction. Protocols may register exact Hypothesis IDs. Once a Protocol is
-Sealed, an Experiment can activate only a Hypothesis registered by that
-Protocol. Legacy Protocols without Hypothesis IDs remain replayable.
+prediction. Creating it does not freeze a Research Question. Only
+`research_question.sealed` reaches `RQ_FROZEN`, with Actor and Receipt
+provenance. Protocols may register exact Hypothesis IDs. A Protocol Seal also
+stores its Actor.
+
+Local reproduction is represented by `reproduction-record/1.0`, not a
+manually toggled Evidence boolean. The record binds Evidence to canonical
+Runs, a Result Bundle, Artifacts, and an Assessment.
 
 ## Assessment and Decision
 
@@ -34,10 +39,10 @@ and its Sigil. It records limitations and explicit Claim and Hypothesis
 findings. Replay checks that every finding belongs to the same Program and
 that each Hypothesis was registered by the analyzed Protocol.
 
-A `decision/1.1` object references one or more complete Assessments. The CLI
-invocation is the human commitment point; Athanor appends `decision.sealed`
-and embeds the Receipt and timestamp in the projection. Decisions are
-immutable in this version.
+A `decision/1.2` object references one or more complete Assessments and stores
+its Actor. Outcome-specific Gates prevent CONTINUE with an open CRITICAL Issue,
+require actions for REPAIR, require lineage for PIVOT, and preserve unresolved
+Issues and Assessment limitations. Decisions are immutable in this version.
 
 ## Lineage
 
@@ -45,5 +50,5 @@ immutable in this version.
 events whose payload references it. A Claim trace therefore includes its
 creation, dependent Hypotheses, and later Assessment findings.
 
-The original 1.0 Evidence, Claim, Assessment, and Decision Schemas remain
-published unchanged. M7 projections use the additive 1.1 contracts.
+Earlier Evidence, Claim, Protocol, and Decision Schemas remain published
+unchanged. M10 projections use the corrected additive contracts.

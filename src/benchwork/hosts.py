@@ -7,6 +7,7 @@ from typing import Any
 
 from .athanor import Athanor
 from .circle import CapsuleStore, CapabilityRegistry, Ward, WardDecision
+from .tasks import TaskService
 
 
 HOSTS = ("codex", "claude-code")
@@ -29,7 +30,7 @@ class HostProposal:
         return {
             "host": self.host,
             "task_id": self.capsule["task_id"],
-            "capability": self.capsule["capability"],
+            "capability": self.capsule["capability"]["id"],
             "ward": self.ward.as_dict(),
             "next_action": next_action,
         }
@@ -49,12 +50,22 @@ class HostAdapter:
         self.capsules = capsules
 
     def propose(
-        self, capability: str, input_sigil: str, tools: list[str], time_budget_seconds: int, network: bool
+        self,
+        capability: str,
+        program_id: str,
+        objective: str,
+        tools: list[str],
+        time_budget_seconds: int,
+        network: bool,
     ) -> HostProposal:
-        self.registry.get(capability)
-        capsule = self.capsules.create(
+        capsule = TaskService(
+            self.athanor,
+            self.registry,
+            self.capsules,
+        ).create(
             capability,
-            input_sigil,
+            program_id,
+            objective,
             {"tools": tools, "time_budget_seconds": time_budget_seconds, "network": network},
             host=self.host,
         )
@@ -63,10 +74,20 @@ class HostAdapter:
 
 
 class CodexHostAdapter(HostAdapter):
-    def __init__(self, athanor: Athanor, registry: CapabilityRegistry, capsules: CapsuleStore) -> None:
+    def __init__(
+        self,
+        athanor: Athanor,
+        registry: CapabilityRegistry,
+        capsules: CapsuleStore,
+    ) -> None:
         super().__init__("codex", athanor, registry, capsules)
 
 
 class ClaudeCodeHostAdapter(HostAdapter):
-    def __init__(self, athanor: Athanor, registry: CapabilityRegistry, capsules: CapsuleStore) -> None:
+    def __init__(
+        self,
+        athanor: Athanor,
+        registry: CapabilityRegistry,
+        capsules: CapsuleStore,
+    ) -> None:
         super().__init__("claude-code", athanor, registry, capsules)

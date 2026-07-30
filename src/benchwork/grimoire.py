@@ -41,10 +41,23 @@ def _load_extension_json(path: Path, label: str) -> dict[str, Any]:
 
 def load_rite_definition(path: Path) -> dict[str, Any]:
     definition = _load_extension_json(path, "Grimoire Rite")
-    validate_instance("rite-definition-1.0.json", definition)
+    schema_name = (
+        "rite-definition-1.1.json"
+        if definition.get("schema_version") == "rite/1.1"
+        else "rite-definition-1.0.json"
+    )
+    validate_instance(schema_name, definition)
     stages = [stage["name"] for stage in definition["stages"]]
     if len(stages) != len(set(stages)):
         raise AthanorError(f"Grimoire Rite has duplicate stage names: {definition['rite_id']}")
+    if definition["schema_version"] == "rite/1.1" and (
+        any("exit_contract" not in stage for stage in definition["stages"][:-1])
+        or "exit_contract" in definition["stages"][-1]
+    ):
+        raise AthanorError(
+            "Grimoire Rite v1.1 requires exits on non-terminal stages only: "
+            f"{definition['rite_id']}"
+        )
     return definition
 
 
@@ -113,9 +126,18 @@ class GrimoireRegistry:
         with _exclusive_lock(self.lock_path):
             return self._read_unlocked()["grimoires"]
 
-    def rite_entries(self) -> dict[str, dict[str, Any]]:
+    def verify_existing(self) -> dict[str, dict[str, Any]]:
+        """Validate the stored Registry without creating or rewriting it."""
+        if not self.path.is_file():
+            raise AthanorError("Grimoire Registry is missing")
+        return self._read_unlocked()["grimoires"]
+
+    @staticmethod
+    def _rite_entries(
+        grimoires: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
         entries: dict[str, dict[str, Any]] = {}
-        for grimoire_ref, record in self.grimoires().items():
+        for grimoire_ref, record in grimoires.items():
             for rite_id, rite in record["rites"].items():
                 if rite_id in entries:
                     raise AthanorError(f"Rite collision between installed Grimoires: {rite_id}")
@@ -126,6 +148,12 @@ class GrimoireRegistry:
                     "manifest_sigil": record["manifest_sigil"],
                 }
         return entries
+
+    def rite_entries(self) -> dict[str, dict[str, Any]]:
+        return self._rite_entries(self.grimoires())
+
+    def verify_existing_rite_entries(self) -> dict[str, dict[str, Any]]:
+        return self._rite_entries(self.verify_existing())
 
     def install(
         self, source: Path, reserved_rite_ids: set[str] | None = None
@@ -169,7 +197,7 @@ class GrimoireRegistry:
         collision = reserved.intersection(installed_rites)
         if collision:
             raise AthanorError(f"Grimoire cannot override reserved Rite: {sorted(collision)[0]}")
-        record = {
+        record: dict[str, Any] = {
             "manifest": manifest,
             "manifest_sigil": content_sigil(manifest),
             "rites": installed_rites,

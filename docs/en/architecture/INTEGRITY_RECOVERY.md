@@ -37,3 +37,22 @@ Seal. This preserves the original commitment and makes later context explicit.
 
 All Artifact, Issue, and Deviation references fail before Chronicle append when
 an object is absent or belongs to another Program.
+
+## Chronicle v1.1 recovery
+
+New projects use `chronicle-event/1.1`, `receipt/1.1`, and
+`chronicle-head/1.1`. Event bodies and Receipts have separate SHA-256 Sigils;
+the Receipt Sigil binds Receipt identity and acceptance time and is the value
+used for chaining and the Head.
+
+`bwork chronicle recover --dry-run` validates an uncommitted tail and replays
+the complete scientific projection without changing either file.
+`bwork chronicle recover --accept-valid-tail` may then update only the Head.
+It refuses removed events, rewritten committed prefixes, invalid schemas,
+broken chains, and tails that cannot be projected.
+
+Projects with a v1.0 Head are rejected during ordinary replay until
+`bwork migrate chronicle-v1.0-to-v1.1` is run. The migration verifies the old
+ledger, refuses unsupported fields, creates a timestamped backup and report,
+rebuilds the Receipt chain, and requires the old and new scientific
+projections to be equal before replacing the ledger.

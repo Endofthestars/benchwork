@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result/1.1",
+  "title": "Agent Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "snapshot_sigil",
+    "capability_contract_sigil",
+    "status",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": {"const": "agent-result/1.1"},
+    "task_id": {"type": "string", "pattern": "^TK-[A-Z0-9]+$"},
+    "snapshot_sigil": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+    },
+    "capability_contract_sigil": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+    },
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]},
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "uri", "blob_sigil"],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*/[0-9]+\\.[0-9]+$"
+          },
+          "uri": {"type": "string", "minLength": 1},
+          "blob_sigil": {
+            "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime": {"type": "string", "minLength": 1},
+        "host": {"enum": ["cli", "codex", "claude-code"]},
+        "invocation_id": {"type": "string", "minLength": 1}
+      },
+      "minProperties": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "COMPLETED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {"outputs": {"minItems": 1}}
+      }
+    }
+  ]
+}

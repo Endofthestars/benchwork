@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/chronicle-event/1.1",
+  "title": "Chronicle Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "sequence",
+    "type",
+    "object_id",
+    "occurred_at",
+    "previous_receipt_sigil",
+    "actor",
+    "payload",
+    "event_body_sigil",
+    "receipt"
+  ],
+  "properties": {
+    "schema_version": {"const": "chronicle-event/1.1"},
+    "event_id": {"type": "string", "pattern": "^CE-[A-Z0-9]+$"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "type": {"type": "string", "minLength": 1},
+    "object_id": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "previous_receipt_sigil": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "actor_type", "host", "authenticated_by"],
+      "properties": {
+        "actor_id": {"type": "string", "minLength": 1},
+        "actor_type": {"enum": ["human", "policy", "tool", "agent"]},
+        "host": {"enum": ["cli", "codex", "claude-code"]},
+        "authenticated_by": {"type": "string", "minLength": 1}
+      }
+    },
+    "payload": {"type": "object"},
+    "event_body_sigil": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "receipt": {"$ref": "https://benchwork.dev/schemas/receipt/1.1"}
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/capability-registry/1.1",
+  "title": "Capability Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capabilities"],
+  "properties": {
+    "schema_version": {"const": "capability-registry/1.1"},
+    "capabilities": {
+      "type": "object",
+      "propertyNames": {"pattern": "^bench\\.[a-z0-9]+(?:\\.[a-z0-9]+)+$"},
+      "additionalProperties": {
+        "$ref": "https://benchwork.dev/schemas/capability-contract/1.0"
+      }
+    }
+  }
+}

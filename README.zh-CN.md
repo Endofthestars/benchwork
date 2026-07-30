@@ -8,7 +8,8 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.2.0a3` 公开 Alpha。M0–M9 里程碑已经实现。
+> 项目状态：`0.2.0rc1` 公开候选版本。M10 第一阶段验收已实现；稳定命名仍为
+> provisional。
 
 ## 为什么需要 Benchwork
 
@@ -42,13 +43,13 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 - **Codex 与 Claude Code Host** 生成对称、与 Provider 无关的任务提案。
 - **Rite 与 Working** 固定工作流定义，并记录受 Protocol 约束的阶段迁移。
 - **Experiment、Run 与 Alembic** 保留全部结果，并生成确定性的
-  `result-bundle/1.0` 分析产物。
+  `result-bundle/1.1` 描述性聚合产物。
 - **Assessment 与 Decision** 将解释绑定到 Result Bundle，并让最终科研承诺
   由人类 Seal 且可回放。
 - **Artifact、Issue 与 Deviation** 保存内容寻址产物、可恢复的问题，以及不改写
   历史的 Protocol 封存后变更。
 - **直动词与 Agent 交接** 创建经过 Ward 检查的 Task Proposal，并由 Athanor
-  接纳匹配的 `agent-result/1.0` 输出。
+  接纳绑定 Snapshot 与 Capability Contract 的 `agent-result/1.1` 输出。
 - **Open Grimoire** 安装版本化、内容固定、仅数据的 Rite 包，不执行扩展代码。
 - **版本化 JSON Schema** 定义科研对象、事件、任务、Run、Assessment、
   Decision 和 Result Bundle 的公共契约。
@@ -96,6 +97,8 @@ bwork program create robust-agent-memory \
   --title "可靠的智能体记忆" \
   --problem "测量长上下文条件下的检索可靠性。"
 
+bwork program use RP-001
+
 bwork evidence record EV-001 \
   --program RP-001 \
   --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
@@ -109,23 +112,37 @@ bwork claim create CL-001 \
   --statement "处理方法可以提高检索表现。" \
   --evidence "EV-001|SUPPORTS"
 
+bwork claim verify-relation CL-001 --evidence EV-001
+
 bwork hypothesis create HY-001 \
   --program RP-001 \
   --claim CL-001 \
   --statement "处理方法提高注册检索指标。" \
   --prediction "平均指标高于基线平均值。"
 
+bwork rq seal --program RP-001 \
+  --statement "处理方法是否提高已注册检索指标？"
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "记忆检索研究" \
   --analysis-plan "计算跨随机种子的效应量与不确定性。" \
-  --hypothesis HY-001
+  --study-mode confirmatory \
+  --hypothesis HY-001 \
+  --analysis-spec examples/basic-analysis-spec.json
 
 bwork protocol seal PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork working start computational-study@0.2.1 \
   --program RP-001 \
   --protocol PT-001
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:<由-bwork-sigil-file-得到的摘要>" \
+  --producer WK-001 \
+  --input PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
@@ -133,18 +150,34 @@ bwork experiment create EX-001 \
   --hypothesis HY-001 \
   --question "处理方法是否提高已注册指标？"
 
-bwork run record RUN-001 \
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
+bwork run record RUN-000 \
   --experiment EX-001 \
+  --phase PILOT \
   --status COMPLETED \
   --include \
+  --arm baseline \
+  --seed 1 \
+  --metric score=0.80
+
+bwork run record RUN-001 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --status COMPLETED \
+  --include \
+  --arm treatment \
   --seed 1 \
   --metric score=0.82
+
+bwork experiment transition EX-001 pilot-completed
 
 bwork analyze --program RP-001 --protocol PT-001
 
 bwork review RB-001 \
   --summary "注册结果支持该假设。" \
-  --limitation "目前只有一次 Run。" \
+  --limitation "目前只有一组配对观察。" \
   --claim-finding "CL-001|SUPPORTED|观察方向与 Claim 一致。" \
   --hypothesis-finding "HY-001|SUPPORTED|预测得到满足。"
 
@@ -159,23 +192,12 @@ bwork doctor
 bwork trace CL-001
 ```
 
-在新项目中，上述命令会建立从 `EV-001` 到已 Seal 的 `DE-001` 的完整追踪，
-同时让 `WK-001` 从 `IMPLEMENTATION` 阶段开始。
+在新项目中，上述命令会建立从 `EV-001` 到已 Seal 的 `DE-001` 的完整追踪。
+匹配的规范事件会让 `WK-001` 按固定退出契约推进到 `COMPLETED`。
 
-每次 Working 迁移都必须提供固定 Rite 所要求的 Artifact：
+操作完整性对象仍可与科学链并列记录：
 
 ```bash
-bwork working advance WK-001 \
-  --reason "实现已经审查。" \
-  --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
-
-bwork artifact register AR-001 \
-  --program RP-001 \
-  --kind implementation \
-  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
-  --producer WK-001 \
-  --input PT-001
-
 bwork issue open IS-001 \
   --program RP-001 \
   --subject AR-001 \
@@ -218,20 +240,20 @@ RFC 直动词复用同一边界：
 
 ```bash
 bwork start "研究可恢复的智能体记忆"
-bwork investigate
-bwork design
-bwork implement
-bwork pilot
-bwork run
+bwork investigate --program RP-001
+bwork design --program RP-001
+bwork implement --program RP-001
+bwork pilot --program RP-001
+bwork run --program RP-001
 
-bwork scry literature
-bwork distill evidence
-bwork invoke bench.hypothesis.challenge
+bwork scry literature --program RP-001
+bwork distill evidence --program RP-001
+bwork invoke bench.hypothesis.challenge --program RP-001
 ```
 
 `investigate` 与 `design` 通常通过只读契约；`implement`、`pilot` 和裸
 `run` 会停在 `WAITING_FOR_APPROVAL`。这些命令只准备 Task Capsule，不会把
-尚未发生的 Provider 工作报告为完成。Provider 返回 `agent-result/1.0` 文件后：
+尚未发生的 Provider 工作报告为完成。Provider 返回 `agent-result/1.1` 文件后：
 
 ```bash
 bwork task accept agent-result.json
@@ -250,22 +272,29 @@ bwork grimoire list
 bwork --help
 ```
 
+命令会从子目录向上发现项目根目录。直接阶段动词可使用 `--program RP-001`，
+也可使用 `bwork program use` 显式选中的 Program；它们绝不会推断最新创建的
+Program。机器调用可使用 `bwork --json ...` 获取稳定的成功或错误信封。
+
 ## 命令地图
 
 | 命令 | 用途 |
 |---|---|
 | `bwork init` | 初始化 Chronicle、Capability 契约、Rite 与 Grimoire |
+| `bwork root` | 输出向上发现的项目根目录 |
 | `bwork status` | 重建并输出规范状态 |
 | `bwork doctor` | 验证 Chronicle 事件、Sigil、head 与 Receipt 链 |
-| `bwork program` | 创建 Research Program |
+| `bwork program` | 创建、关闭、选择和查看 Research Program |
 | `bwork start` | 从研究目标启动 Research Program |
 | `bwork investigate`、`design`、`implement`、`pilot`、`run` | 准备有边界的阶段 Task |
 | `bwork scry`、`distill`、`invoke` | 准备 Arcana 或显式 Capability Task |
 | `bwork seal` | 使用 RFC 直达形式 Seal Protocol |
 | `bwork evidence` | 记录、验证和查看有来源的 Evidence |
-| `bwork claim` | 创建和查看由 Evidence 支撑的 Claim |
+| `bwork claim` | 创建 Claim 并显式验证 Evidence 关系 |
 | `bwork hypothesis` | 创建和查看可证伪 Hypothesis |
+| `bwork rq` | 显式封存 Research Question |
 | `bwork protocol` | 起草并封存 Protocol |
+| `bwork reproduction` | 将复现状态绑定到规范科研对象 |
 | `bwork capability` | 查看已安装的 Capability 契约 |
 | `bwork task` | 创建/查看 Task Capsule，并接纳 Agent Result |
 | `bwork ward` | 根据策略评估 Task Capsule |
@@ -299,6 +328,7 @@ bwork --help
 ├── chronicle.jsonl
 ├── chronicle.head
 ├── chronicle.lock
+├── context.json
 ├── capabilities.json
 ├── capabilities.lock
 ├── rites.json

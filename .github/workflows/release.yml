@@ -40,6 +40,9 @@ jobs:
             exit 1
           fi
 
+      - name: Enforce stable release naming policy
+        run: python scripts/ci/check-release-policy.py
+
       - name: Install project, test, and packaging tools
         run: |
           python -m pip install --upgrade pip

@@ -33,8 +33,8 @@ machine.
 
 ## M5: Alembic
 
-Completed: canonical Experiment and Run provenance plus deterministic,
-Schema-validated `result-bundle/1.0` analysis artifacts.
+Completed: canonical Experiment and Run provenance plus schema-validated
+`result-bundle/1.1` deterministic descriptive aggregation.
 
 ## M6: Open Grimoire
 
@@ -60,3 +60,11 @@ Completed: all RFC Capability contracts; direct research verbs that create
 Ward-checked Task Proposals; canonical Agent Result acceptance bound to the
 original Capsule and input Sigil; Chronicle and Sigil inspection; and the
 documented Grimoire, Rite, Working, Seal, and typed Trace command forms.
+
+## M10: The Seal
+
+Release candidate implemented: Phase 1 hardening for Receipt integrity,
+state-bound Tasks, explicit scientific Gates, canonical Working and Run
+lifecycles, registered Alembic comparisons, deterministic CLI project context,
+governance, and golden release acceptance. Automatic Provider execution remains
+outside M10. Final acceptance requires the complete stacked CI suite to pass.

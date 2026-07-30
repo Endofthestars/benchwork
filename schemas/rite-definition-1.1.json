@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/rite-definition/1.1",
+  "title": "Rite Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rite_id", "description", "stages"],
+  "properties": {
+    "schema_version": {"const": "rite/1.1"},
+    "rite_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "description": {"type": "string", "minLength": 1},
+    "stages": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+          "exit_contract": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event_type", "object_type", "same_program", "same_protocol"],
+            "properties": {
+              "event_type": {
+                "enum": [
+                  "artifact.registered",
+                  "experiment.pilot_completed",
+                  "run.recorded",
+                  "analysis.computed",
+                  "assessment.recorded",
+                  "decision.sealed"
+                ]
+              },
+              "object_type": {
+                "enum": ["artifact", "experiment", "run", "result-bundle", "assessment", "decision"]
+              },
+              "kind": {"type": "string", "minLength": 1},
+              "phase": {"enum": ["PILOT", "FORMAL"]},
+              "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED", "LOST"]},
+              "same_program": {"const": true},
+              "same_protocol": {"const": true}
+            }
+          }
+        }
+      }
+    }
+  }
+}

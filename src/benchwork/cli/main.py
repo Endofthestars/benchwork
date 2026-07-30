@@ -4,20 +4,40 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
+import sys
+from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Sequence
+from typing import NoReturn, Sequence
 
-from .athanor import Athanor, AthanorError, content_sigil
-from .circle import CapsuleStore, CapabilityRegistry, Ward
-from .grimoire import rite_definition_sigil
-from .hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
-from .rites import RiteRegistry
+from ..athanor import Athanor, AthanorError, content_sigil
+from ..circle import CapsuleStore, CapabilityRegistry, Ward
+from ..errors import CommandError, ProjectContextError, classify_error
+from ..grimoire import rite_definition_sigil
+from ..hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
+from ..project import ProjectContext, discover_project_root
+from ..rites import RiteRegistry
+from ..tasks import TaskService
 
 
-def _add_task_boundary_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input-sigil")
+class _CommandArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise ProjectContextError(
+            "INVALID_ARGUMENTS",
+            message,
+            details={"usage": self.format_usage().strip()},
+        )
+
+
+def _add_task_boundary_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    program_required: bool = False,
+) -> None:
+    parser.add_argument("--program", required=program_required)
+    parser.add_argument("--objective")
     parser.add_argument("--tool", action="append")
     parser.add_argument("--time-budget", type=int)
     parser.add_argument(
@@ -28,11 +48,26 @@ def _add_task_boundary_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bwork", description="Benchwork Athanor foundation")
+    parser = _CommandArgumentParser(
+        prog="bwork",
+        description="Benchwork Athanor foundation",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="emit a stable machine-readable response envelope",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init", help="initialize a local Benchwork project")
+    subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
-    subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
+    doctor = subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
+    doctor.add_argument(
+        "--deep",
+        action="store_true",
+        help="replay every canonical projection after integrity verification",
+    )
 
     start = subparsers.add_parser("start", help="start a Research Program")
     start.add_argument("objective")
@@ -72,6 +107,11 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("slug")
     create.add_argument("--title", required=True)
     create.add_argument("--problem", default="")
+    close = program_commands.add_parser("close", help="close an evaluated Research Program")
+    close.add_argument("program_id")
+    use = program_commands.add_parser("use", help="set the explicit active Research Program")
+    use.add_argument("program_id")
+    program_commands.add_parser("current", help="show the explicit active Research Program")
 
     protocol = subparsers.add_parser("protocol", help="manage Protocols")
     protocol_commands = protocol.add_subparsers(dest="protocol_command", required=True)
@@ -81,6 +121,15 @@ def _parser() -> argparse.ArgumentParser:
     draft.add_argument("--title", required=True)
     draft.add_argument("--analysis-plan", required=True)
     draft.add_argument("--hypothesis", action="append", default=[])
+    draft.add_argument(
+        "--study-mode",
+        choices=("confirmatory", "exploratory"),
+    )
+    draft.add_argument(
+        "--analysis-spec",
+        type=Path,
+        help="registered analysis-spec/1.0 JSON document",
+    )
     seal = protocol_commands.add_parser("seal", help="seal a drafted Protocol")
     seal.add_argument("protocol_id")
 
@@ -93,7 +142,6 @@ def _parser() -> argparse.ArgumentParser:
     evidence_record.add_argument("--observation", required=True)
     evidence_record.add_argument("--source-resolved", action="store_true")
     evidence_record.add_argument("--content-inspected", action="store_true")
-    evidence_record.add_argument("--locally-reproduced", action="store_true")
     evidence_verify = evidence_commands.add_parser("verify", help="mark Evidence checks complete")
     evidence_verify.add_argument("evidence_id")
     evidence_verify.add_argument(
@@ -103,8 +151,6 @@ def _parser() -> argparse.ArgumentParser:
         choices=(
             "source_resolved",
             "content_inspected",
-            "claim_relation_verified",
-            "locally_reproduced",
         ),
     )
     evidence_show = evidence_commands.add_parser("show", help="show an Evidence projection")
@@ -127,6 +173,12 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
         metavar="EV-ID|RELATION",
     )
+    claim_verify = claim_commands.add_parser(
+        "verify-relation",
+        help="verify one proposed Claim-Evidence relation",
+    )
+    claim_verify.add_argument("claim_id")
+    claim_verify.add_argument("--evidence", required=True)
     claim_show = claim_commands.add_parser("show", help="show a Claim projection")
     claim_show.add_argument("claim_id")
 
@@ -141,6 +193,12 @@ def _parser() -> argparse.ArgumentParser:
     hypothesis_show = hypothesis_commands.add_parser("show", help="show a Hypothesis projection")
     hypothesis_show.add_argument("hypothesis_id")
 
+    rq = subparsers.add_parser("rq", help="seal a Research Question")
+    rq_commands = rq.add_subparsers(dest="rq_command", required=True)
+    rq_seal = rq_commands.add_parser("seal", help="seal a Program Research Question")
+    rq_seal.add_argument("--program", required=True)
+    rq_seal.add_argument("--statement", required=True)
+
     capability = subparsers.add_parser("capability", help="inspect Capability contracts")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)
     capability_commands.add_parser("list", help="list installed Capability contracts")
@@ -149,7 +207,8 @@ def _parser() -> argparse.ArgumentParser:
     task_commands = task.add_subparsers(dest="task_command", required=True)
     task_create = task_commands.add_parser("create", help="create a bounded Task Capsule")
     task_create.add_argument("capability")
-    task_create.add_argument("--input-sigil", required=True)
+    task_create.add_argument("--program", required=True)
+    task_create.add_argument("--objective", required=True)
     task_create.add_argument("--tool", action="append", default=[])
     task_create.add_argument("--time-budget", type=int, required=True)
     task_create.add_argument("--network", action="store_true")
@@ -177,7 +236,8 @@ def _parser() -> argparse.ArgumentParser:
     propose = host_commands.add_parser("propose", help="create and check a Host Task Capsule")
     propose.add_argument("host", choices=HOSTS)
     propose.add_argument("capability")
-    propose.add_argument("--input-sigil", required=True)
+    propose.add_argument("--program", required=True)
+    propose.add_argument("--objective", required=True)
     propose.add_argument("--tool", action="append", default=[])
     propose.add_argument("--time-budget", type=int, required=True)
     propose.add_argument("--network", action="store_true")
@@ -227,7 +287,10 @@ def _parser() -> argparse.ArgumentParser:
     working_commands.add_parser("list", help="list Workings")
     working_resume = working_commands.add_parser("resume", help="resume inspection at a checkpoint")
     working_resume.add_argument("working_id")
-    working_advance = working_commands.add_parser("advance", help="advance a Working one stage")
+    working_advance = working_commands.add_parser(
+        "advance",
+        help="deprecated compatibility alias; Workings advance from canonical events",
+    )
     working_advance.add_argument("working_id")
     working_advance.add_argument("--reason", required=True)
     working_advance.add_argument(
@@ -246,9 +309,26 @@ def _parser() -> argparse.ArgumentParser:
     experiment_create.add_argument("--protocol", required=True)
     experiment_create.add_argument("--question", required=True)
     experiment_create.add_argument("--hypothesis")
+    experiment_create.add_argument("--working")
+    experiment_transition = experiment_commands.add_parser(
+        "transition",
+        help="record a monotonic Experiment lifecycle transition",
+    )
+    experiment_transition.add_argument("experiment_id")
+    experiment_transition.add_argument(
+        "transition",
+        choices=(
+            "implemented",
+            "pilot-started",
+            "pilot-completed",
+            "formal-started",
+            "completed",
+            "cancelled",
+        ),
+    )
 
     run = subparsers.add_parser("run", help="record immutable experimental Runs")
-    _add_task_boundary_arguments(run)
+    _add_task_boundary_arguments(run, program_required=False)
     run_commands = run.add_subparsers(dest="run_command")
     run_record = run_commands.add_parser("record", help="record a Run and its observed metrics")
     run_record.add_argument("run_id")
@@ -256,9 +336,13 @@ def _parser() -> argparse.ArgumentParser:
     run_record.add_argument(
         "--status",
         required=True,
-        choices=("QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "LOST"),
+        choices=("COMPLETED", "FAILED", "CANCELLED", "LOST"),
     )
+    run_record.add_argument("--phase", choices=("PILOT", "FORMAL"), default="FORMAL")
     run_record.add_argument("--include", action="store_true", help="include this Run in primary analysis")
+    run_record.add_argument("--exclusion-reason")
+    run_record.add_argument("--policy-reference")
+    run_record.add_argument("--arm")
     run_record.add_argument("--seed", type=int)
     run_record.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
     run_record.add_argument("--artifact", action="append", default=[], metavar="URI|SHA256")
@@ -306,12 +390,38 @@ def _parser() -> argparse.ArgumentParser:
     )
     decide.add_argument("--assessment", action="append", required=True)
     decide.add_argument("--rationale", required=True)
+    decide.add_argument("--required-action", action="append", default=[])
+    decide.add_argument("--pivot-reason")
 
     decision = subparsers.add_parser("decision", help="inspect sealed Decisions")
     decision_commands = decision.add_subparsers(dest="decision_command", required=True)
     decision_commands.add_parser("list", help="list sealed Decisions")
     decision_show = decision_commands.add_parser("show", help="show a Decision")
     decision_show.add_argument("decision_id")
+
+    reproduction = subparsers.add_parser(
+        "reproduction",
+        help="record a canonical reproduction assessment",
+    )
+    reproduction_commands = reproduction.add_subparsers(
+        dest="reproduction_command",
+        required=True,
+    )
+    reproduction_record = reproduction_commands.add_parser(
+        "record",
+        help="bind reproduction status to canonical outputs",
+    )
+    reproduction_record.add_argument("reproduction_id")
+    reproduction_record.add_argument("--evidence", required=True)
+    reproduction_record.add_argument("--run", action="append", required=True)
+    reproduction_record.add_argument("--result-bundle", required=True)
+    reproduction_record.add_argument("--artifact", action="append", required=True)
+    reproduction_record.add_argument("--assessment", required=True)
+    reproduction_record.add_argument(
+        "--status",
+        choices=("REPRODUCED", "NOT_REPRODUCED", "INCONCLUSIVE"),
+        required=True,
+    )
 
     artifact = subparsers.add_parser("artifact", help="register and inspect canonical Artifacts")
     artifact_commands = artifact.add_subparsers(dest="artifact_command", required=True)
@@ -376,6 +486,19 @@ def _parser() -> argparse.ArgumentParser:
     chronicle_commands = chronicle.add_subparsers(dest="chronicle_command", required=True)
     chronicle_commands.add_parser("show", help="show verified Chronicle events")
     chronicle_commands.add_parser("verify", help="verify the Chronicle chain")
+    recover = chronicle_commands.add_parser(
+        "recover",
+        help="inspect or accept a valid uncommitted Chronicle tail",
+    )
+    recovery_mode = recover.add_mutually_exclusive_group(required=True)
+    recovery_mode.add_argument("--dry-run", action="store_true")
+    recovery_mode.add_argument("--accept-valid-tail", action="store_true")
+
+    migrate = subparsers.add_parser("migrate", help="run an explicit data migration")
+    migrate.add_argument(
+        "migration",
+        choices=("chronicle-v1.0-to-v1.1",),
+    )
 
     sigil = subparsers.add_parser("sigil", help="show or verify content Sigils")
     sigil_commands = sigil.add_subparsers(dest="sigil_command", required=True)
@@ -426,12 +549,6 @@ def _prepare_task(
     capsules: CapsuleStore,
 ) -> int:
     contract = registry.get(capability)
-    input_sigil = args.input_sigil
-    if input_sigil is None:
-        programs = athanor.programs()
-        if not programs:
-            raise AthanorError("Task requires --input-sigil or an existing Research Program")
-        input_sigil = content_sigil(next(reversed(programs.values())))
     tools = args.tool if args.tool is not None else contract["allowed_tools"]
     time_budget = (
         args.time_budget
@@ -439,9 +556,11 @@ def _prepare_task(
         else contract["max_time_seconds"]
     )
     network = args.network if args.network is not None else contract["network"]
-    capsule = capsules.create(
+    objective = args.objective or f"Execute {capability} for {args.program}"
+    capsule = TaskService(athanor, registry, capsules).create(
         capability,
-        input_sigil,
+        args.program,
+        objective,
         {
             "tools": tools,
             "time_budget_seconds": time_budget,
@@ -450,7 +569,35 @@ def _prepare_task(
     )
     decision = Ward(registry, athanor.approvals()).evaluate(capsule)
     print(json.dumps({"task_id": capsule["task_id"], "ward": decision.as_dict()}, indent=2))
-    return 0 if decision.status == "PASS" else 2
+    return 0 if decision.status == "PASS" else 3
+
+
+def _resolve_program_argument(
+    args: argparse.Namespace,
+    context: ProjectContext,
+) -> None:
+    if args.command == "run" and args.run_command is not None:
+        return
+    if not hasattr(args, "program") or args.program is not None:
+        return
+    active_program = context.active_program()
+    if active_program is None:
+        raise ProjectContextError(
+            "PROGRAM_REQUIRED",
+            "this command requires --program or an explicit active Program",
+            details={"command": args.command},
+        )
+    args.program = active_program
+
+
+def _machine_result(output: str) -> dict:
+    rendered = output.strip()
+    if not rendered:
+        return {}
+    try:
+        return json.loads(rendered)
+    except json.JSONDecodeError:
+        return {"message": rendered}
 
 
 def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
@@ -465,14 +612,62 @@ def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
         raise AthanorError(f"unknown Working: {working_id}") from error
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    root = Path.cwd()
-    athanor = Athanor(root)
-    registry = CapabilityRegistry(root)
-    capsules = CapsuleStore(root)
-    rites = RiteRegistry(root)
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    _machine_capture: bool = False,
+) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if "--json" in arguments and not _machine_capture:
+        forwarded = arguments.copy()
+        forwarded.remove("--json")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(forwarded, _machine_capture=True)
+        captured = output.getvalue()
+        if exit_code == 0:
+            print(json.dumps({"ok": True, "result": _machine_result(captured)}, indent=2))
+        else:
+            result = _machine_result(captured)
+            if isinstance(result, dict) and result.get("ok") is False:
+                print(json.dumps(result, indent=2))
+            else:
+                command_error = CommandError(
+                    "WAITING_FOR_APPROVAL"
+                    if exit_code == 3
+                    else (
+                        "INTEGRITY_FAILURE"
+                        if exit_code == 4
+                        else "COMMAND_REJECTED"
+                    ),
+                    "Task is waiting for explicit approval"
+                    if exit_code == 3
+                    else (
+                        "Deep doctor detected integrity failures"
+                        if exit_code == 4
+                        else "Command was rejected"
+                    ),
+                    exit_code,
+                    {"result": result},
+                )
+                print(json.dumps(command_error.envelope(), indent=2))
+        return exit_code
+
     try:
+        args = _parser().parse_args(arguments)
+        standalone = args.command == "init" or (
+            args.command == "sigil" and args.sigil_command == "verify"
+        )
+        root = Path.cwd().resolve() if standalone else discover_project_root()
+        if args.command == "root":
+            print(root)
+            return 0
+        athanor = Athanor(root)
+        registry = CapabilityRegistry(root)
+        capsules = CapsuleStore(root)
+        rites = RiteRegistry(root)
+        context = ProjectContext(root)
+        _resolve_program_argument(args, context)
         if args.command == "init":
             athanor.initialize()
             registry.initialize()
@@ -532,17 +727,57 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt.receipt_id,
                 receipt.sigil,
             )
+        elif args.command == "program" and args.program_command == "close":
+            receipt = athanor.close_program(args.program_id)
+            _print_receipt(
+                f"Research Program {args.program_id} closed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
+        elif args.command == "program" and args.program_command == "use":
+            if args.program_id not in athanor.programs():
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    f"unknown Research Program: {args.program_id}",
+                    exit_code=6,
+                    details={"program_id": args.program_id},
+                )
+            context.use_program(args.program_id)
+            print(args.program_id)
+        elif args.command == "program" and args.program_command == "current":
+            active_program = context.active_program()
+            if active_program is None:
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    "no active Research Program is configured",
+                    exit_code=6,
+                )
+            if active_program not in athanor.programs():
+                raise ProjectContextError(
+                    "NOT_FOUND",
+                    f"active Research Program does not exist: {active_program}",
+                    exit_code=6,
+                    details={"program_id": active_program},
+                )
+            print(active_program)
         elif args.command == "program":
             problem = {"statement": args.problem} if args.problem else {}
             program_id, receipt = athanor.create_program(args.slug, args.title, problem)
             _print_receipt(f"Research Program {program_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol" and args.protocol_command == "draft":
+            analysis_spec = (
+                _load_json_object(args.analysis_spec)
+                if args.analysis_spec is not None
+                else None
+            )
             receipt = athanor.draft_protocol(
                 args.protocol_id,
                 args.program,
                 args.title,
                 args.analysis_plan,
                 args.hypothesis,
+                args.study_mode,
+                analysis_spec,
             )
             _print_receipt(f"Protocol {args.protocol_id} drafted", receipt.receipt_id, receipt.sigil)
         elif args.command == "protocol":
@@ -556,8 +791,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             verification = {
                 "source_resolved": args.source_resolved,
                 "content_inspected": args.content_inspected,
-                "claim_relation_verified": False,
-                "locally_reproduced": args.locally_reproduced,
             }
             receipt = athanor.record_evidence(
                 args.evidence_id,
@@ -592,6 +825,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 relations,
             )
             _print_receipt(f"Claim {args.claim_id} created", receipt.receipt_id, receipt.sigil)
+        elif args.command == "claim" and args.claim_command == "verify-relation":
+            receipt = athanor.verify_claim_relation(args.claim_id, args.evidence)
+            _print_receipt(
+                f"Claim relation {args.claim_id} -> {args.evidence} verified",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "claim":
             try:
                 claim = athanor.claims()[args.claim_id]
@@ -617,13 +857,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             except KeyError as error:
                 raise AthanorError(f"unknown Hypothesis: {args.hypothesis_id}") from error
             print(json.dumps(hypothesis, indent=2))
+        elif args.command == "rq":
+            receipt = athanor.seal_research_question(
+                args.program,
+                args.statement,
+            )
+            _print_receipt(
+                f"Research Question for {args.program} sealed",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "capability":
             print(json.dumps(registry.capabilities(), indent=2))
         elif args.command == "task" and args.task_command == "create":
-            registry.get(args.capability)
-            capsule = capsules.create(
+            capsule = TaskService(athanor, registry, capsules).create(
                 args.capability,
-                args.input_sigil,
+                args.program,
+                args.objective,
                 {"tools": args.tool, "time_budget_seconds": args.time_budget, "network": args.network},
             )
             decision = Ward(registry, athanor.approvals()).evaluate(capsule)
@@ -653,7 +903,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "host":
             adapter_class = CodexHostAdapter if args.host == "codex" else ClaudeCodeHostAdapter
             proposal = adapter_class(athanor, registry, capsules).propose(
-                args.capability, args.input_sigil, args.tool, args.time_budget, args.network
+                args.capability,
+                args.program,
+                args.objective,
+                args.tool,
+                args.time_budget,
+                args.network,
             )
             print(json.dumps(proposal.as_dict(), indent=2))
             return 0 if proposal.ward.status == "PASS" else 2
@@ -719,6 +974,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 artifacts.append({"kind": kind, "uri": uri, "sigil": digest})
             receipt = athanor.advance_working(args.working_id, args.reason, artifacts)
             _print_receipt(f"Working {args.working_id} advanced", receipt.receipt_id, receipt.sigil)
+        elif args.command == "experiment" and args.experiment_command == "transition":
+            receipt = athanor.transition_experiment(args.experiment_id, args.transition)
+            _print_receipt(
+                f"Experiment {args.experiment_id} transitioned",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "experiment":
             receipt = athanor.create_experiment(
                 args.experiment_id,
@@ -726,9 +988,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.protocol,
                 args.question,
                 args.hypothesis,
+                args.working,
             )
             _print_receipt(f"Experiment {args.experiment_id} created", receipt.receipt_id, receipt.sigil)
         elif args.command == "run" and args.run_command is None:
+            if args.program is None:
+                raise AthanorError("run task preparation requires --program")
             return _prepare_task(
                 args,
                 "bench.experiment.execute",
@@ -761,6 +1026,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 metrics,
                 args.seed,
                 artifacts,
+                args.phase,
+                args.exclusion_reason,
+                args.policy_reference,
+                args.arm,
             )
             run_sigil = content_sigil(athanor.runs()[args.run_id])
             _print_receipt(
@@ -824,23 +1093,48 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "assessment":
             print(json.dumps(athanor.assessments(), indent=2))
         elif args.command == "decide":
+            lineage = (
+                {
+                    "parent_program_id": args.program,
+                    "reason": args.pivot_reason,
+                }
+                if args.pivot_reason is not None
+                else None
+            )
             decision_id, receipt = athanor.seal_decision(
                 args.program,
                 args.outcome,
                 args.assessment,
                 args.rationale,
+                args.required_action,
+                lineage,
             )
             _print_receipt(
                 f"Decision {decision_id} sealed",
                 receipt.receipt_id,
                 receipt.sigil,
             )
+        elif args.command == "reproduction":
+            receipt = athanor.record_reproduction(
+                args.reproduction_id,
+                args.evidence,
+                args.run,
+                args.result_bundle,
+                args.artifact,
+                args.assessment,
+                args.status,
+            )
+            _print_receipt(
+                f"Reproduction {args.reproduction_id} recorded",
+                receipt.receipt_id,
+                receipt.sigil,
+            )
         elif args.command == "decision" and args.decision_command == "show":
             try:
-                decision = athanor.decisions()[args.decision_id]
+                shown_decision = athanor.decisions()[args.decision_id]
             except KeyError as error:
                 raise AthanorError(f"unknown Decision: {args.decision_id}") from error
-            print(json.dumps(decision, indent=2))
+            print(json.dumps(shown_decision, indent=2))
         elif args.command == "decision":
             print(json.dumps(athanor.decisions(), indent=2))
         elif args.command == "artifact" and args.artifact_command == "register":
@@ -923,9 +1217,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(athanor.deviations(), indent=2))
         elif args.command == "chronicle" and args.chronicle_command == "show":
             print(json.dumps(athanor.chronicle.events(), indent=2))
+        elif args.command == "chronicle" and args.chronicle_command == "recover":
+            report = athanor.recover_chronicle(
+                accept_valid_tail=args.accept_valid_tail,
+            )
+            print(json.dumps(report, indent=2))
         elif args.command == "chronicle":
             event_count = len(athanor.chronicle.events())
             print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
+        elif args.command == "migrate":
+            print(json.dumps(athanor.migrate_chronicle_v10_to_v11(), indent=2))
         elif args.command == "sigil" and args.sigil_command == "verify":
             try:
                 digest = "sha256:" + hashlib.sha256(args.path.read_bytes()).hexdigest()
@@ -940,7 +1241,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             events = athanor.chronicle.events()
             match = next(
                 (
-                    event["receipt"]["sigil"]
+                    event["receipt"]["receipt_sigil"]
                     for event in events
                     if event["receipt"]["receipt_id"] == args.identifier
                     or event["event_id"] == args.identifier
@@ -949,7 +1250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             if match is None:
                 state = athanor.replay()
-                record = next(
+                object_record = next(
                     (
                         collection[args.identifier]
                         for collection in state.values()
@@ -958,15 +1259,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),
                     None,
                 )
-                if record is None:
+                if object_record is None:
                     raise AthanorError(f"unknown object or Receipt: {args.identifier}")
-                match = content_sigil(record)
+                match = content_sigil(object_record)
             print(match)
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":
-            event_count = len(athanor.chronicle.events())
-            print(f"Chronicle healthy: {event_count} verified event(s), receipt chain intact")
+            if args.deep:
+                from ..doctor import deep_doctor
+
+                report = deep_doctor(root)
+                if not report["ok"]:
+                    if _machine_capture:
+                        raise ProjectContextError(
+                            "INTEGRITY_FAILURE",
+                            "Deep doctor detected integrity failures",
+                            exit_code=4,
+                            details={"report": report},
+                        )
+                    print(json.dumps(report, indent=2))
+                    return 4
+                print(json.dumps(report, indent=2))
+            else:
+                event_count = len(athanor.chronicle.events())
+                print(
+                    f"Chronicle healthy: {event_count} verified event(s), "
+                    "receipt chain intact"
+                )
         elif args.command == "trace":
             object_id = args.object_id or args.object_type_or_id
             if args.object_id is not None:
@@ -993,9 +1313,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"trace type does not match object ID: {args.object_type_or_id} {object_id}"
                     )
             print(json.dumps(athanor.trace(object_id), indent=2))
-    except AthanorError as error:
-        print(f"Athanor rejected transition: {error}")
-        return 2
+    except (AthanorError, ProjectContextError) as error:
+        command_error = classify_error(error)
+        if _machine_capture:
+            print(json.dumps(command_error.envelope(), indent=2))
+        else:
+            print(f"Benchwork rejected command [{command_error.code}]: {command_error.message}")
+        return command_error.exit_code
     return 0
 
 

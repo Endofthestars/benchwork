@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/claim/1.2",
+  "title": "Research Claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_id",
+    "program_id",
+    "type",
+    "statement",
+    "status",
+    "evidence_relations"
+  ],
+  "properties": {
+    "schema_version": {"const": "claim/1.2"},
+    "claim_id": {"type": "string", "pattern": "^CL-"},
+    "program_id": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"
+    },
+    "type": {"enum": ["empirical", "theoretical", "methodological", "operational"]},
+    "statement": {"type": "string", "minLength": 1},
+    "status": {"enum": ["PROPOSED", "SUPPORTED", "CONTESTED", "REJECTED", "UNRESOLVED"]},
+    "evidence_relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "relation", "status"],
+        "properties": {
+          "evidence_id": {"type": "string", "pattern": "^EV-"},
+          "relation": {
+            "enum": ["SUPPORTS", "CONTRADICTS", "LIMITS", "REPRODUCES", "UNRESOLVED"]
+          },
+          "status": {"enum": ["PROPOSED", "VERIFIED"]}
+        }
+      }
+    }
+  }
+}

@@ -9,7 +9,8 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.2.0a3` public Alpha. Milestones M0–M9 are implemented.
+> Project status: `0.2.0rc1` public release candidate. M10 Phase 1 acceptance
+> is implemented; stable naming remains provisional.
 
 ## Why Benchwork
 
@@ -47,13 +48,14 @@ scientific state.
 - **Rites and Workings** pin workflow definitions and record protocol-bound
   stage transitions.
 - **Experiments, Runs, and Alembic** preserve all outcomes and produce
-  deterministic `result-bundle/1.0` analysis artifacts.
+  deterministic `result-bundle/1.1` descriptive aggregation artifacts.
 - **Assessments and Decisions** bind interpretation to Result Bundles and keep
   final scientific commitments human-sealed and replayable.
 - **Artifacts, Issues, and Deviations** preserve content-addressed outputs,
   recoverable problems, and post-Seal changes without rewriting history.
 - **Direct verbs and Agent handoff** create Ward-checked Task Proposals and
-  accept matching `agent-result/1.0` outputs through Athanor.
+  accept Snapshot- and Contract-bound `agent-result/1.1` outputs through
+  Athanor.
 - **Open Grimoire** installs versioned, content-pinned, data-only Rite packs
   without executing extension code.
 - **Versioned JSON Schemas** define the public contracts for research objects,
@@ -107,6 +109,8 @@ bwork program create robust-agent-memory \
   --title "Reliable agent memory" \
   --problem "Measure retrieval reliability under long context."
 
+bwork program use RP-001
+
 bwork evidence record EV-001 \
   --program RP-001 \
   --source "paper.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
@@ -120,23 +124,37 @@ bwork claim create CL-001 \
   --statement "The treatment can improve retrieval." \
   --evidence "EV-001|SUPPORTS"
 
+bwork claim verify-relation CL-001 --evidence EV-001
+
 bwork hypothesis create HY-001 \
   --program RP-001 \
   --claim CL-001 \
   --statement "The treatment improves registered retrieval score." \
   --prediction "Mean score exceeds the baseline mean."
 
+bwork rq seal --program RP-001 \
+  --statement "Does the treatment improve registered retrieval score?"
+
 bwork protocol draft PT-001 \
   --program RP-001 \
   --title "Memory retrieval study" \
   --analysis-plan "Compute effect sizes and uncertainty across seeds." \
-  --hypothesis HY-001
+  --study-mode confirmatory \
+  --hypothesis HY-001 \
+  --analysis-spec examples/basic-analysis-spec.json
 
 bwork protocol seal PT-001
 
-bwork working start computational-study@0.1.0 \
+bwork working start computational-study@0.2.1 \
   --program RP-001 \
   --protocol PT-001
+
+bwork artifact register AR-001 \
+  --program RP-001 \
+  --kind implementation \
+  --location "artifact.json|sha256:<digest-from-bwork-sigil-file>" \
+  --producer WK-001 \
+  --input PT-001
 
 bwork experiment create EX-001 \
   --program RP-001 \
@@ -144,18 +162,34 @@ bwork experiment create EX-001 \
   --hypothesis HY-001 \
   --question "Does the treatment improve the registered score?"
 
-bwork run record RUN-001 \
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
+bwork run record RUN-000 \
   --experiment EX-001 \
+  --phase PILOT \
   --status COMPLETED \
   --include \
+  --arm baseline \
+  --seed 1 \
+  --metric score=0.80
+
+bwork run record RUN-001 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --status COMPLETED \
+  --include \
+  --arm treatment \
   --seed 1 \
   --metric score=0.82
+
+bwork experiment transition EX-001 pilot-completed
 
 bwork analyze --program RP-001 --protocol PT-001
 
 bwork review RB-001 \
   --summary "The registered result supports the hypothesis." \
-  --limitation "Only one run is available." \
+  --limitation "Only one paired observation is available." \
   --claim-finding "CL-001|SUPPORTED|The observed direction matches the claim." \
   --hypothesis-finding "HY-001|SUPPORTED|The prediction was satisfied."
 
@@ -171,22 +205,12 @@ bwork trace CL-001
 ```
 
 In a new project, the commands above create a complete trace from `EV-001` to
-the Sealed `DE-001`, while `WK-001` starts at the `IMPLEMENTATION` stage.
+the Sealed `DE-001`. The matching canonical events move `WK-001` through its
+pinned exit contracts to `COMPLETED`.
 
-Every Working transition must provide the artifact required by the pinned Rite:
+Operational integrity objects remain available alongside the scientific chain:
 
 ```bash
-bwork working advance WK-001 \
-  --reason "Implementation reviewed." \
-  --artifact "implementation|artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000"
-
-bwork artifact register AR-001 \
-  --program RP-001 \
-  --kind implementation \
-  --location "artifact.json|sha256:0000000000000000000000000000000000000000000000000000000000000000" \
-  --producer WK-001 \
-  --input PT-001
-
 bwork issue open IS-001 \
   --program RP-001 \
   --subject AR-001 \
@@ -230,21 +254,21 @@ The RFC direct verbs use the same boundary:
 
 ```bash
 bwork start "Study recoverable agent memory"
-bwork investigate
-bwork design
-bwork implement
-bwork pilot
-bwork run
+bwork investigate --program RP-001
+bwork design --program RP-001
+bwork implement --program RP-001
+bwork pilot --program RP-001
+bwork run --program RP-001
 
-bwork scry literature
-bwork distill evidence
-bwork invoke bench.hypothesis.challenge
+bwork scry literature --program RP-001
+bwork distill evidence --program RP-001
+bwork invoke bench.hypothesis.challenge --program RP-001
 ```
 
 `investigate` and `design` normally pass their read-only contracts.
 `implement`, `pilot`, and bare `run` stop at `WAITING_FOR_APPROVAL`. These
 commands prepare Task Capsules; they do not report Provider work as complete.
-After a Provider returns an `agent-result/1.0` file:
+After a Provider returns an `agent-result/1.1` file:
 
 ```bash
 bwork task accept agent-result.json
@@ -263,22 +287,30 @@ bwork grimoire list
 bwork --help
 ```
 
+Commands discover the project root from subdirectories. Direct phase verbs may
+use `--program RP-001` or the explicit selection made by `bwork program use`;
+they never infer the newest Program. Use `bwork --json ...` for stable success
+and error envelopes.
+
 ## Command map
 
 | Command | Purpose |
 |---|---|
 | `bwork init` | Initialize Chronicle, Capability contracts, Rites, and Grimoires |
+| `bwork root` | Show the upward-discovered project root |
 | `bwork status` | Rebuild and print canonical state |
 | `bwork doctor` | Verify Chronicle events, Sigils, head, and receipt chain |
-| `bwork program` | Create Research Programs |
+| `bwork program` | Create, close, select, and inspect Research Programs |
 | `bwork start` | Start a Research Program from an objective |
 | `bwork investigate`, `design`, `implement`, `pilot`, `run` | Prepare bounded phase Tasks |
 | `bwork scry`, `distill`, `invoke` | Prepare Arcana or explicit Capability Tasks |
 | `bwork seal` | Seal a Protocol through the direct RFC form |
 | `bwork evidence` | Record, verify, and inspect sourced Evidence |
-| `bwork claim` | Create and inspect Evidence-backed Claims |
+| `bwork claim` | Create Claims and explicitly verify Evidence relations |
 | `bwork hypothesis` | Create and inspect falsifiable Hypotheses |
+| `bwork rq` | Explicitly Seal a Research Question |
 | `bwork protocol` | Draft and Seal Protocols |
+| `bwork reproduction` | Bind reproduction status to canonical research objects |
 | `bwork capability` | Inspect installed Capability contracts |
 | `bwork task` | Create/inspect Task Capsules and accept Agent Results |
 | `bwork ward` | Evaluate a Task Capsule against policy |
@@ -312,6 +344,7 @@ Use `bwork <command> --help` for command-specific arguments.
 ├── chronicle.jsonl
 ├── chronicle.head
 ├── chronicle.lock
+├── context.json
 ├── capabilities.json
 ├── capabilities.lock
 ├── rites.json
@@ -368,6 +401,15 @@ Changes to canonical transitions should include tests for replay, schema
 validation, integrity failure, and concurrency where applicable. Documentation
 changes should preserve locale paths and follow
 [the localization policy](docs/LOCALIZATION.md).
+
+## Community and release policy
+
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Compatibility policy](docs/en/COMPATIBILITY.md)
+- [Release process](docs/en/RELEASE_PROCESS.md)
+- [M10 acceptance matrix](docs/en/M10_ACCEPTANCE.md)
 
 ## License
 
