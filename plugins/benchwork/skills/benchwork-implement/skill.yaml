@@ -1,0 +1,20 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-implement",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_get_program",
+      "benchwork_open_task",
+      "benchwork_get_task",
+      "benchwork_complete_task",
+      "benchwork_fail_task",
+      "benchwork_register_artifact",
+      "benchwork_prepare_review",
+      "benchwork_approve_external_review",
+      "benchwork_record_review",
+      "benchwork_accept_review"
+    ]
+  }
+}

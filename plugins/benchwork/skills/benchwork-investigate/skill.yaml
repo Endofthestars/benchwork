@@ -1,0 +1,15 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-investigate",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_status",
+      "benchwork_open_task",
+      "benchwork_complete_task",
+      "benchwork_record_evidence",
+      "benchwork_verify_evidence"
+    ]
+  }
+}

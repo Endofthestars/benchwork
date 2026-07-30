@@ -1,0 +1,13 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-orchestrate",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_status",
+      "benchwork_next_actions",
+      "benchwork_create_program"
+    ]
+  }
+}

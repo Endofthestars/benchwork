@@ -1,0 +1,16 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-evaluate",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_get_object",
+      "benchwork_compute_analysis",
+      "benchwork_record_assessment",
+      "benchwork_open_issue",
+      "benchwork_preview_decision_seal",
+      "benchwork_commit_decision_seal"
+    ]
+  }
+}
