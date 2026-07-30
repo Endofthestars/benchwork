@@ -35,6 +35,7 @@
       "tier": "tier_1_cli",
       "mcp": true,
       "gui": false,
+      "acceptance": "PENDING_HOST_VALIDATION",
       "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
     },
     "codex_ide": {
@@ -66,10 +67,22 @@
     "core": "PASS",
     "mcp": "PASS",
     "cli_host": "PASS",
+    "cli_hosts": {
+      "codex_cli": "PASS",
+      "claude_code_cli": "PENDING_HOST_VALIDATION"
+    },
     "ide_host": {
       "status": "BLOCKED_BY_ENVIRONMENT",
       "exception_id": "HOST-IDE-001",
-      "accepted": true
+      "accepted": true,
+      "owner": "Benchwork release owner",
+      "required_before": "Public Codex IDE integration release",
+      "reproduction": [
+        "Use a graphical machine with the authenticated Codex IDE extension.",
+        "Install the Benchwork plugin from a fresh local marketplace.",
+        "Verify explicit and implicit Skill selection and MCP discovery.",
+        "Complete a bounded Task and retain its Athanor Receipt."
+      ]
     },
     "external_review": "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
   }

@@ -11,12 +11,17 @@ states, not product failures.
 | --- | --- | --- | --- |
 | Tier 0 — Kernel | PASS | Required | Chronicle, Schema, Ward, Capability, replay, and deterministic suites |
 | MCP | PASS | Required | in-memory and spawned-STDIO discovery, envelopes, pagination, Task and canonical tool tests |
-| Tier 1 — CLI Host | PASS | Required before Phase release | fresh Codex CLI explicit/implicit Skill trials and MCP calls |
+| Tier 1 — Codex CLI Host | PASS | Required before Phase release | fresh Codex CLI explicit/implicit Skill trials and MCP calls |
+| Tier 1 — Claude Code CLI | PENDING_HOST_VALIDATION | Not a claimed Phase 2 Host PASS | host-neutral contract is implemented; independent interactive evidence is pending |
 | Tier 2 — IDE Host | BLOCKED_BY_ENVIRONMENT (accepted) | Does not block Core/MCP/CLI | `HOST-IDE-001`; extension installed, no graphical extension Host available |
 | External Review | WAITING_FOR_DISCLOSURE_AUTHORIZATION | Does not block local review or Core/MCP/CLI | Disclosure Gate denied an unapproved diff review |
 
 The IDE exception has no impact on Core, MCP, or CLI acceptance. It must be
 closed before a public IDE integration release.
+
+`HOST-IDE-001` is owned by the Benchwork release owner. Its reproducible
+closure procedure is maintained in the
+[Host Support Matrix](HOST_SUPPORT_MATRIX.md).
 
 External Review remains pending until a researcher approves the exact source,
 files, disclosure flags, and destination. No diff was uploaded during this
