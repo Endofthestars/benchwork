@@ -21,9 +21,11 @@ The public MCP names are the existing `benchwork_<verb>` names returned by
 | Canonical | 19 | Research proposals, Review provenance, and scientific Seals |
 | Experiment | 6 | Working, Artifact, Experiment, Run, and Alembic operations |
 
-The machine-readable registry introduced by M17 is the authoritative
-inventory. Until it is present, the four registration modules are the
-executable inventory.
+The machine-readable
+[`mcp-tool-registry/1.0`](../../src/benchwork/mcp/tool_registry.json) is the
+authoritative inventory. The four registration modules derive their ordered
+tool names from it, and contract tests require the MCP server's `tools/list`
+result to match it exactly.
 
 New universal escape hatches are prohibited. In particular, Benchwork will not
 add `benchwork_execute`, `benchwork_run_anything`, file-edit, shell, Git, or web
