@@ -95,6 +95,9 @@ jobs:
       - name: Golden M10 replay fixture
         run: python -m unittest tests.test_m10_repair_study
 
+      - name: Golden Phase 2 REPAIR acceptance
+        run: python -m unittest tests.mcp.test_runtime.MCPRuntimeTest.test_complete_repair_cycle_uses_only_control_plane_tools
+
   package:
     name: Build and verify package
     runs-on: ubuntu-latest
@@ -131,6 +134,7 @@ jobs:
           bwork init
           bwork doctor
           bwork --json root
+          python -c "from benchwork.mcp.tool_registry import tool_names; assert len(tool_names()) == 38"
 
       - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

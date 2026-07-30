@@ -5,6 +5,21 @@ Phase 2 uses the
 unavailable optional Host and a correctly denied disclosure are explicit
 states, not product failures.
 
+## M17 seal verdict
+
+```yaml
+version: 0.3.0rc1
+phase2:
+  implementation: COMPLETE
+  acceptance: PASS_WITH_ACCEPTED_EXCEPTIONS
+  contracts: FROZEN_ALPHA
+phase3_rfc_gate: OPEN
+```
+
+This verdict does not convert optional or unauthorized Host work into PASS.
+It records required gates separately from accepted environment and disclosure
+states.
+
 ## Release acceptance
 
 | Boundary | Status | Release effect | Evidence |
@@ -27,9 +42,9 @@ External Review remains pending until a researcher approves the exact source,
 files, disclosure flags, and destination. No diff was uploaded during this
 acceptance run.
 
-The hardened deterministic gate completed with 135 unittest cases (one
-environment-dependent subprocess skip), 134 pytest cases, 167 subtests, and
-81% branch-aware coverage. Ruff and mypy completed without findings.
+The M17 deterministic gate completed with 144 unittest cases, 144 pytest
+cases, 174 subtests, and 81% branch-aware coverage on Python 3.13. Ruff and
+mypy completed without findings, and the SciPy numerical oracle passed.
 
 ## Milestone evidence
 
@@ -43,6 +58,7 @@ environment-dependent subprocess skip), 134 pytest cases, 167 subtests, and
 | M14 — The Wards | startup, pre-tool, and post-tool hooks; direct state-write denial | `tests/hooks/test_hooks.py` |
 | M15 — The Working | canonical writes, preview/commit Seals, Runs, Alembic, seven workflows | runtime tests and lifecycle/Alembic suites |
 | M16 — Trial of the Familiar | marketplace package, fresh CLI discovery, accepted Host exception | plugin validation, interactive contract tests, install/upgrade/rollback trials |
+| M17 — The Instrumentarium Seal | frozen Alpha contracts, Tool Registry, release metadata, golden REPAIR, rc1 package | registry parity tests, golden scenario, package smoke, this matrix |
 
 The deterministic suite remains the release gate:
 
@@ -62,6 +78,30 @@ The M17 golden path is published under
 an accepted `bench.study.audit` proposal, replacement Protocol preview/commit,
 registered implementation and Runs, Alembic analysis, Assessment, and a
 human-sealed `REPAIR` Decision through Chronicle replay.
+
+## 2026-07-30 M17 rc1 trial
+
+- The Python wheel and source distribution built as `0.3.0rc1`; Twine accepted
+  both. A force-installed wheel initialized a fresh project, passed Deep
+  Doctor, loaded all packaged schemas, and discovered 38 registry tools.
+- The local marketplace installed
+  `0.3.0-rc.1+codex.20260730080053`. The source manifest was restored to the
+  release version `0.3.0-rc.1` after cache-busted installation.
+- A fresh ephemeral Codex CLI `0.145.0` read-only conversation explicitly
+  selected `$benchwork-orchestrate`. `benchwork_status` and
+  `benchwork_next_actions` both returned `ok=true` with
+  `mcp-tool-result/1.0`.
+- A second fresh conversation implicitly selected
+  `benchwork:benchwork-orchestrate` for “What should we do next for this
+  study?” and made the same two read-only MCP calls.
+- Neither CLI trial used shell or file-edit tools. The temporary project's
+  Chronicle remained at zero events after plugin installation and both calls,
+  and the source repository had no `.benchwork/` directory.
+- VS Code `1.122.0` and the `openai.chatgpt` extension were installed, but no
+  display variable or graphical extension Host was available. IDE execution
+  therefore remains `HOST-IDE-001: BLOCKED_BY_ENVIRONMENT`.
+- No external diff review was attempted or disclosed. External Review remains
+  `WAITING_FOR_DISCLOSURE_AUTHORIZATION`.
 
 ## 2026-07-30 Host trial
 

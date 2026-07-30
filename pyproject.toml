@@ -8,7 +8,7 @@ version = "0.3.0rc1"
 description = "An auditable workbench for agent-assisted computational research."
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Endofthestars"}]
 dependencies = [
   "jsonschema>=4.18",
