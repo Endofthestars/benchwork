@@ -1,0 +1,7 @@
+{
+  "program_id": "RP-001",
+  "outcome": "REPAIR",
+  "assessment_ids": ["AS-001"],
+  "rationale": "The registered evidence requires repair before continuation.",
+  "required_actions": ["Resolve the identified validity threat."]
+}

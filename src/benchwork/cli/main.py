@@ -62,6 +62,9 @@ def _parser() -> argparse.ArgumentParser:
     subparsers.add_parser("init", help="initialize a local Benchwork project")
     subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
+    mcp = subparsers.add_parser("mcp", help="serve the Benchwork scientific control plane")
+    mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
+    mcp_commands.add_parser("serve", help="serve Model Context Protocol over STDIO")
     doctor = subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
     doctor.add_argument(
         "--deep",
@@ -661,6 +664,11 @@ def main(
         root = Path.cwd().resolve() if standalone else discover_project_root()
         if args.command == "root":
             print(root)
+            return 0
+        if args.command == "mcp":
+            from ..mcp.server import run as run_mcp
+
+            run_mcp()
             return 0
         athanor = Athanor(root)
         registry = CapabilityRegistry(root)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Implement"
+  short_description: "Implement and validate research changes"
+  default_prompt: "Use $benchwork-implement to implement the registered study change."

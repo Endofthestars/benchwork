@@ -1,0 +1,76 @@
+{
+  "schema_version": "host-capability-matrix/1.0",
+  "tiers": {
+    "tier_0_kernel": {
+      "release_gate": "REQUIRED",
+      "requires": [
+        "chronicle",
+        "schema",
+        "ward",
+        "capability",
+        "mcp_protocol",
+        "tool_contract",
+        "replay"
+      ]
+    },
+    "tier_1_cli": {
+      "release_gate": "REQUIRED_BEFORE_PHASE_RELEASE",
+      "hosts": ["codex_cli", "claude_code_cli"],
+      "requires": ["interactive_session", "mcp", "tool_calls", "receipts"]
+    },
+    "tier_2_ide": {
+      "release_gate": "OPTIONAL_HOST_VALIDATION",
+      "hosts": ["codex_ide", "cursor", "jetbrains", "claude_desktop"],
+      "requires": ["graphical_window", "interactive_chat", "tool_calls"]
+    }
+  },
+  "hosts": {
+    "codex_cli": {
+      "tier": "tier_1_cli",
+      "mcp": true,
+      "gui": false,
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    },
+    "claude_code_cli": {
+      "tier": "tier_1_cli",
+      "mcp": true,
+      "gui": false,
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    },
+    "codex_ide": {
+      "tier": "tier_2_ide",
+      "mcp": true,
+      "gui": "DEPENDS_ON_ENVIRONMENT",
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    },
+    "cursor": {
+      "tier": "tier_2_ide",
+      "mcp": "DEPENDS_ON_HOST",
+      "gui": true,
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    },
+    "jetbrains": {
+      "tier": "tier_2_ide",
+      "mcp": "DEPENDS_ON_HOST",
+      "gui": true,
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    },
+    "claude_desktop": {
+      "tier": "tier_2_ide",
+      "mcp": "DEPENDS_ON_HOST",
+      "gui": true,
+      "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
+    }
+  },
+  "current_acceptance": {
+    "core": "PASS",
+    "mcp": "PASS",
+    "cli_host": "PASS",
+    "ide_host": {
+      "status": "BLOCKED_BY_ENVIRONMENT",
+      "exception_id": "HOST-IDE-001",
+      "accepted": true
+    },
+    "external_review": "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+  }
+}

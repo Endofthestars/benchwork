@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Pilot"
+  short_description: "Run and register bounded pilot outcomes"
+  default_prompt: "Use $benchwork-pilot to execute the approved pilot protocol."

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/mcp-tool-result/1.0",
+  "title": "Benchwork MCP Tool Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "tool", "schema_version", "warnings", "next_actions"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "tool": {"type": "string", "pattern": "^benchwork_[a-z0-9_]+$"},
+    "schema_version": {"const": "mcp-tool-result/1.0"},
+    "data": {},
+    "receipt": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://benchwork.dev/schemas/receipt/1.1"}
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "details"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "message": {"type": "string"},
+        "details": {"type": "object"}
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"ok": {"const": true}}, "required": ["ok"]},
+      "then": {"required": ["data", "receipt"], "not": {"required": ["error"]}}
+    },
+    {
+      "if": {"properties": {"ok": {"const": false}}, "required": ["ok"]},
+      "then": {"required": ["error"], "not": {"required": ["data", "receipt"]}}
+    }
+  ]
+}

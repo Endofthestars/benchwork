@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/operation-commit/1.0",
+  "title": "Operation Commit Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preview_id",
+    "preview_sigil",
+    "idempotency_key",
+    "confirmation_token"
+  ],
+  "properties": {
+    "schema_version": {"const": "operation-commit/1.0"},
+    "preview_id": {"type": "string", "pattern": "^PV-[A-Z0-9]+$"},
+    "preview_sigil": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "confirmation_token": {"type": "string", "minLength": 1}
+  }
+}

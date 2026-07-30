@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Orchestrate"
+  short_description: "Coordinate an auditable research workflow"
+  default_prompt: "Use $benchwork-orchestrate to continue this research program."

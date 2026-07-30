@@ -78,6 +78,8 @@ bench.experiment.plan            bench.experiment.execute
 bench.experiment.collect         bench.analysis.compute
 bench.analysis.interpret         bench.decision.review
 bench.decision.propose
+bench.review.prepare             bench.review.local
+bench.review.external            bench.review.accept
 ```
 
 Claude, Codex, and future models participate through the same Capability contracts. The Scientific Canon names research objects; Arcana Mechanics names research craft; Capability Language names executable actions.

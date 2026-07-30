@@ -1,8 +1,8 @@
 ---
 title: "RFC-0007: Provider and Executor Runtime Boundaries"
 document_id: BW-RFC-0007
-version: 0.1
-status: design-only
+version: 0.2
+status: accepted
 owner: Endofthestars
 date: 2026-07-29
 language: en
@@ -13,8 +13,9 @@ canonical: true
 
 ## Status
 
-This RFC is design-only during M10. It authorizes no automatic Provider
-invocation, remote transport, cluster execution, or autonomous research loop.
+This RFC authorizes no automatic Provider invocation, remote transport,
+cluster execution, or autonomous research loop. Phase 2 adds an implemented
+Review disclosure boundary without authorizing Benchwork to launch a Provider.
 
 ## Boundary
 
@@ -34,6 +35,21 @@ Codex and Claude Code use the same Capability, Capsule, Result, and approval
 contracts. Provider-specific metadata belongs only in provenance. No Host may
 receive a scientific transition unavailable to the other Host under the same
 contract.
+
+## Phase 2 external Review amendment
+
+Codex, Claude Code, and future Hosts keep Review local by default. A Host may
+transmit repository content to an external reviewer only when the exact Review
+Request has a disclosure approval Receipt and the `bench.review.external` Task
+passes Ward. General Host, network, execution, IDE, or scientific Seal approval
+does not authorize disclosure.
+
+Benchwork records `review.requested`, `review.approved`, `review.completed`,
+and `review.accepted`, but does not execute the provider call. Requests that
+include credentials fail closed. The completed Review Artifact remains
+advisory until explicitly accepted. Completion is valid only when the
+Artifact's `task_id` resolves to an accepted Agent Result whose immutable Task
+Capsule binds the same `review_id`.
 
 ## Future Executor contract
 
@@ -56,8 +72,10 @@ from conversation state.
 - distributed scheduling;
 - remote Grimoire execution;
 - automatically converting Agent output into Claims, Protocols, or Decisions.
+- automatically uploading repository content for Review.
 
 ## Entry gate
 
-Implementation may begin only after all M10 acceptance checks pass and a new
-RFC version specifies executable schemas, threat model, and conformance tests.
+Any future automatic Provider or remote Executor implementation still requires
+a new RFC version specifying executable schemas, threat model, and conformance
+tests.

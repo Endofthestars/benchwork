@@ -68,3 +68,52 @@ state-bound Tasks, explicit scientific Gates, canonical Working and Run
 lifecycles, registered Alembic comparisons, deterministic CLI project context,
 governance, and golden release acceptance. Automatic Provider execution remains
 outside M10. Final acceptance requires the complete stacked CI suite to pass.
+
+## M11: The Grimoire
+
+Implemented: Codex Plugin-first RFCs, the repository marketplace, seven
+trigger-specific Skills, and concise repository agent rules.
+
+## M12: The Instrument
+
+Implemented: `bwork mcp serve`, STDIO transport, server instructions, stable
+response envelopes, cursor pagination, and read-only project tools.
+
+## M12.5: Host Boundary Verification
+
+Implemented: tiered Kernel, CLI, and IDE Host acceptance; a machine-readable
+Host capability matrix; environment-blocked IDE exceptions that do not weaken
+Core/MCP gates; and a host-neutral external disclosure policy.
+
+## M13: The Familiar
+
+Implemented: the interactive Task open/get/complete/fail loop with automatic
+semantic output blobs, Sigils, Host Session provenance, Athanor acceptance, and
+same-session Receipts.
+
+## M13.5: Review Provenance
+
+Implemented: local and external Review Capability boundaries, Review Request
+and Review Artifact Schemas, a fail-closed disclosure Gate, and Chronicle
+events for request, approval, completion, and acceptance. Benchwork records
+Review provenance but does not invoke or upload content to a provider.
+
+## M14: The Wards
+
+Implemented: trusted SessionStart, PreToolUse, and PostToolUse hooks with
+bounded output, direct `.benchwork/` write protection, and adversarial fixtures.
+
+## M15: The Working
+
+Implemented: canonical scientific write tools, immutable preview/commit Seals,
+Experiment and Run tools, deterministic Alembic invocation, and specialized
+implementation, pilot, evaluation, and recovery Skills.
+
+## M16: Trial of the Familiar
+
+Prerelease candidate: local marketplace packaging, plugin and Skill validation,
+in-memory and spawned-STDIO protocol tests, and the Phase 2 acceptance matrix.
+Codex CLI acceptance is complete. IDE validation is an accepted
+`BLOCKED_BY_ENVIRONMENT` Tier 2 exception until a graphical extension Host is
+available; external diff review remains
+`WAITING_FOR_DISCLOSURE_AUTHORIZATION`.
