@@ -9,8 +9,9 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.3.0a1` prerelease. Phase 2 adds the Codex Plugin-first
-> Instrumentarium while preserving host-neutral scientific contracts.
+> Project status: `0.3.0rc1` release candidate. Phase 2 freezes the Codex
+> Plugin-first Instrumentarium while preserving host-neutral scientific
+> contracts.
 
 ## Why Benchwork
 
