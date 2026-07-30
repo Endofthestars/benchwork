@@ -1,0 +1,9 @@
+{
+  "protocol_id": "PT-001",
+  "program_id": "RP-001",
+  "title": "Registered study",
+  "study_mode": "confirmatory",
+  "hypothesis_ids": ["HY-001"],
+  "analysis_plan": "Apply the registered analysis specification without substitution.",
+  "analysis_spec": {}
+}

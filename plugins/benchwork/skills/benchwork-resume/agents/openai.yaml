@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Resume"
+  short_description: "Recover work from canonical research state"
+  default_prompt: "Use $benchwork-resume to continue this study from canonical state."

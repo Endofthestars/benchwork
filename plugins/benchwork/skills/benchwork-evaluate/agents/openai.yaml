@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Evaluate"
+  short_description: "Compute and assess registered results"
+  default_prompt: "Use $benchwork-evaluate to assess the registered experimental results."

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "benchwork": {
+      "command": "bwork",
+      "args": ["mcp", "serve"]
+    }
+  }
+}

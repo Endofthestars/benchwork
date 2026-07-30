@@ -24,6 +24,8 @@ English is the canonical source for all Benchwork documentation.
 - [RFC-0005: Experiment and Run Lifecycle](rfcs/RFC-0005-experiment-run-lifecycle.md)
 - [RFC-0006: Alembic Analysis Contract](rfcs/RFC-0006-alembic-analysis-contract.md)
 - [RFC-0007: Provider and Executor Runtime Boundaries](rfcs/RFC-0007-provider-executor-runtime-boundaries.md)
+- [RFC-0008: Codex Plugin-first Host Architecture](rfcs/RFC-0008-codex-plugin-first-host-architecture.md)
+- [RFC-0009: MCP as the Scientific Control Plane](rfcs/RFC-0009-mcp-scientific-control-plane.md)
 
 ## Architecture
 
@@ -45,6 +47,8 @@ English is the canonical source for all Benchwork documentation.
 - [Compatibility policy](COMPATIBILITY.md)
 - [Release process](RELEASE_PROCESS.md)
 - [M10 acceptance matrix](M10_ACCEPTANCE.md)
+- [Phase 2 acceptance matrix](PHASE2_ACCEPTANCE.md)
+- [Benchwork Codex plugin](plugins/benchwork.md)
 - [0.2.0rc1 release notes](releases/0.2.0rc1.md)
 
 Architecture notes describe implemented boundaries unless a page explicitly

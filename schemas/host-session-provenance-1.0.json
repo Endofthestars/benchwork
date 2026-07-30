@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/host-session-provenance/1.0",
+  "title": "Host Session Provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "host", "session_id"],
+  "properties": {
+    "schema_version": {"const": "host-session-provenance/1.0"},
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "session_id": {"type": "string", "minLength": 1},
+    "provider": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "runtime": {"type": "string", "minLength": 1}
+  }
+}

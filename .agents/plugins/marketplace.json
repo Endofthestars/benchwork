@@ -1,0 +1,20 @@
+{
+  "name": "benchwork-local",
+  "interface": {
+    "displayName": "Benchwork Local"
+  },
+  "plugins": [
+    {
+      "name": "benchwork",
+      "source": {
+        "source": "local",
+        "path": "./plugins/benchwork"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

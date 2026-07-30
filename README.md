@@ -9,8 +9,8 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.2.0rc1` public release candidate. M10 Phase 1 acceptance
-> is implemented; stable naming remains provisional.
+> Project status: `0.3.0a1` prerelease. Phase 2 adds the Codex Plugin-first
+> Instrumentarium while preserving host-neutral scientific contracts.
 
 ## Why Benchwork
 
@@ -61,9 +61,11 @@ scientific state.
 - **Versioned JSON Schemas** define the public contracts for research objects,
   events, tasks, runs, assessments, decisions, and result bundles.
 
-Benchwork does not yet provide a canonical remote Agent backend or automatic
-experiment execution. Alpha Grimoire installation is local and data-only;
-publisher signatures and remote distribution remain future work.
+Benchwork does not launch a background model for ordinary interactive use and
+does not yet provide a canonical remote Agent backend. Codex uses native tools
+for repository and execution work, while the Benchwork plugin's MCP server
+controls canonical research state. Alpha Grimoire installation remains local
+and data-only; publisher signatures and remote distribution remain future work.
 
 ## Integrity model
 

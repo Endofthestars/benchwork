@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchwork Design"
+  short_description: "Design and preview a rigorous protocol"
+  default_prompt: "Use $benchwork-design to draft a falsifiable study protocol."

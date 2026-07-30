@@ -1,0 +1,29 @@
+{
+  "name": "benchwork",
+  "version": "0.3.0-alpha.1",
+  "description": "Auditable research workflows and scientific control-plane tools for Codex",
+  "author": {
+    "name": "Endofthestars",
+    "url": "https://github.com/Endofthestars"
+  },
+  "homepage": "https://github.com/Endofthestars/benchwork",
+  "repository": "https://github.com/Endofthestars/benchwork",
+  "license": "MIT",
+  "keywords": ["research", "reproducibility", "codex", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Benchwork",
+    "shortDescription": "Auditable computational research workflows",
+    "longDescription": "Coordinate evidence, protocols, code, runs, analysis, and human-sealed decisions from an interactive Codex session.",
+    "developerName": "Endofthestars",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "Continue this research program from canonical state.",
+      "Investigate evidence and register verified findings.",
+      "Implement and evaluate the sealed protocol."
+    ],
+    "brandColor": "#6B4EFF"
+  }
+}
