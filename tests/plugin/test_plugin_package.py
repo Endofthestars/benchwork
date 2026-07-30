@@ -67,13 +67,19 @@ class PluginPackageTest(unittest.TestCase):
             matrix["tiers"]["tier_2_ide"]["release_gate"],
             "OPTIONAL_HOST_VALIDATION",
         )
+        ide_host = matrix["current_acceptance"]["ide_host"]
+        self.assertEqual(ide_host["status"], "BLOCKED_BY_ENVIRONMENT")
+        self.assertEqual(ide_host["exception_id"], "HOST-IDE-001")
+        self.assertTrue(ide_host["accepted"])
+        self.assertEqual(ide_host["owner"], "Benchwork release owner")
+        self.assertTrue(ide_host["reproduction"])
         self.assertEqual(
-            matrix["current_acceptance"]["ide_host"],
-            {
-                "status": "BLOCKED_BY_ENVIRONMENT",
-                "exception_id": "HOST-IDE-001",
-                "accepted": True,
-            },
+            matrix["current_acceptance"]["cli_hosts"]["codex_cli"],
+            "PASS",
+        )
+        self.assertEqual(
+            matrix["current_acceptance"]["cli_hosts"]["claude_code_cli"],
+            "PENDING_HOST_VALIDATION",
         )
         self.assertEqual(
             matrix["current_acceptance"]["external_review"],

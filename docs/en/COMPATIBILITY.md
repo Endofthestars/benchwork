@@ -5,10 +5,35 @@ canonical: true
 
 # Compatibility Policy
 
-Benchwork `0.2` is a public Alpha and follows Semantic Versioning for the Python
-distribution. Persisted schemas use independent explicit versions. A package
-minor version may add a new schema version but must not silently reinterpret an
-existing schema identifier.
+Benchwork `0.3` is an Alpha research-control-plane release. The Python
+distribution follows PEP 440; the Codex plugin follows Semantic Versioning.
+Persisted schemas, MCP envelopes, plugin workflow metadata, and Host
+provenance use independent explicit versions. A package release may add a new
+contract version but must never silently reinterpret an existing identifier.
+
+The Phase 2 contract freeze begins with `0.3.0rc1`. “Frozen” means the existing
+name and versioned meaning are reviewable compatibility commitments; it does
+not promote Alpha interfaces to Stable.
+
+## Stability levels
+
+| Level | Compatibility promise |
+| --- | --- |
+| `experimental` | Breaking changes are allowed and must be identified in release notes. |
+| `alpha` | Breaking changes require an accepted RFC, migration guidance, and replay or contract tests. |
+| `stable` | No breaking change within the supported major version. |
+
+All Phase 2 MCP tools, plugin workflows, and their versioned companion
+metadata are `alpha` unless a more specific document says otherwise.
+
+## Frozen Phase 2 surfaces
+
+| Surface | Contract | Stability |
+| --- | --- | --- |
+| MCP tool names and envelopes | [MCP API Policy](MCP_API_POLICY.md) | `alpha` |
+| Codex plugin, Skills, and Host rules | [Plugin API Policy](PLUGIN_API_POLICY.md) | `alpha` |
+| Host acceptance tiers and exceptions | [Host Support Matrix](HOST_SUPPORT_MATRIX.md) | `alpha` |
+| Persisted scientific state | Published JSON Schemas and accepted RFCs | Per schema/RFC |
 
 ## Provisional names
 
@@ -39,3 +64,9 @@ until Windows locking, atomic replacement, and package smoke tests enter CI.
 - Public CLI aliases remain available for the documented migration window.
 - Exit codes and JSON error codes are machine-interface contracts.
 - Alpha APIs may change only with migration notes and replay tests.
+- MCP tool removals, renames, permission changes, and request or result
+  reinterpretations are breaking changes.
+- Plugin installation, upgrade, rollback, and removal never mutate canonical
+  `.benchwork/` state.
+- Host-specific packaging may change without changing the host-neutral
+  scientific contract.

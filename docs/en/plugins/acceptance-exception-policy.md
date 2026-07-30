@@ -9,7 +9,7 @@ test, but neither automatically invalidates a lower acceptance tier.
 | Tier | Boundary | Release status | Required evidence |
 | --- | --- | --- | --- |
 | Tier 0 — Kernel | Core Runtime | Required and automated | Chronicle, Schema, Ward, Capability, MCP protocol and tool contracts, replay |
-| Tier 1 — CLI Host | Codex CLI and Claude Code CLI | Required before a Phase release | interactive MCP discovery, representative Task loop, Athanor Receipt |
+| Tier 1 — CLI Host | Declared primary CLI Host | Required before a Phase release | interactive MCP discovery, representative Task loop, Athanor Receipt |
 | Tier 2 — IDE Host | graphical IDE and desktop Hosts | Optional Host Validation | graphical lifecycle, interactive chat, MCP tool call |
 
 Tier 0 runs without Claude, Codex, or an IDE. It is Benchwork's permanent trust
@@ -21,15 +21,23 @@ An unavailable Tier 2 environment is recorded as `BLOCKED_BY_ENVIRONMENT`, not
 `FAILED`. The record must include an exception identifier, reason, impact, and
 the release boundary before which validation becomes required.
 
-The current exception is:
+Tier 1 is accepted per Host. Codex CLI is the Phase 2 primary Host and has a
+recorded PASS. Claude Code CLI remains `PENDING_HOST_VALIDATION`; the
+host-neutral tool contract does not manufacture an interactive Host result.
+
+The current IDE exception is:
 
 ```yaml
 id: HOST-IDE-001
 status: BLOCKED_BY_ENVIRONMENT
+owner: Benchwork release owner
 reason: No graphical IDE extension host is available.
 impact: None on Core, MCP, or CLI acceptance.
 required_before: Public IDE integration release.
 ```
+
+Closure steps are maintained in the
+[Host Support Matrix](../HOST_SUPPORT_MATRIX.md).
 
 The machine-readable policy is bundled as
 [`host-capability-matrix.yaml`](../../../plugins/benchwork/assets/host-capability-matrix.yaml).
