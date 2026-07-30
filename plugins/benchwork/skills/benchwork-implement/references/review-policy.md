@@ -1,5 +1,10 @@
 # Review policy
 
+The canonical project policy is
+[`REVIEW_DISCLOSURE_POLICY.md`](../../../../../docs/en/REVIEW_DISCLOSURE_POLICY.md).
+“Local” means no additional destination beyond the already authorized
+interactive Host; it does not assert that the model runs on-device.
+
 - Default to `bench.review.local`; keep source and diff in the approved project boundary
 - Call `benchwork_prepare_review` with the exact target, files, checks, disclosure flags, and destination
 - For local review, open `bench.review.local` with the returned `review_id`, perform the read-only review, complete the Task, and call `benchwork_record_review`

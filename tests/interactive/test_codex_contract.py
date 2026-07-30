@@ -51,3 +51,19 @@ class CodexInteractiveContractTest(unittest.TestCase):
         self.assertIn("benchwork_prepare_review", policy)
         self.assertIn("benchwork_approve_external_review", policy)
         self.assertIn("same `review_id`", policy)
+
+    def test_review_policy_distinguishes_host_trust_from_on_device_execution(self) -> None:
+        policy = (ROOT / "docs" / "en" / "REVIEW_DISCLOSURE_POLICY.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(policy.split())
+        self.assertIn(
+            "does not claim that a hosted Agent model runs on-device",
+            normalized,
+        )
+        self.assertIn(
+            "no additional provider, destination, export, or disclosure",
+            normalized,
+        )
+        self.assertIn("WAITING_FOR_DISCLOSURE_AUTHORIZATION", normalized)
+        self.assertIn("A Review Artifact cannot", normalized)
