@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from .registration import register_tools
 from .runtime import BenchworkTools
+from .tool_registry import tool_names
 
-EXPERIMENT_TOOLS = (
-    "benchwork_start_working",
-    "benchwork_register_artifact",
-    "benchwork_create_experiment",
-    "benchwork_transition_experiment",
-    "benchwork_record_run",
-    "benchwork_compute_analysis",
-)
+EXPERIMENT_TOOLS = tool_names("experiment")
 
 
 def register_experiment_tools(server: object, tools: BenchworkTools) -> None:

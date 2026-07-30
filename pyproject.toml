@@ -40,6 +40,9 @@ where = ["src"]
 [tool.setuptools.data-files]
 "share/benchwork/schemas" = ["schemas/*.json"]
 
+[tool.setuptools.package-data]
+"benchwork.mcp" = ["tool_registry.json"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
