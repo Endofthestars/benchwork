@@ -117,3 +117,22 @@ Codex CLI acceptance is complete. IDE validation is an accepted
 `BLOCKED_BY_ENVIRONMENT` Tier 2 exception until a graphical extension Host is
 available; external diff review remains
 `WAITING_FOR_DISCLOSURE_AUTHORIZATION`.
+
+## M17: The Instrumentarium Seal
+
+Completed for `0.3.0rc1`: Phase 2 API and protocol freeze; 38-tool
+machine-readable MCP Registry; versioned Plugin and Skill compatibility
+metadata; Host Support Matrix; Review Disclosure Policy; deterministic golden
+audit-to-`REPAIR` acceptance; migration and release documentation; and
+release-gated CI coverage.
+
+Phase 2 is sealed with Kernel, MCP, Plugin, and Codex CLI gates passing.
+`HOST-IDE-001` remains an accepted `BLOCKED_BY_ENVIRONMENT` Tier 2 exception,
+External Review remains `WAITING_FOR_DISCLOSURE_AUTHORIZATION`, and Claude Code
+CLI remains `PENDING_HOST_VALIDATION`. These states are not reclassified as
+failures or fabricated PASS results.
+
+Phase 3 — The Sanctum may now begin through new RFCs for sandboxing,
+filesystem isolation, execution policy, patch promotion, experiment executors,
+GPU/remote jobs, and Artifact storage. Phase 3 must not weaken the frozen
+Phase 2 scientific control-plane boundary.
