@@ -1,0 +1,15 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-resume",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_doctor",
+      "benchwork_status",
+      "benchwork_get_program",
+      "benchwork_trace",
+      "benchwork_next_actions"
+    ]
+  }
+}

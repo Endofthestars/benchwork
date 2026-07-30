@@ -1,0 +1,16 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-pilot",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_get_object",
+      "benchwork_open_task",
+      "benchwork_complete_task",
+      "benchwork_fail_task",
+      "benchwork_transition_experiment",
+      "benchwork_record_run"
+    ]
+  }
+}

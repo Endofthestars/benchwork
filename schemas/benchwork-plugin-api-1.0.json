@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-plugin-api/1.0",
+  "title": "Benchwork Plugin Compatibility Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plugin",
+    "plugin_version",
+    "benchwork_api",
+    "minimum_runtime",
+    "skills_api",
+    "mcp_tool_registry",
+    "mcp_tool_count"
+  ],
+  "properties": {
+    "schema_version": {"const": "benchwork-plugin-api/1.0"},
+    "plugin": {"const": "benchwork"},
+    "plugin_version": {
+      "type": "string",
+      "pattern": "^0\\.3\\.0-(?:alpha|rc)\\.[0-9]+$"
+    },
+    "benchwork_api": {"const": "0.3"},
+    "minimum_runtime": {
+      "type": "string",
+      "pattern": "^0\\.3\\.0(?:a|rc)[0-9]+$"
+    },
+    "skills_api": {"const": "1"},
+    "mcp_tool_registry": {"const": "mcp-tool-registry/1.0"},
+    "mcp_tool_count": {"const": 38}
+  }
+}

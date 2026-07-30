@@ -2,3 +2,9 @@ interface:
   display_name: "Benchwork Investigate"
   short_description: "Find and verify research evidence"
   default_prompt: "Use $benchwork-investigate to investigate evidence for this study."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "benchwork"
+      description: "Benchwork scientific control plane"

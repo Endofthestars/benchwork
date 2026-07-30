@@ -1,0 +1,18 @@
+{
+  "schema_version": "benchwork-skill-metadata/1.0",
+  "name": "benchwork-design",
+  "version": "1.0.0",
+  "skills_api": "1",
+  "requires": {
+    "mcp": [
+      "benchwork_get_program",
+      "benchwork_get_object",
+      "benchwork_open_task",
+      "benchwork_complete_task",
+      "benchwork_draft_protocol",
+      "benchwork_open_issue",
+      "benchwork_preview_protocol_seal",
+      "benchwork_commit_protocol_seal"
+    ]
+  }
+}

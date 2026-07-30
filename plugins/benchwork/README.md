@@ -23,3 +23,8 @@ Host acceptance is tiered. A missing graphical extension Host can be recorded
 as `BLOCKED_BY_ENVIRONMENT` without blocking Kernel, MCP, or CLI acceptance.
 See the repository
 [Acceptance Exception Policy](../../docs/en/plugins/acceptance-exception-policy.md).
+
+`benchwork-plugin-api.json` and each Skill's `skill.yaml` are versioned
+Benchwork compatibility metadata. They do not replace Codex's
+`.codex-plugin/plugin.json`, `SKILL.md`, or `agents/openai.yaml` discovery
+contracts.
