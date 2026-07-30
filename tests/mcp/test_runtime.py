@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import inspect
+import json
 import sys
 import tempfile
 import unittest
@@ -314,6 +315,19 @@ class MCPRuntimeTest(unittest.TestCase):
         self.assertNotIn("Traceback", str(result))
 
     def test_complete_repair_cycle_uses_only_control_plane_tools(self) -> None:
+        scenario = json.loads(
+            (
+                Path(__file__).parents[2]
+                / "examples"
+                / "phase2-final"
+                / "scenario.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            scenario["required_facts"]["audit_capability"],
+            "bench.study.audit",
+        )
+        self.assertEqual(scenario["required_facts"]["decision"], "REPAIR")
         program_id = self.tools.benchwork_create_program(
             "mcp-repair-cycle",
             "MCP repair cycle",
@@ -367,6 +381,53 @@ class MCPRuntimeTest(unittest.TestCase):
             rq_preview["required_approval"]["confirmation_token"],
         )
         self.assertTrue(rq_commit["ok"])
+
+        draft = self.tools.benchwork_draft_protocol(
+            "PT-DRAFT",
+            program_id,
+            "Protocol requiring audit repair",
+            "Compare treatment and baseline scores without a registered estimand.",
+            ["HY-001"],
+            "confirmatory",
+        )
+        self.assertTrue(draft["ok"])
+        audit = self.tools.benchwork_open_task(
+            "bench.study.audit",
+            program_id,
+            "Audit PT-DRAFT before experimentation.",
+        )
+        self.assertTrue(audit["ok"])
+        audit_task_id = audit["data"]["task"]["task_id"]
+        audit_result = self.tools.benchwork_complete_task(
+            audit_task_id,
+            "The draft requires a registered estimand and complete Run inventory.",
+            {
+                "protocol_id": "PT-DRAFT",
+                "findings": [
+                    "The analysis plan does not identify a registered estimand."
+                ],
+                "validity_threats": [
+                    "Outcome selection could drift after observing Runs."
+                ],
+                "open_issues": [
+                    "Register the comparison, uncertainty method, and Run inventory."
+                ],
+                "recommendation": "REPAIR",
+            },
+            {
+                "schema_version": "host-session-provenance/1.0",
+                "host": "codex",
+                "session_id": "phase2-golden-audit",
+                "runtime": "deterministic-host-simulation",
+            },
+        )
+        self.assertTrue(audit_result["ok"])
+        self.assertIsNotNone(audit_result["receipt"])
+        accepted_audit = self.tools.benchwork_get_task(audit_task_id)
+        self.assertEqual(
+            accepted_audit["data"]["result"]["status"],
+            "COMPLETED",
+        )
 
         analysis_spec = {
             "schema_version": "analysis-spec/1.0",
@@ -567,6 +628,15 @@ class MCPRuntimeTest(unittest.TestCase):
         self.assertTrue(decision["ok"])
         state = Athanor(self.root).replay()
         self.assertEqual(state["programs"][program_id]["status"], "EVALUATED")
+        self.assertEqual(state["protocols"]["PT-DRAFT"]["status"], "DRAFT")
+        self.assertEqual(state["protocols"]["PT-001"]["status"], "FROZEN")
+        decisions = [
+            decision
+            for decision in state["decisions"].values()
+            if decision["program_id"] == program_id
+        ]
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0]["outcome"], scenario["required_facts"]["decision"])
         self.assertEqual(state["runs"]["RUN-F1"]["status"], "FAILED")
         self.assertEqual(
             state["runs"]["RUN-X1"]["analysis_disposition"]["included"],
