@@ -56,6 +56,10 @@ The M10 reference kernel is supported and tested on Linux with Python
 not an M10-supported platform; this explicit POSIX-only declaration remains
 until Windows locking, atomic replacement, and package smoke tests enter CI.
 
+The `0.3.0rc2` POSIX installer has a separate support boundary: macOS
+x86_64/arm64, glibc Linux x86_64/arm64, and Windows through WSL2. Native
+Windows and musl-only Linux remain unsupported by `install.sh`.
+
 ## Compatibility rules
 
 - Chronicle versions never mix inside one ledger.

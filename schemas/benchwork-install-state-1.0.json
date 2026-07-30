@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-install-state/1.0",
+  "title": "Benchwork Installer State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "installed_version",
+    "package_requirement",
+    "manifest_url",
+    "manifest_sha256",
+    "backend",
+    "install_dir",
+    "bin_dir",
+    "bwork_path",
+    "backend_bootstrapped",
+    "plugin",
+    "hosts",
+    "managed_files",
+    "config_backups",
+    "installed_at",
+    "updated_at"
+  ],
+  "$defs": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp", "plugin"],
+      "properties": {
+        "mcp": {
+          "enum": ["configured", "plugin_managed", "not_configured", "blocked", "experimental"]
+        },
+        "plugin": {
+          "enum": ["configured", "not_configured", "unsupported", "known_upstream_limitation"]
+        }
+      }
+    },
+    "path_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["plugin", "marketplace", "path_block", "script", "state"]},
+        "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "backup", "source_sha256"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "backup": {"type": "string", "minLength": 1},
+        "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "benchwork-install-state/1.0"},
+    "installed_version": {"type": "string", "minLength": 1},
+    "previous_version": {"type": ["string", "null"]},
+    "package_requirement": {"type": "string", "minLength": 1},
+    "manifest_url": {"type": "string", "pattern": "^https://"},
+    "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "backend": {"enum": ["uv", "pipx"]},
+    "install_dir": {"type": "string", "minLength": 1},
+    "bin_dir": {"type": "string", "minLength": 1},
+    "bwork_path": {"type": "string", "minLength": 1},
+    "backend_bootstrapped": {"type": "boolean"},
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "version", "path", "marketplace_path", "previous_path"],
+      "properties": {
+        "scope": {"enum": ["user", "project", "none"]},
+        "version": {"type": ["string", "null"]},
+        "path": {"type": ["string", "null"]},
+        "marketplace_path": {"type": ["string", "null"]},
+        "previous_path": {"type": ["string", "null"]}
+      }
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codex", "claude"],
+      "properties": {
+        "codex": {"$ref": "#/$defs/host"},
+        "claude": {"$ref": "#/$defs/host"}
+      }
+    },
+    "managed_files": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/path_record"}
+    },
+    "config_backups": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/backup"}
+    },
+    "installed_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

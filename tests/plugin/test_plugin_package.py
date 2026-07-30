@@ -23,7 +23,7 @@ class PluginPackageTest(unittest.TestCase):
         entry = next(item for item in marketplace["plugins"] if item["name"] == "benchwork")
         self.assertEqual(marketplace["name"], "benchwork-local")
         self.assertEqual(manifest["name"], "benchwork")
-        self.assertEqual(manifest["version"], "0.3.0-rc.1")
+        self.assertEqual(manifest["version"], "0.3.0-rc.2")
         self.assertEqual(entry["source"]["path"], "./plugins/benchwork")
         self.assertEqual(entry["policy"]["installation"], "AVAILABLE")
         self.assertEqual(entry["policy"]["authentication"], "ON_INSTALL")

@@ -1,6 +1,6 @@
 {
   "name": "benchwork",
-  "version": "0.3.0-rc.1",
+  "version": "0.3.0-rc.2",
   "description": "Auditable research workflows and scientific control-plane tools for Codex",
   "author": {
     "name": "Endofthestars",

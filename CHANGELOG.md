@@ -3,6 +3,16 @@
 All notable changes are recorded here. Benchwork remains a prerelease and uses
 versioned schemas plus explicit migration notes for compatibility.
 
+## 0.3.0rc2 — The Invitation
+
+- Added the auditable POSIX installer and exact release/channel manifests.
+- Added uv-first isolated installation, pipx fallback, plugin staging,
+  installer state, Host diagnostics, repair, rollback, and uninstall.
+- Added checksummed release assets, SBOM/provenance generation, installer CI,
+  GitHub Pages publication, and installation documentation.
+
+See [release notes](docs/en/releases/0.3.0rc2.md).
+
 ## 0.3.0rc1 — The Instrumentarium Seal
 
 - Froze the Phase 2 host-native Plugin and MCP architecture.

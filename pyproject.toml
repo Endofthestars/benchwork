@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "benchwork-arcana"
-version = "0.3.0rc1"
+version = "0.3.0rc2"
 description = "An auditable workbench for agent-assisted computational research."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -42,6 +42,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "benchwork.mcp" = ["tool_registry.json"]
+"benchwork.install" = ["compatibility.json"]
 
 [tool.ruff]
 target-version = "py311"
