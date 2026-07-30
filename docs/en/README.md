@@ -48,6 +48,7 @@ English is the canonical source for all Benchwork documentation.
 - [MCP API policy](MCP_API_POLICY.md)
 - [Plugin API policy](PLUGIN_API_POLICY.md)
 - [Host support matrix](HOST_SUPPORT_MATRIX.md)
+- [Review disclosure policy](REVIEW_DISCLOSURE_POLICY.md)
 - [Release process](RELEASE_PROCESS.md)
 - [M10 acceptance matrix](M10_ACCEPTANCE.md)
 - [Phase 2 acceptance matrix](PHASE2_ACCEPTANCE.md)

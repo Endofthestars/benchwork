@@ -44,8 +44,13 @@ The machine-readable policy is bundled as
 
 ## External Review Disclosure Policy
 
-Local Review reads the current worktree inside the approved project boundary.
-It is read-only and does not disclose repository content to another provider.
+The normative policy is
+[Review Disclosure Policy](../REVIEW_DISCLOSURE_POLICY.md). This section
+summarizes the acceptance exception.
+
+Local Review reads the current worktree inside the trust boundary already
+approved for the active Host and project. It is read-only and introduces no
+additional provider, destination, export, or disclosure.
 
 External Review includes any workflow that uploads or transmits a diff, source
 files, unpublished results, private data, or related repository information to
