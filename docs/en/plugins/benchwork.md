@@ -1,6 +1,6 @@
 # Benchwork Codex plugin
 
-Benchwork 0.3.0a1 is designed for an interactive Codex session. Install the
+Benchwork 0.3.0rc1 is designed for an interactive Codex session. Install the
 Python package first, then install the repository marketplace and enable the
 `benchwork` plugin.
 

@@ -8,8 +8,8 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.2.0rc1` 公开候选版本。M10 第一阶段验收已实现；稳定命名仍为
-> provisional。
+> 项目状态：`0.3.0rc1` 候选版本。Phase 2 已冻结 Codex Plugin-first
+> Instrumentarium，同时保留宿主中立的科研契约；稳定命名仍为 provisional。
 
 ## 为什么需要 Benchwork
 
