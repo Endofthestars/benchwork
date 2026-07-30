@@ -154,7 +154,10 @@ class PluginArchiveTest(unittest.TestCase):
             )
             installed = Path(result["path"])
             self.assertEqual(validate_plugin(installed, PLUGIN_VERSION)["skill_count"], 7)
-            self.assertEqual((root / "data" / "plugins" / "current").resolve(), installed)
+            self.assertEqual(
+                (root / "data" / "plugins" / "current").resolve(),
+                installed.resolve(),
+            )
 
     def test_archive_rejects_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

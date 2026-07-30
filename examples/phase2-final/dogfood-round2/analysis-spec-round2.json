@@ -1,0 +1,35 @@
+{
+  "schema_version": "analysis-spec/1.0",
+  "comparisons": [
+    {
+      "comparison_id": "CMP-002",
+      "experiment_id": "EX-002",
+      "arms": [
+        "baseline",
+        "treatment"
+      ],
+      "metric": "replay_success",
+      "estimand": "mean_difference",
+      "pairing": "paired",
+      "uncertainty_method": "student_t",
+      "confidence_level": 0.95
+    }
+  ],
+  "multiple_comparison_policy": "none",
+  "practical_significance_thresholds": {
+    "replay_success": 0.0
+  },
+  "pilot_run_ids": [
+    "RUN-101",
+    "RUN-102",
+    "RUN-103",
+    "RUN-104"
+  ],
+  "expected_run_ids": [
+    "RUN-101",
+    "RUN-102",
+    "RUN-103",
+    "RUN-104",
+    "RUN-105"
+  ]
+}

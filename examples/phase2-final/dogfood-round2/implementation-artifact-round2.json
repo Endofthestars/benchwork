@@ -1,0 +1,19 @@
+{
+  "schema_version": "dogfood-implementation-artifact/1.0",
+  "name": "benchwork-dogfood-replay-repair",
+  "version": "0.2",
+  "purpose": "Validate canonical replay through a Protocol-aligned registered pilot and preserve the excluded failed Run.",
+  "protocol_id": "PT-002",
+  "working_id": "WK-002",
+  "analysis_spec": "analysis-spec-round2.json",
+  "experiment_id": "EX-002",
+  "required_pilot_run_ids": [
+    "RUN-101",
+    "RUN-102",
+    "RUN-103",
+    "RUN-104"
+  ],
+  "preserved_failed_run_ids": [
+    "RUN-105"
+  ]
+}

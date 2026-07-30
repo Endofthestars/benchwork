@@ -1,0 +1,1213 @@
+{
+  "agent_results": {
+    "TK-275B79CB5D04": {
+      "acceptance_receipt": "RC-5A6F1D66EDC0",
+      "accepted_at": "2026-07-30T14:37:29.064570+00:00",
+      "bindings": {
+        "review_id": "RV-001"
+      },
+      "capability": {
+        "contract_sigil": "sha256:3cbbb48d5909b321fb21038e66e7a5d18026d93e94208af4d40da426b252ed35",
+        "contract_version": "1.0",
+        "id": "bench.review.local"
+      },
+      "capsule_sigil": "sha256:9414974b0401a76521c4bcde2a9c81446f785469c797622fa8d182bccbb9388b",
+      "host": "codex",
+      "outputs": [
+        {
+          "blob_sigil": "sha256:8132db37395b3f4430798e7192836113ea3112d429411186447a53061c7558d8",
+          "schema": "review-execution-result/1.0",
+          "uri": ".benchwork/mcp/task-results/TK-275B79CB5D04-8132db37395b.json"
+        }
+      ],
+      "program_id": "RP-001",
+      "provenance": {
+        "host": "codex",
+        "runtime": "interactive-session"
+      },
+      "schema_version": "agent-result-record/1.1",
+      "snapshot": {
+        "snapshot_id": "SS-C4BE95B16204",
+        "snapshot_sigil": "sha256:44e620656004f615748cdf3580902335f132cf13851cf9864d7d02392fd512f7"
+      },
+      "status": "COMPLETED",
+      "task_id": "TK-275B79CB5D04"
+    },
+    "TK-5B034920CB51": {
+      "acceptance_receipt": "RC-64EE2D17E005",
+      "accepted_at": "2026-07-30T14:33:22.797479+00:00",
+      "capability": {
+        "contract_sigil": "sha256:5e2002a33a14b28584e3a11faf2ce7235286933c7ffe10d69720ae1ab8df876e",
+        "contract_version": "1.0",
+        "id": "bench.experiment.execute"
+      },
+      "capsule_sigil": "sha256:f23e9664d4bccf5f54036c2c620c1fe1b877a33f54a87f71ad71fd6ef97cc480",
+      "host": "codex",
+      "outputs": [
+        {
+          "blob_sigil": "sha256:aed2ab304c5c072652a0b8edc806cb0550ee08383e0c0d3de9628d2e808fba6a",
+          "schema": "experiment-execution-result/1.0",
+          "uri": ".benchwork/mcp/task-results/TK-5B034920CB51-aed2ab304c5c.json"
+        }
+      ],
+      "program_id": "RP-001",
+      "provenance": {
+        "host": "codex",
+        "runtime": "interactive-session"
+      },
+      "schema_version": "agent-result-record/1.1",
+      "snapshot": {
+        "snapshot_id": "SS-EF7FBA54C396",
+        "snapshot_sigil": "sha256:544bc8f3ced2eb0fca19b9569105d263b1f7ee166b1f3ec29590c1eddde86d9f"
+      },
+      "status": "COMPLETED",
+      "task_id": "TK-5B034920CB51"
+    },
+    "TK-A81479A5CF07": {
+      "acceptance_receipt": "RC-EBDE2185DB96",
+      "accepted_at": "2026-07-30T14:42:39.852493+00:00",
+      "capability": {
+        "contract_sigil": "sha256:d2f9b8636f6c860172801b0d7bcf647518825a7959614a08f932ee09ce7a6daa",
+        "contract_version": "1.0",
+        "id": "bench.code.modify"
+      },
+      "capsule_sigil": "sha256:65ce272c51d86cc72d24440fa0c382e5a5527d1d129b9267768a29d17250f503",
+      "host": "codex",
+      "outputs": [
+        {
+          "blob_sigil": "sha256:aa7edac164cc5399fa797470b4c5ed4e3f5797039717dadc68edf6653094ad6a",
+          "schema": "code-modification-result/1.0",
+          "uri": ".benchwork/mcp/task-results/TK-A81479A5CF07-aa7edac164cc.json"
+        }
+      ],
+      "program_id": "RP-001",
+      "provenance": {
+        "host": "codex",
+        "runtime": "interactive-session"
+      },
+      "schema_version": "agent-result-record/1.1",
+      "snapshot": {
+        "snapshot_id": "SS-C2544C70DA4C",
+        "snapshot_sigil": "sha256:1f7f6a499b33f7fb45c7a394f2cfdc633662fd1b1135ed3885e30809772a2b6b"
+      },
+      "status": "COMPLETED",
+      "task_id": "TK-A81479A5CF07"
+    }
+  },
+  "approvals": {
+    "TK-494B77762B6D": {
+      "capability": "bench.code.modify",
+      "capability_contract_sigil": "sha256:d2f9b8636f6c860172801b0d7bcf647518825a7959614a08f932ee09ce7a6daa",
+      "capsule_sigil": "sha256:eac267ed57ffc7d1cf319876e6065f7d58c7521a59e770de899a41afef7b9faf",
+      "circle": {
+        "network": false,
+        "time_budget_seconds": 1800,
+        "tools": [
+          "read",
+          "write"
+        ]
+      },
+      "granted_at": "2026-07-30T13:37:45.853760+00:00",
+      "reason": "The user explicitly requested completion of the attached Round 2 repair plan and authorized access to the canonical dogfood project.",
+      "receipt_id": "RC-04A5C51BC0CD",
+      "task_id": "TK-494B77762B6D"
+    },
+    "TK-5B034920CB51": {
+      "capability": "bench.experiment.execute",
+      "capability_contract_sigil": "sha256:5e2002a33a14b28584e3a11faf2ce7235286933c7ffe10d69720ae1ab8df876e",
+      "capsule_sigil": "sha256:f23e9664d4bccf5f54036c2c620c1fe1b877a33f54a87f71ad71fd6ef97cc480",
+      "circle": {
+        "network": false,
+        "time_budget_seconds": 1800,
+        "tools": [
+          "read",
+          "write",
+          "execute"
+        ]
+      },
+      "granted_at": "2026-07-30T14:32:58.742307+00:00",
+      "reason": "The user explicitly approved proceeding with the attached fixed synthetic Run contract; all five Runs are already canonical.",
+      "receipt_id": "RC-8F447CC111BE",
+      "task_id": "TK-5B034920CB51"
+    },
+    "TK-A81479A5CF07": {
+      "capability": "bench.code.modify",
+      "capability_contract_sigil": "sha256:d2f9b8636f6c860172801b0d7bcf647518825a7959614a08f932ee09ce7a6daa",
+      "capsule_sigil": "sha256:65ce272c51d86cc72d24440fa0c382e5a5527d1d129b9267768a29d17250f503",
+      "circle": {
+        "network": false,
+        "time_budget_seconds": 1800,
+        "tools": [
+          "read",
+          "write"
+        ]
+      },
+      "granted_at": "2026-07-30T14:42:03.084229+00:00",
+      "reason": "The user explicitly approved completing the attached Round 2 repair plan.",
+      "receipt_id": "RC-912934FD1B07",
+      "task_id": "TK-A81479A5CF07"
+    },
+    "TK-AD4634B611AF": {
+      "capability": "bench.experiment.execute",
+      "capability_contract_sigil": "sha256:5e2002a33a14b28584e3a11faf2ce7235286933c7ffe10d69720ae1ab8df876e",
+      "capsule_sigil": "sha256:fb09c77a215d87518ae7ea56bd269281a452e074cea7af255610c14af3f0c1c9",
+      "circle": {
+        "network": false,
+        "time_budget_seconds": 1800,
+        "tools": [
+          "read",
+          "write",
+          "execute"
+        ]
+      },
+      "granted_at": "2026-07-30T14:31:26.303277+00:00",
+      "reason": "The user explicitly approved proceeding with the attached fixed synthetic Run contract.",
+      "receipt_id": "RC-A646516AA538",
+      "task_id": "TK-AD4634B611AF"
+    }
+  },
+  "artifacts": {
+    "AR-001": {
+      "artifact_id": "AR-001",
+      "input_ids": [
+        "PT-001"
+      ],
+      "kind": "implementation",
+      "location": {
+        "sigil": "sha256:f7a488b0699838d9e5e13775bc45073773b0cc7e472f3a106fbd279d93894f3c",
+        "uri": "implementation-artifact.json"
+      },
+      "producer_id": "WK-001",
+      "program_id": "RP-001",
+      "registered_at": "2026-07-30T10:15:40.615528+00:00",
+      "registration_receipt": "RC-403698C05BBF",
+      "schema_version": "artifact/1.0",
+      "status": "REGISTERED"
+    },
+    "AR-002": {
+      "artifact_id": "AR-002",
+      "input_ids": [
+        "PT-002"
+      ],
+      "kind": "implementation",
+      "location": {
+        "sigil": "sha256:3e355f4d64d22dd25adfa215463b0a6d26b499249229496a26a1d34759cfefe5",
+        "uri": "implementation-artifact-round2.json"
+      },
+      "producer_id": "WK-002",
+      "program_id": "RP-001",
+      "registered_at": "2026-07-30T14:31:26.180034+00:00",
+      "registration_receipt": "RC-C31B5C8A201D",
+      "schema_version": "artifact/1.0",
+      "status": "REGISTERED"
+    }
+  },
+  "assessments": {
+    "AS-001": {
+      "assessment_id": "AS-001",
+      "claim_findings": [
+        {
+          "claim_id": "CL-002",
+          "rationale": "The registered Round 2 replay comparison completed with all required Runs and preserved the failed excluded Run.",
+          "status": "SUPPORTED"
+        }
+      ],
+      "hypothesis_findings": [
+        {
+          "hypothesis_id": "HY-002",
+          "rationale": "The registered replay prediction was satisfied within the synthetic dogfood boundary.",
+          "status": "SUPPORTED"
+        }
+      ],
+      "limitations": [
+        "The data are synthetic and validate the Benchwork control plane rather than an external scientific claim.",
+        "Only the Codex CLI Host was exercised; IDE and Claude Code CLI validation remain unavailable.",
+        "The paired differences have zero variance, so a standardized effect is unavailable despite the deterministic mean difference."
+      ],
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "result_bundle": {
+        "sigil": "sha256:a0d63c63cf7002cb2460ce58ead10110b042bba447d0ab5d59052ad8a29210da",
+        "uri": ".benchwork/results/RB-001.json"
+      },
+      "result_bundle_id": "RB-001",
+      "review_receipt": "RC-6059F5DA3824",
+      "reviewed_at": "2026-07-30T14:34:21.331930+00:00",
+      "schema_version": "assessment/1.2",
+      "status": "COMPLETE",
+      "study_mode": "confirmatory",
+      "summary": "Round 2 completed the registered replay_success comparison and validated the repaired control-plane path."
+    }
+  },
+  "claims": {
+    "CL-001": {
+      "claim_id": "CL-001",
+      "evidence_relations": [
+        {
+          "evidence_id": "EV-001",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "program_id": "RP-001",
+      "schema_version": "claim/1.2",
+      "statement": "The minimal canonical workflow preserves research state.",
+      "status": "PROPOSED",
+      "type": "empirical"
+    },
+    "CL-002": {
+      "claim_id": "CL-002",
+      "evidence_relations": [
+        {
+          "evidence_id": "EV-002",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "program_id": "RP-001",
+      "schema_version": "claim/1.2",
+      "statement": "Benchwork reconstructs canonical state from Chronicle after process restart.",
+      "status": "SUPPORTED",
+      "type": "empirical"
+    }
+  },
+  "decisions": {
+    "DE-001": {
+      "assessment_ids": [
+        "AS-001"
+      ],
+      "decision_id": "DE-001",
+      "lineage": null,
+      "outcome": "REPAIR",
+      "program_id": "RP-001",
+      "rationale": "The Benchwork control plane completed successfully, while broader Host and real-study validation remain.",
+      "required_actions": [
+        "Validate the workflow in a non-synthetic real study before making external scientific claims.",
+        "Complete Codex IDE and Claude Code CLI Host acceptance when those environments are available.",
+        "Obtain explicit disclosure authorization before any external review."
+      ],
+      "schema_version": "decision/1.2",
+      "seal_actor": {
+        "actor_id": "interactive-user",
+        "actor_type": "human",
+        "authenticated_by": "codex-explicit-confirmation",
+        "host": "codex"
+      },
+      "seal_receipt": "RC-85E81CCAD550",
+      "sealed_at": "2026-07-30T14:39:42.281640+00:00",
+      "status": "SEALED",
+      "unresolved_issue_ids": [],
+      "unresolved_uncertainties": [
+        "Only the Codex CLI Host was exercised; IDE and Claude Code CLI validation remain unavailable.",
+        "The data are synthetic and validate the Benchwork control plane rather than an external scientific claim.",
+        "The paired differences have zero variance, so a standardized effect is unavailable despite the deterministic mean difference."
+      ]
+    }
+  },
+  "deviations": {},
+  "evidence": {
+    "EV-001": {
+      "claim_relations": [
+        {
+          "claim_id": "CL-001",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "evidence_id": "EV-001",
+      "observation": "The trial records a minimal supported observation.",
+      "program_id": "RP-001",
+      "reproduction_ids": [],
+      "schema_version": "evidence/1.2",
+      "source": {
+        "sigil": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "uri": "trial-source.txt"
+      },
+      "verification": {
+        "content_inspected": true,
+        "source_resolved": true
+      }
+    },
+    "EV-002": {
+      "claim_relations": [
+        {
+          "claim_id": "CL-002",
+          "relation": "SUPPORTS",
+          "status": "VERIFIED"
+        }
+      ],
+      "evidence_id": "EV-002",
+      "observation": "The dogfood source defines the expected replay behavior.",
+      "program_id": "RP-001",
+      "reproduction_ids": [],
+      "schema_version": "evidence/1.2",
+      "source": {
+        "sigil": "sha256:6a98fcb971fa3ec0e0ddcf8ff607093e2c730e6953a50bb7a0a6ea5582996f9a",
+        "uri": "trial-source.txt"
+      },
+      "verification": {
+        "content_inspected": true,
+        "source_resolved": true
+      }
+    }
+  },
+  "experiments": {
+    "EX-001": {
+      "experiment_id": "EX-001",
+      "history": [
+        {
+          "at": "2026-07-30T10:16:19.738616+00:00",
+          "event_id": "CE-D6F92F631780",
+          "status": "PLANNED"
+        },
+        {
+          "at": "2026-07-30T10:16:25.565867+00:00",
+          "event_id": "CE-004D35021E08",
+          "status": "IMPLEMENTED"
+        },
+        {
+          "at": "2026-07-30T10:16:35.387817+00:00",
+          "event_id": "CE-0927A1F2A8EC",
+          "status": "PILOT_RUNNING"
+        }
+      ],
+      "hypothesis_id": "HY-002",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "question": "Does Benchwork preserve registered state after process restart?",
+      "schema_version": "experiment/1.2",
+      "status": "PILOT_RUNNING",
+      "working_id": "WK-001"
+    },
+    "EX-002": {
+      "experiment_id": "EX-002",
+      "history": [
+        {
+          "at": "2026-07-30T14:31:26.202596+00:00",
+          "event_id": "CE-FD9FD86FEDFF",
+          "status": "PLANNED"
+        },
+        {
+          "at": "2026-07-30T14:31:26.225455+00:00",
+          "event_id": "CE-B61055E68C91",
+          "status": "IMPLEMENTED"
+        },
+        {
+          "at": "2026-07-30T14:31:26.248213+00:00",
+          "event_id": "CE-542287D1C84F",
+          "status": "PILOT_RUNNING"
+        },
+        {
+          "at": "2026-07-30T14:33:22.827665+00:00",
+          "event_id": "CE-A3BAC0D1482A",
+          "status": "PILOT_COMPLETED"
+        }
+      ],
+      "hypothesis_id": "HY-002",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "question": "Does the registered treatment preserve canonical replay_success compared with baseline?",
+      "schema_version": "experiment/1.2",
+      "status": "PILOT_COMPLETED",
+      "working_id": "WK-002"
+    }
+  },
+  "hypotheses": {
+    "HY-001": {
+      "claim_ids": [
+        "CL-001"
+      ],
+      "hypothesis_id": "HY-001",
+      "prediction": "The protocol remains present and unchanged after process restart.",
+      "program_id": "RP-001",
+      "schema_version": "hypothesis/1.0",
+      "statement": "A sealed protocol can be replayed from Chronicle.",
+      "status": "PROPOSED"
+    },
+    "HY-002": {
+      "claim_ids": [
+        "CL-002"
+      ],
+      "hypothesis_id": "HY-002",
+      "prediction": "The replayed protocol Sigil and canonical fields match the pre-restart state.",
+      "program_id": "RP-001",
+      "schema_version": "hypothesis/1.0",
+      "statement": "A frozen protocol remains identical after restarting the CLI process.",
+      "status": "SUPPORTED"
+    }
+  },
+  "issues": {},
+  "programs": {
+    "RP-001": {
+      "artifacts": [
+        "AR-001",
+        "AR-002"
+      ],
+      "assessments": [
+        "AS-001"
+      ],
+      "claims": [
+        "CL-001",
+        "CL-002"
+      ],
+      "decisions": [
+        "DE-001"
+      ],
+      "deviations": [],
+      "evidence": [
+        "EV-001",
+        "EV-002"
+      ],
+      "hypotheses": [
+        "HY-001",
+        "HY-002"
+      ],
+      "issues": [],
+      "problem": {
+        "statement": "Verify the minimal canonical research workflow."
+      },
+      "program_id": "RP-001",
+      "protocols": [
+        "PT-001",
+        "PT-002"
+      ],
+      "reproduction_records": [],
+      "research_question": {
+        "actor": {
+          "actor_id": "local-user",
+          "actor_type": "human",
+          "authenticated_by": "local-session",
+          "host": "cli"
+        },
+        "seal_receipt": "RC-A11F46B334F6",
+        "sealed_at": "2026-07-30T09:47:53.450632+00:00",
+        "statement": "Can Benchwork preserve a minimal research workflow across restart?"
+      },
+      "schema_version": "research-program/1.1",
+      "slug": "trial-memory",
+      "status": "EVALUATED",
+      "title": "Benchwork dogfood trial"
+    }
+  },
+  "protocols": {
+    "PT-001": {
+      "analysis_plan": "Compare registered replay outcomes between baseline and treatment runs.",
+      "analysis_spec": {
+        "comparisons": [
+          {
+            "arms": [
+              "baseline",
+              "treatment"
+            ],
+            "comparison_id": "CMP-001",
+            "confidence_level": 0.95,
+            "estimand": "mean_difference",
+            "experiment_id": "EX-001",
+            "metric": "score",
+            "pairing": "paired",
+            "uncertainty_method": "student_t"
+          }
+        ],
+        "expected_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "multiple_comparison_policy": "none",
+        "pilot_run_ids": [
+          "RUN-000",
+          "RUN-001"
+        ],
+        "practical_significance_thresholds": {
+          "score": 0.02
+        },
+        "schema_version": "analysis-spec/1.0"
+      },
+      "deviations": [],
+      "hypothesis_ids": [
+        "HY-002"
+      ],
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "schema_version": "study-protocol/1.3",
+      "seal_actor": {
+        "actor_id": "local-user",
+        "actor_type": "human",
+        "authenticated_by": "local-session",
+        "host": "cli"
+      },
+      "seal_receipt": "RC-8CE15AA5E69F",
+      "sealed_at": "2026-07-30T10:12:42.439410+00:00",
+      "status": "FROZEN",
+      "study_mode": "confirmatory",
+      "title": "Minimal Chronicle replay trial"
+    },
+    "PT-002": {
+      "analysis_plan": "Compare registered replay_success outcomes between baseline and treatment while preserving failed excluded Runs.",
+      "analysis_spec": {
+        "comparisons": [
+          {
+            "arms": [
+              "baseline",
+              "treatment"
+            ],
+            "comparison_id": "CMP-002",
+            "confidence_level": 0.95,
+            "estimand": "mean_difference",
+            "experiment_id": "EX-002",
+            "metric": "replay_success",
+            "pairing": "paired",
+            "uncertainty_method": "student_t"
+          }
+        ],
+        "expected_run_ids": [
+          "RUN-101",
+          "RUN-102",
+          "RUN-103",
+          "RUN-104",
+          "RUN-105"
+        ],
+        "multiple_comparison_policy": "none",
+        "pilot_run_ids": [
+          "RUN-101",
+          "RUN-102",
+          "RUN-103",
+          "RUN-104"
+        ],
+        "practical_significance_thresholds": {
+          "replay_success": 0.0
+        },
+        "schema_version": "analysis-spec/1.0"
+      },
+      "deviations": [],
+      "hypothesis_ids": [
+        "HY-002"
+      ],
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "schema_version": "study-protocol/1.3",
+      "seal_actor": {
+        "actor_id": "interactive-user",
+        "actor_type": "human",
+        "authenticated_by": "codex-explicit-confirmation",
+        "host": "codex"
+      },
+      "seal_receipt": "RC-784E362FFF7A",
+      "sealed_at": "2026-07-30T14:29:40.313123+00:00",
+      "status": "FROZEN",
+      "study_mode": "confirmatory",
+      "title": "Chronicle replay dogfood repair trial"
+    }
+  },
+  "reproduction_records": {},
+  "result_bundles": {
+    "RB-001": {
+      "analysis_kind": "deterministic-descriptive-aggregation",
+      "bundle_id": "RB-001",
+      "comparisons": [
+        {
+          "comparison_id": "CMP-002",
+          "control_arm": "baseline",
+          "estimand": "mean_difference",
+          "experiment_id": "EX-002",
+          "metrics": {
+            "replay_success": {
+              "descriptive": {
+                "control": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "min": 0.0,
+                  "n": 2,
+                  "sample_stddev": 0.0
+                },
+                "treatment": {
+                  "max": 1.0,
+                  "mean": 1.0,
+                  "min": 1.0,
+                  "n": 2,
+                  "sample_stddev": 0.0
+                }
+              },
+              "effect": {
+                "estimate": 1.0,
+                "method": "mean_difference",
+                "standardized": {
+                  "estimate": null,
+                  "method": "unavailable",
+                  "reason": "paired differences have zero variance"
+                }
+              },
+              "practical_significance": {
+                "exceeds_threshold": true,
+                "threshold": 0.0
+              },
+              "uncertainty": {
+                "degrees_of_freedom": 1.0,
+                "effective_level": 0.95,
+                "lower": 1.0,
+                "method": "student_t",
+                "reason": null,
+                "requested_level": 0.95,
+                "samples": null,
+                "seed": null,
+                "upper": 1.0
+              }
+            }
+          },
+          "pairing": "paired",
+          "run_ids": {
+            "control": [
+              "RUN-101",
+              "RUN-103"
+            ],
+            "treatment": [
+              "RUN-102",
+              "RUN-104"
+            ]
+          },
+          "treatment_arm": "treatment"
+        }
+      ],
+      "multiple_comparison_policy": "none",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_inventory": {
+        "all_run_ids": [
+          "RUN-101",
+          "RUN-102",
+          "RUN-103",
+          "RUN-104",
+          "RUN-105"
+        ],
+        "excluded_runs": [
+          {
+            "policy_reference": "PT-002#analysis-plan",
+            "reason": "Synthetic failure retained for negative-result testing.",
+            "run_id": "RUN-105",
+            "status": "FAILED"
+          }
+        ],
+        "failed_run_ids": [
+          "RUN-105"
+        ],
+        "included_run_ids": [
+          "RUN-101",
+          "RUN-102",
+          "RUN-103",
+          "RUN-104"
+        ],
+        "missing_run_ids": []
+      },
+      "schema_version": "result-bundle/1.1"
+    }
+  },
+  "review_artifacts": {
+    "RV-001": {
+      "acceptance_receipt": null,
+      "accepted_at": null,
+      "approval": {
+        "approved_at": null,
+        "approved_by": null,
+        "rationale": null,
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "completed_at": "2026-07-30T14:37:29.106354+00:00",
+      "completion_receipt": "RC-6E02CB1880A3",
+      "disclosure": {
+        "includes_credentials": false,
+        "includes_private_data": false,
+        "includes_source_code": false,
+        "includes_unpublished_results": true
+      },
+      "program_id": "RP-001",
+      "result": {
+        "findings": [
+          "PT-002 Analysis Spec matches EX-002, RUN-101 through RUN-105, replay_success, arms, and seeds.",
+          "RUN-105 remains canonical as FAILED and excluded with its registered reason.",
+          "RB-001 primary analysis includes only RUN-101 through RUN-104 and is scoped only to EX-002.",
+          "AS-001 records synthetic-data and Host-coverage limitations and does not promote the result to a general scientific claim.",
+          "PT-001 and EX-001 traces are byte-identical to the preserved Round 1 snapshots.",
+          "Schema validation, Artifact Sigil verification, canonical jq assertions, and Deep Doctor all passed."
+        ],
+        "recommendation": "REPAIR",
+        "residual_risks": [
+          "The data are synthetic.",
+          "Paired differences have zero variance, so standardized effect size is unavailable.",
+          "IDE and Claude Code CLI Host validation remain incomplete.",
+          "External review remains unauthorized.",
+          "The first pilot Task completion was rejected as stale after canonical Run registration; the rejection is preserved and a fresh Snapshot-bound Task completed successfully."
+        ],
+        "summary": "The sealed Protocol, registered Runs, Alembic Result Bundle, Assessment, and preserved Round 1 evidence are internally consistent."
+      },
+      "review_id": "RV-001",
+      "reviewer": {
+        "kind": "agent",
+        "name": "codex-local-review"
+      },
+      "schema_version": "review-artifact/1.0",
+      "scope": {
+        "checks": [
+          "PT-002 Analysis Spec equals the registered EX-002 Run contract.",
+          "RUN-105 remains FAILED and excluded rather than deleted.",
+          "RB-001 includes only RUN-101 through RUN-104 in the primary comparison.",
+          "AS-001 separates synthetic numerical facts from broader scientific interpretation.",
+          "Round 1 canonical objects remain present and unchanged."
+        ],
+        "summary": "Review the Round 2 repair for Protocol/Run/Experiment alignment, failed-Run preservation, Alembic scope, Assessment limitations, and readiness for a REPAIR Decision preview."
+      },
+      "source": {
+        "execution": "local",
+        "host": "codex",
+        "provider": null
+      },
+      "status": "COMPLETED",
+      "target": {
+        "commit": null,
+        "files": [
+          "analysis-spec-round2.json",
+          "implementation-artifact-round2.json"
+        ],
+        "repository": "benchwork-trial"
+      },
+      "task_id": "TK-275B79CB5D04"
+    }
+  },
+  "review_requests": {
+    "RV-001": {
+      "approval": {
+        "approved_at": null,
+        "approved_by": null,
+        "rationale": null,
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "destination": {
+        "execution": "local",
+        "provider": null
+      },
+      "disclosure": {
+        "includes_credentials": false,
+        "includes_private_data": false,
+        "includes_source_code": false,
+        "includes_unpublished_results": true
+      },
+      "program_id": "RP-001",
+      "request_receipt": "RC-63A6E1866CF1",
+      "requested_at": "2026-07-30T14:35:12.190246+00:00",
+      "review_id": "RV-001",
+      "schema_version": "review-request/1.0",
+      "scope": {
+        "checks": [
+          "PT-002 Analysis Spec equals the registered EX-002 Run contract.",
+          "RUN-105 remains FAILED and excluded rather than deleted.",
+          "RB-001 includes only RUN-101 through RUN-104 in the primary comparison.",
+          "AS-001 separates synthetic numerical facts from broader scientific interpretation.",
+          "Round 1 canonical objects remain present and unchanged."
+        ],
+        "summary": "Review the Round 2 repair for Protocol/Run/Experiment alignment, failed-Run preservation, Alembic scope, Assessment limitations, and readiness for a REPAIR Decision preview."
+      },
+      "status": "COMPLETED",
+      "target": {
+        "commit": null,
+        "files": [
+          "analysis-spec-round2.json",
+          "implementation-artifact-round2.json"
+        ],
+        "repository": "benchwork-trial"
+      },
+      "type": "local_review"
+    }
+  },
+  "runs": {
+    "RUN-001": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "run_id": "RUN-001",
+      "schema_version": "run/1.2",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "RUN-002": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "run_id": "RUN-002",
+      "schema_version": "run/1.2",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "RUN-003": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "run_id": "RUN-003",
+      "schema_version": "run/1.2",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "RUN-004": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "run_id": "RUN-004",
+      "schema_version": "run/1.2",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "RUN-005": {
+      "analysis_disposition": {
+        "included": false,
+        "policy_reference": "PT-001#analysis-plan",
+        "reason": "Synthetic failed run retained for negative-result validation."
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-001",
+      "metrics": {},
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "run_id": "RUN-005",
+      "schema_version": "run/1.2",
+      "seed": 3,
+      "status": "FAILED"
+    },
+    "RUN-101": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-002#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-002",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_id": "RUN-101",
+      "schema_version": "run/1.2",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "RUN-102": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-002#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-002",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_id": "RUN-102",
+      "schema_version": "run/1.2",
+      "seed": 1,
+      "status": "COMPLETED"
+    },
+    "RUN-103": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-002#analysis-plan",
+        "reason": null
+      },
+      "arm": "baseline",
+      "artifacts": [],
+      "experiment_id": "EX-002",
+      "metrics": {
+        "replay_success": 0.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_id": "RUN-103",
+      "schema_version": "run/1.2",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "RUN-104": {
+      "analysis_disposition": {
+        "included": true,
+        "policy_reference": "PT-002#analysis-plan",
+        "reason": null
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-002",
+      "metrics": {
+        "replay_success": 1.0
+      },
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_id": "RUN-104",
+      "schema_version": "run/1.2",
+      "seed": 2,
+      "status": "COMPLETED"
+    },
+    "RUN-105": {
+      "analysis_disposition": {
+        "included": false,
+        "policy_reference": "PT-002#analysis-plan",
+        "reason": "Synthetic failure retained for negative-result testing."
+      },
+      "arm": "treatment",
+      "artifacts": [],
+      "experiment_id": "EX-002",
+      "metrics": {},
+      "phase": "PILOT",
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "run_id": "RUN-105",
+      "schema_version": "run/1.2",
+      "seed": 3,
+      "status": "FAILED"
+    }
+  },
+  "workings": {
+    "WK-001": {
+      "history": [
+        {
+          "at": "2026-07-30T10:13:15.842335+00:00",
+          "canonical_event_id": "CE-A53ADE916123",
+          "object_id": "WK-001",
+          "reason": "created",
+          "stage": "IMPLEMENTATION"
+        },
+        {
+          "at": "2026-07-30T10:15:40.615528+00:00",
+          "canonical_event_id": "CE-32EAC70BE810",
+          "object_id": "AR-001",
+          "reason": "exit contract satisfied by artifact.registered",
+          "stage": "PILOT"
+        }
+      ],
+      "program_id": "RP-001",
+      "protocol_id": "PT-001",
+      "rite": {
+        "description": "A Working-bound canonical-event computational research study.",
+        "rite_id": "computational-study@0.2.1",
+        "schema_version": "rite/1.1",
+        "stages": [
+          {
+            "exit_contract": {
+              "event_type": "artifact.registered",
+              "kind": "implementation",
+              "object_type": "artifact",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "IMPLEMENTATION"
+          },
+          {
+            "exit_contract": {
+              "event_type": "experiment.pilot_completed",
+              "object_type": "experiment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "PILOT"
+          },
+          {
+            "exit_contract": {
+              "event_type": "analysis.computed",
+              "object_type": "result-bundle",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "ANALYSIS"
+          },
+          {
+            "exit_contract": {
+              "event_type": "assessment.recorded",
+              "object_type": "assessment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "REVIEW"
+          },
+          {
+            "exit_contract": {
+              "event_type": "decision.sealed",
+              "object_type": "decision",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "DECISION"
+          },
+          {
+            "name": "COMPLETED"
+          }
+        ]
+      },
+      "rite_id": "computational-study@0.2.1",
+      "rite_sigil": "sha256:1d942b9229ebd9ec54c3f6f1991e9a96efccdbc096bfc1776e78523632260ba8",
+      "schema_version": "working/1.1",
+      "stage": "PILOT",
+      "status": "ACTIVE",
+      "working_id": "WK-001"
+    },
+    "WK-002": {
+      "history": [
+        {
+          "at": "2026-07-30T14:29:40.337324+00:00",
+          "canonical_event_id": "CE-8077442B202A",
+          "object_id": "WK-002",
+          "reason": "created",
+          "stage": "IMPLEMENTATION"
+        },
+        {
+          "at": "2026-07-30T14:31:26.180034+00:00",
+          "canonical_event_id": "CE-5026267DDA9D",
+          "object_id": "AR-002",
+          "reason": "exit contract satisfied by artifact.registered",
+          "stage": "PILOT"
+        },
+        {
+          "at": "2026-07-30T14:33:22.827665+00:00",
+          "canonical_event_id": "CE-A3BAC0D1482A",
+          "object_id": "EX-002",
+          "reason": "exit contract satisfied by experiment.pilot_completed",
+          "stage": "ANALYSIS"
+        },
+        {
+          "at": "2026-07-30T14:33:44.601684+00:00",
+          "canonical_event_id": "CE-081E7C2E7F43",
+          "object_id": "RB-001",
+          "reason": "exit contract satisfied by analysis.computed",
+          "stage": "REVIEW"
+        },
+        {
+          "at": "2026-07-30T14:34:21.331930+00:00",
+          "canonical_event_id": "CE-823D9B8096DF",
+          "object_id": "AS-001",
+          "reason": "exit contract satisfied by assessment.recorded",
+          "stage": "DECISION"
+        },
+        {
+          "at": "2026-07-30T14:39:42.281640+00:00",
+          "canonical_event_id": "CE-E1A982AA9E6F",
+          "object_id": "DE-001",
+          "reason": "exit contract satisfied by decision.sealed",
+          "stage": "COMPLETED"
+        }
+      ],
+      "program_id": "RP-001",
+      "protocol_id": "PT-002",
+      "rite": {
+        "description": "A Working-bound canonical-event computational research study.",
+        "rite_id": "computational-study@0.2.1",
+        "schema_version": "rite/1.1",
+        "stages": [
+          {
+            "exit_contract": {
+              "event_type": "artifact.registered",
+              "kind": "implementation",
+              "object_type": "artifact",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "IMPLEMENTATION"
+          },
+          {
+            "exit_contract": {
+              "event_type": "experiment.pilot_completed",
+              "object_type": "experiment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "PILOT"
+          },
+          {
+            "exit_contract": {
+              "event_type": "analysis.computed",
+              "object_type": "result-bundle",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "ANALYSIS"
+          },
+          {
+            "exit_contract": {
+              "event_type": "assessment.recorded",
+              "object_type": "assessment",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "REVIEW"
+          },
+          {
+            "exit_contract": {
+              "event_type": "decision.sealed",
+              "object_type": "decision",
+              "same_program": true,
+              "same_protocol": true
+            },
+            "name": "DECISION"
+          },
+          {
+            "name": "COMPLETED"
+          }
+        ]
+      },
+      "rite_id": "computational-study@0.2.1",
+      "rite_sigil": "sha256:1d942b9229ebd9ec54c3f6f1991e9a96efccdbc096bfc1776e78523632260ba8",
+      "schema_version": "working/1.1",
+      "stage": "COMPLETED",
+      "status": "COMPLETED",
+      "working_id": "WK-002"
+    }
+  }
+}
