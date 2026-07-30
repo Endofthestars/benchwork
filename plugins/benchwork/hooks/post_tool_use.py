@@ -13,6 +13,10 @@ from typing import Any
 
 TEST_COMMAND = re.compile(r"(?i)\b(pytest|unittest|tox|nox|cargo test|go test|npm test|npm run test)\b")
 EXPERIMENT_COMMAND = re.compile(r"(?i)\b(pilot|experiment|train|benchmark|evaluate|inference)\b")
+ARTIFACT_COMMAND = re.compile(
+    r"(?i)(?:--(?:output|output-dir|save|save-dir|checkpoint)(?:=|\s+)"
+    r"|(?:^|[\s\"'])(?:artifacts?|outputs?|results?|checkpoints?)/[^\s\"']+)"
+)
 CORE_PATH = re.compile(r"(?m)(?:src/benchwork/|schemas/|pyproject\.toml)")
 
 
@@ -26,15 +30,24 @@ def _state_path(session_id: str) -> Path | None:
 
 def _load(path: Path | None) -> dict[str, bool]:
     if path is None:
-        return {"core_changed": False, "tests_run": False}
+        return {
+            "core_changed": False,
+            "tests_run": False,
+            "artifact_pending": False,
+        }
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
         return {
             "core_changed": bool(value.get("core_changed")),
             "tests_run": bool(value.get("tests_run")),
+            "artifact_pending": bool(value.get("artifact_pending")),
         }
     except (OSError, json.JSONDecodeError):
-        return {"core_changed": False, "tests_run": False}
+        return {
+            "core_changed": False,
+            "tests_run": False,
+            "artifact_pending": False,
+        }
 
 
 def _save(path: Path | None, value: dict[str, bool]) -> None:
@@ -86,8 +99,17 @@ def main() -> int:
             messages.append("Core changes remain unvalidated by a successful relevant test.")
     if tool == "Bash" and EXPERIMENT_COMMAND.search(tool_input) and not _failed(response):
         messages.append("Register every experimental outcome, including negative Runs, through Benchwork MCP.")
+    if tool == "Bash" and ARTIFACT_COMMAND.search(tool_input) and not _failed(response):
+        state["artifact_pending"] = True
+    if tool.endswith("benchwork_register_artifact") and not _failed(response):
+        state["artifact_pending"] = False
     if tool.endswith("benchwork_record_run"):
         messages = [message for message in messages if "experimental outcome" not in message]
+    if state["artifact_pending"]:
+        messages.append(
+            "A generated output may be an unregistered Artifact; register its project-relative "
+            "path and Sigil through Benchwork MCP."
+        )
     if _failed(response):
         messages.append("Preserve this failure in the Task or Run record; do not silently discard it.")
     _save(path, state)

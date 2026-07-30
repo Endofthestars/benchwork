@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from benchwork.athanor import Athanor, AthanorError
+
 
 HOOKS = Path(__file__).parents[2] / "plugins" / "benchwork" / "hooks"
 
@@ -43,6 +45,19 @@ class HookTest(unittest.TestCase):
         self.assertEqual(code, 0)
         decision = output["hookSpecificOutput"]
         self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_pre_tool_allows_ordinary_source_patch(self) -> None:
+        code, output = run_hook(
+            "pre_tool_use.py",
+            {
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": "*** Update File: src/benchwork/athanor.py\n"
+                },
+            },
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(output, {})
 
     def test_pre_tool_denies_destructive_shell_but_allows_read(self) -> None:
         denied_commands = (
@@ -101,3 +116,41 @@ class HookTest(unittest.TestCase):
             )
         self.assertIn("smallest relevant tests", str(edit))
         self.assertIn("Preserve this failure", str(failure))
+
+    def test_post_tool_tracks_generated_artifact_until_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {**os.environ, "PLUGIN_DATA": directory}
+            _, generated = run_hook(
+                "post_tool_use.py",
+                {
+                    "session_id": "session-artifact",
+                    "tool_name": "Bash",
+                    "tool_input": {
+                        "command": "python train.py --output artifacts/model.bin"
+                    },
+                    "tool_response": {"exit_code": 0},
+                },
+                environment=environment,
+            )
+            _, registered = run_hook(
+                "post_tool_use.py",
+                {
+                    "session_id": "session-artifact",
+                    "tool_name": "mcp__benchwork__benchwork_register_artifact",
+                    "tool_input": {"artifact_id": "AR-001"},
+                    "tool_response": {"ok": True},
+                },
+                environment=environment,
+            )
+        self.assertIn("unregistered Artifact", str(generated))
+        self.assertNotIn("unregistered Artifact", str(registered))
+
+    def test_athanor_rejects_invalid_transition_without_hook_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            athanor = Athanor(Path(directory))
+            athanor.initialize()
+            with self.assertRaisesRegex(
+                AthanorError,
+                "Protocol is not an unsealed draft",
+            ):
+                athanor.seal_protocol("PT-404")
