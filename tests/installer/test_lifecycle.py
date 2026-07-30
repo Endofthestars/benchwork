@@ -347,11 +347,16 @@ class ManagerLifecycleTest(unittest.TestCase):
                 self.assertFalse(installation_status()["installed"])
                 with patch(
                     "benchwork.install.manager.shutil.which",
-                    return_value=str(Path(sys.executable).with_name("bwork")),
+                    side_effect=lambda command: (
+                        str(Path(sys.executable).with_name("bwork"))
+                        if command == "bwork"
+                        else None
+                    ),
                 ):
                     doctor = installation_doctor()
         self.assertTrue(doctor["ok"])
         self.assertEqual(doctor["project_state"], "NOT_TOUCHED")
+        self.assertFalse(doctor["checks"]["codex"]["detected"])
 
     def test_download_bounds_integrity_and_redirect_failures(self) -> None:
         with self.assertRaisesRegex(InstallationError, "HTTPS"):
@@ -608,7 +613,7 @@ class ManagerLifecycleTest(unittest.TestCase):
                         / "plugins"
                         / "current"
                     ).resolve(),
-                    Path(installed["path"]),
+                    Path(installed["path"]).resolve(),
                 )
 
     def test_repair_configures_hosts_path_and_project_uninstall(self) -> None:
