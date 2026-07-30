@@ -46,7 +46,9 @@
               "artifact",
               "issue",
               "deviation",
-              "reproduction-record"
+              "reproduction-record",
+              "review-request",
+              "review-artifact"
             ]
           },
           "object_sigil": {

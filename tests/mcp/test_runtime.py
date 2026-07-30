@@ -165,7 +165,7 @@ class MCPRuntimeTest(unittest.TestCase):
             async with Client(create_server(self.root)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 33)
+                self.assertEqual(len(names), 38)
                 self.assertIn("benchwork_compute_analysis", names)
                 result = await client.call_tool("benchwork_status", {})
                 self.assertTrue(result.structured_content["ok"])
@@ -201,7 +201,7 @@ class MCPRuntimeTest(unittest.TestCase):
             listed = await server._dispatch_stdio(
                 {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}
             )
-            self.assertEqual(len(listed["result"]["tools"]), 33)
+            self.assertEqual(len(listed["result"]["tools"]), 38)
             called = await server._dispatch_stdio(
                 {
                     "jsonrpc": "2.0",
@@ -589,7 +589,7 @@ class MCPRuntimeTest(unittest.TestCase):
                     await session.initialize()
                     tools = await session.list_tools()
                     names = {tool.name for tool in tools.tools}
-                    self.assertEqual(len(names), 33)
+                    self.assertEqual(len(names), 38)
                     result = await session.call_tool("benchwork_status", {})
                     self.assertTrue(result.structured_content["ok"])
 

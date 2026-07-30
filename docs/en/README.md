@@ -49,6 +49,7 @@ English is the canonical source for all Benchwork documentation.
 - [M10 acceptance matrix](M10_ACCEPTANCE.md)
 - [Phase 2 acceptance matrix](PHASE2_ACCEPTANCE.md)
 - [Benchwork Codex plugin](plugins/benchwork.md)
+- [Acceptance Exception Policy](plugins/acceptance-exception-policy.md)
 - [0.2.0rc1 release notes](releases/0.2.0rc1.md)
 
 Architecture notes describe implemented boundaries unless a page explicitly

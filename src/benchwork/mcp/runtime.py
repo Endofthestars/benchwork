@@ -46,6 +46,8 @@ COLLECTIONS = (
     "issues",
     "deviations",
     "agent_results",
+    "review_requests",
+    "review_artifacts",
 )
 
 
@@ -233,6 +235,25 @@ class BenchworkTools:
 
         return self._run(tool, operation)
 
+    def benchwork_get_review(self, review_id: str) -> dict[str, Any]:
+        """Read a Review Request and its completed Artifact, when present."""
+        tool = "benchwork_get_review"
+
+        def operation() -> dict[str, Any]:
+            state = self._athanor().replay()
+            request = state["review_requests"].get(review_id)
+            if request is None:
+                raise AthanorError(f"unknown Review Request: {review_id}")
+            return success(
+                tool,
+                {
+                    "request": request,
+                    "artifact": state["review_artifacts"].get(review_id),
+                },
+            )
+
+        return self._run(tool, operation)
+
     def benchwork_trace(
         self,
         object_id: str,
@@ -370,6 +391,7 @@ class BenchworkTools:
         time_budget_seconds: int | None = None,
         network: bool | None = None,
         approval_reason: str | None = None,
+        review_id: str | None = None,
     ) -> dict[str, Any]:
         """Open a bounded Codex Task Capsule and evaluate it through Ward."""
         tool = "benchwork_open_task"
@@ -379,6 +401,41 @@ class BenchworkTools:
             athanor = Athanor(root)
             registry = CapabilityRegistry(root)
             contract = registry.get(capability)
+            bindings = None
+            if capability in {
+                "bench.review.local",
+                "bench.review.external",
+                "bench.review.accept",
+            }:
+                if review_id is None:
+                    raise AthanorError(f"{capability} requires a Review Request ID")
+                state = athanor.replay()
+                request = state["review_requests"].get(review_id)
+                artifact = state["review_artifacts"].get(review_id)
+                if request is None:
+                    raise AthanorError(f"unknown Review Request: {review_id}")
+                if capability == "bench.review.local" and (
+                    request["type"] != "local_review"
+                    or request["status"] != "PREPARED"
+                ):
+                    raise AthanorError(
+                        f"Local Review Request is not prepared: {review_id}"
+                    )
+                if capability == "bench.review.external" and (
+                    request["type"] != "external_diff_review"
+                    or request["status"] != "APPROVED"
+                    or request["approval"]["status"] != "APPROVED"
+                ):
+                    raise AthanorError(
+                        f"Review is waiting for disclosure authorization: {review_id}"
+                    )
+                if capability == "bench.review.accept" and (
+                    artifact is None or artifact["status"] != "COMPLETED"
+                ):
+                    raise AthanorError(
+                        f"Review is not awaiting acceptance: {review_id}"
+                    )
+                bindings = {"review_id": review_id}
             capsule = TaskService(
                 athanor,
                 registry,
@@ -397,6 +454,7 @@ class BenchworkTools:
                     "network": network if network is not None else contract["network"],
                 },
                 host="codex",
+                bindings=bindings,
             )
             receipt = None
             if approval_reason is not None:
@@ -768,6 +826,152 @@ class BenchworkTools:
                 hypothesis_findings,
             )
             return success(tool, {"assessment_id": assessment_id}, receipt=receipt)
+
+        return self._run(tool, operation)
+
+    def benchwork_prepare_review(
+        self,
+        review_id: str,
+        program_id: str,
+        review_type: str,
+        target: dict[str, Any],
+        scope: dict[str, Any],
+        disclosure: dict[str, Any],
+        destination: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Prepare a local or external Review Request without invoking a reviewer."""
+        tool = "benchwork_prepare_review"
+
+        def operation() -> dict[str, Any]:
+            receipt = self._athanor().prepare_review(
+                review_id,
+                program_id,
+                review_type,
+                target,
+                scope,
+                disclosure,
+                destination,
+            )
+            request = self._athanor().review_requests()[review_id]
+            external = review_type == "external_diff_review"
+            return success(
+                tool,
+                {"review": request},
+                receipt=receipt,
+                warnings=(
+                    [
+                        "No repository content has been disclosed. "
+                        "Explicit disclosure authorization is still required."
+                    ]
+                    if external
+                    else []
+                ),
+                next_actions=(
+                    ["Request explicit disclosure authorization for this Review Request"]
+                    if external
+                    else ["Open a bench.review.local Task and perform a read-only local review"]
+                ),
+            )
+
+        return self._run(tool, operation)
+
+    def benchwork_approve_external_review(
+        self,
+        review_id: str,
+        approved_by: str,
+        rationale: str,
+    ) -> dict[str, Any]:
+        """Record explicit human disclosure approval for one external Review Request."""
+        tool = "benchwork_approve_external_review"
+        actor = {
+            "actor_id": approved_by,
+            "actor_type": "human",
+            "host": "codex",
+            "authenticated_by": "codex-explicit-disclosure-confirmation",
+        }
+
+        def operation() -> dict[str, Any]:
+            receipt = self._athanor().approve_external_review(
+                review_id,
+                approved_by,
+                rationale,
+                actor=actor,
+            )
+            return success(
+                tool,
+                {"review": self._athanor().review_requests()[review_id]},
+                receipt=receipt,
+                next_actions=[
+                    "Open the Ward-gated bench.review.external Task before disclosure"
+                ],
+            )
+
+        return self._run(tool, operation)
+
+    def benchwork_record_review(
+        self,
+        review_id: str,
+        task_id: str,
+        reviewer_kind: str,
+        reviewer_name: str,
+        summary: str,
+        findings: list[str],
+        residual_risks: list[str],
+        recommendation: str,
+        host: str = "codex",
+    ) -> dict[str, Any]:
+        """Record a completed Review; this tool never invokes the reviewer."""
+        tool = "benchwork_record_review"
+
+        def operation() -> dict[str, Any]:
+            receipt = self._athanor().record_review(
+                review_id,
+                task_id,
+                {"kind": reviewer_kind, "name": reviewer_name},
+                {
+                    "summary": summary,
+                    "findings": findings,
+                    "residual_risks": residual_risks,
+                    "recommendation": recommendation,
+                },
+                host,
+            )
+            return success(
+                tool,
+                {"review": self._athanor().review_artifacts()[review_id]},
+                receipt=receipt,
+                warnings=["A completed Review remains advisory until explicitly accepted."],
+                next_actions=["Request human acceptance of the Review Artifact"],
+            )
+
+        return self._run(tool, operation)
+
+    def benchwork_accept_review(
+        self,
+        review_id: str,
+        rationale: str,
+        accepted_by: str,
+    ) -> dict[str, Any]:
+        """Accept a completed Review Artifact with an explicit human actor."""
+        tool = "benchwork_accept_review"
+        actor = {
+            "actor_id": accepted_by,
+            "actor_type": "human",
+            "host": "codex",
+            "authenticated_by": "codex-explicit-review-acceptance",
+        }
+
+        def operation() -> dict[str, Any]:
+            receipt = self._athanor().accept_review(
+                review_id,
+                rationale,
+                actor=actor,
+            )
+            return success(
+                tool,
+                {"review": self._athanor().review_artifacts()[review_id]},
+                receipt=receipt,
+            )
 
         return self._run(tool, operation)
 

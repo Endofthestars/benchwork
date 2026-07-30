@@ -1,0 +1,33 @@
+{
+  "schema_version": "review-request/1.0",
+  "review_id": "RV-EXAMPLE",
+  "program_id": "RP-001",
+  "type": "external_diff_review",
+  "target": {
+    "repository": "owner/repository",
+    "commit": null,
+    "files": []
+  },
+  "scope": {
+    "summary": "Review the selected diff without expanding the disclosed scope.",
+    "checks": ["correctness", "tests", "security", "research-integrity"]
+  },
+  "disclosure": {
+    "includes_source_code": true,
+    "includes_private_data": false,
+    "includes_credentials": false,
+    "includes_unpublished_results": false
+  },
+  "destination": {
+    "execution": "external",
+    "provider": "codex"
+  },
+  "approval": {
+    "required": true,
+    "status": "WAITING_FOR_DISCLOSURE_AUTHORIZATION",
+    "approved_by": null,
+    "approved_at": null,
+    "rationale": null
+  },
+  "status": "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+}

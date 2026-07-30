@@ -47,6 +47,8 @@ or removal has no canonical research-state effect.
 - Subagents are advisory and read-only unless a user explicitly delegates a
   separate mutation boundary.
 - No scientific capability is bound to one provider or model.
+- External Review disclosure requires approval for the exact Review Request;
+  broad CLI or IDE authorization is insufficient.
 
 ## Compatibility and migration
 
@@ -92,6 +94,8 @@ conversation history, or hidden reasoning.
 - Explicit and implicit skill-selection fixtures cover representative prompts.
 - Plugin validation accepts the manifest and bundled MCP configuration.
 - Install packaging does not read or mutate `.benchwork/`.
-- In-memory and subprocess clients discover the same 33 tools.
+- Host acceptance follows Kernel, CLI, and optional IDE tiers; an unavailable
+  graphical Host is recorded as `BLOCKED_BY_ENVIRONMENT`.
+- In-memory and subprocess clients discover the same 38 tools.
 - Direct native writes to `.benchwork/` are denied by hook fixtures.
 - Disabling hooks does not weaken Athanor validation.

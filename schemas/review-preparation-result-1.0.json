@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/review-preparation-result/1.0",
+  "allOf": [
+    {"$ref": "https://benchwork.dev/schemas/capability-output/1.0"},
+    {
+      "properties": {
+        "schema_version": {"const": "review-preparation-result/1.0"},
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["review_type", "target", "scope", "disclosure", "destination"],
+          "properties": {
+            "review_type": {"enum": ["local_review", "external_diff_review"]},
+            "target": {
+              "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/target"
+            },
+            "scope": {
+              "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/scope"
+            },
+            "disclosure": {
+              "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/disclosure"
+            },
+            "destination": {
+              "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/destination"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -11,6 +11,15 @@ repository marketplace to Codex, enable the plugin, review its hooks with
 
 Use native Codex tools for repository inspection, patches, shell, Git, web
 search, and review. Use `mcp__benchwork__*` tools for canonical research state.
+Review locally by default. An external diff review requires a prepared Review
+Request, explicit disclosure approval, a Ward-approved external Review Task,
+and recorded Review provenance. General CLI or IDE authorization is not
+disclosure authorization.
 
 The plugin and its hooks are not the security boundary. Ward and Athanor still
 validate every accepted transition.
+
+Host acceptance is tiered. A missing graphical extension Host can be recorded
+as `BLOCKED_BY_ENVIRONMENT` without blocking Kernel, MCP, or CLI acceptance.
+See the repository
+[Acceptance Exception Policy](../../docs/en/plugins/acceptance-exception-policy.md).

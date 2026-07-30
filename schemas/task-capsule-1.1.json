@@ -77,6 +77,13 @@
         "network": {"type": "boolean"}
       }
     },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_id": {"type": "string", "pattern": "^RV-"}
+      }
+    },
     "capsule_sigil": {
       "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"
     }

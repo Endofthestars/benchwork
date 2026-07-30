@@ -60,6 +60,8 @@ PROGRAM_OBJECT_COLLECTIONS = (
     "issues",
     "deviations",
     "reproduction_records",
+    "review_requests",
+    "review_artifacts",
 )
 PROGRAM_STATUS_ORDER = {
     status: index
@@ -956,6 +958,8 @@ class Athanor:
         deviations: dict[str, dict[str, Any]] = {}
         reproduction_records: dict[str, dict[str, Any]] = {}
         agent_results: dict[str, dict[str, Any]] = {}
+        review_requests: dict[str, dict[str, Any]] = {}
+        review_artifacts: dict[str, dict[str, Any]] = {}
         for event in events:
             payload = event["payload"]
             object_id = event["object_id"]
@@ -1235,6 +1239,140 @@ class Athanor:
                     "receipt_id": event["receipt"]["receipt_id"],
                     "granted_at": event["occurred_at"],
                 }
+            elif event["type"] == "review.requested":
+                program = programs.get(payload["program_id"])
+                if program is None or object_id in review_requests:
+                    raise AthanorError(f"invalid Review Request: {object_id}")
+                external = payload["type"] == "external_diff_review"
+                expected_execution = "external" if external else "local"
+                expected_status = (
+                    "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+                    if external
+                    else "PREPARED"
+                )
+                expected_approval_status = (
+                    "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+                    if external
+                    else "NOT_REQUIRED"
+                )
+                if (
+                    payload["destination"]["execution"] != expected_execution
+                    or payload["status"] != expected_status
+                    or payload["approval"]["required"] is not external
+                    or payload["approval"]["status"] != expected_approval_status
+                    or payload["approval"]["approved_by"] is not None
+                    or payload["approval"]["approved_at"] is not None
+                    or payload["approval"]["rationale"] is not None
+                    or (
+                        external
+                        and (
+                            not payload["destination"]["provider"]
+                            or payload["disclosure"]["includes_credentials"]
+                        )
+                    )
+                    or (
+                        not external
+                        and payload["destination"]["provider"] is not None
+                    )
+                ):
+                    raise AthanorError(f"invalid Review Request boundary: {object_id}")
+                review_requests[object_id] = {
+                    "schema_version": "review-request/1.0",
+                    "review_id": object_id,
+                    "program_id": payload["program_id"],
+                    "type": payload["type"],
+                    "target": payload["target"],
+                    "scope": payload["scope"],
+                    "disclosure": payload["disclosure"],
+                    "destination": payload["destination"],
+                    "approval": payload["approval"],
+                    "status": payload["status"],
+                    "requested_at": event["occurred_at"],
+                    "request_receipt": event["receipt"]["receipt_id"],
+                }
+            elif event["type"] == "review.approved":
+                review = review_requests.get(object_id)
+                if (
+                    review is None
+                    or review["type"] != "external_diff_review"
+                    or review["status"] != "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+                    or review["disclosure"]["includes_credentials"]
+                    or event_actor["actor_type"] != "human"
+                    or payload["approved_by"] != event_actor["actor_id"]
+                ):
+                    raise AthanorError(f"invalid Review disclosure approval: {object_id}")
+                review["approval"] = {
+                    "required": True,
+                    "status": "APPROVED",
+                    "approved_by": payload["approved_by"],
+                    "approved_at": event["occurred_at"],
+                    "rationale": payload["rationale"],
+                }
+                review["status"] = "APPROVED"
+            elif event["type"] == "review.completed":
+                review = review_requests.get(object_id)
+                agent_result = agent_results.get(payload["task_id"])
+                expected_capability = (
+                    "bench.review.external"
+                    if review is not None
+                    and review["type"] == "external_diff_review"
+                    else "bench.review.local"
+                )
+                if (
+                    review is None
+                    or object_id in review_artifacts
+                    or review["status"]
+                    not in {"PREPARED", "APPROVED"}
+                    or (
+                        review["type"] == "external_diff_review"
+                        and review["approval"]["status"] != "APPROVED"
+                    )
+                    or payload["source"]["execution"]
+                    != review["destination"]["execution"]
+                    or payload["source"]["provider"]
+                    != review["destination"]["provider"]
+                    or agent_result is None
+                    or agent_result["schema_version"] != "agent-result-record/1.1"
+                    or agent_result["program_id"] != review["program_id"]
+                    or agent_result["status"] != "COMPLETED"
+                    or agent_result["capability"]["id"] != expected_capability
+                    or agent_result.get("bindings", {}).get("review_id") != object_id
+                ):
+                    raise AthanorError(f"invalid Review completion: {object_id}")
+                review["status"] = "COMPLETED"
+                review_artifacts[object_id] = {
+                    "schema_version": "review-artifact/1.0",
+                    "review_id": object_id,
+                    "task_id": payload["task_id"],
+                    "program_id": review["program_id"],
+                    "source": payload["source"],
+                    "reviewer": payload["reviewer"],
+                    "target": review["target"],
+                    "scope": review["scope"],
+                    "disclosure": review["disclosure"],
+                    "approval": review["approval"],
+                    "result": payload["result"],
+                    "status": "COMPLETED",
+                    "completed_at": event["occurred_at"],
+                    "completion_receipt": event["receipt"]["receipt_id"],
+                    "accepted_at": None,
+                    "acceptance_receipt": None,
+                }
+            elif event["type"] == "review.accepted":
+                review = review_requests.get(object_id)
+                artifact = review_artifacts.get(object_id)
+                if (
+                    review is None
+                    or artifact is None
+                    or review["status"] != "COMPLETED"
+                    or artifact["status"] != "COMPLETED"
+                    or event_actor["actor_type"] != "human"
+                ):
+                    raise AthanorError(f"invalid Review acceptance: {object_id}")
+                review["status"] = "ACCEPTED"
+                artifact["status"] = "ACCEPTED"
+                artifact["accepted_at"] = event["occurred_at"]
+                artifact["acceptance_receipt"] = event["receipt"]["receipt_id"]
             elif event["type"] == "agent-result.accepted":
                 result = payload["result"]
                 from .schema_validation import validate_instance
@@ -1293,6 +1431,8 @@ class Athanor:
                     }
                     if "provenance" in result:
                         record["provenance"] = result["provenance"]
+                    if "bindings" in payload:
+                        record["bindings"] = payload["bindings"]
                     agent_results[object_id] = record
             elif event["type"] == "working.created":
                 working_protocol = protocols.get(payload["protocol_id"])
@@ -1770,6 +1910,8 @@ class Athanor:
                     artifacts,
                     issues,
                     deviations,
+                    review_requests,
+                    review_artifacts,
                 )
                 if (
                     object_id in artifacts
@@ -1822,6 +1964,8 @@ class Athanor:
                     artifacts,
                     issues,
                     deviations,
+                    review_requests,
+                    review_artifacts,
                 )
                 if (
                     object_id in issues
@@ -1879,6 +2023,8 @@ class Athanor:
                     artifacts,
                     issues,
                     deviations,
+                    review_requests,
+                    review_artifacts,
                 )
                 if (
                     object_id in deviations
@@ -1999,6 +2145,10 @@ class Athanor:
                 else "agent-result-record-1.0.json"
             )
             validate_instance(schema_name, result)
+        for review in review_requests.values():
+            validate_instance("review-request-1.0.json", review)
+        for review in review_artifacts.values():
+            validate_instance("review-artifact-1.0.json", review)
         return {
             "programs": programs,
             "protocols": protocols,
@@ -2017,6 +2167,8 @@ class Athanor:
             "deviations": deviations,
             "reproduction_records": reproduction_records,
             "agent_results": agent_results,
+            "review_requests": review_requests,
+            "review_artifacts": review_artifacts,
         }
 
     def replay(self) -> dict[str, Any]:
@@ -2072,6 +2224,229 @@ class Athanor:
 
     def agent_results(self) -> dict[str, dict[str, Any]]:
         return self.replay()["agent_results"]
+
+    def review_requests(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["review_requests"]
+
+    def review_artifacts(self) -> dict[str, dict[str, Any]]:
+        return self.replay()["review_artifacts"]
+
+    def prepare_review(
+        self,
+        review_id: str,
+        program_id: str,
+        review_type: str,
+        target: dict[str, Any],
+        scope: dict[str, Any],
+        disclosure: dict[str, Any],
+        destination: dict[str, Any],
+    ) -> Receipt:
+        from .schema_validation import validate_instance
+
+        if (
+            not isinstance(review_id, str)
+            or not IDENTIFIER.fullmatch(review_id)
+            or not review_id.startswith("RV-")
+        ):
+            raise AthanorError("Review ID must use the form RV-<identifier>")
+        if review_type not in {"local_review", "external_diff_review"}:
+            raise AthanorError(f"unknown Review type: {review_type}")
+        external = review_type == "external_diff_review"
+        status = (
+            "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+            if external
+            else "PREPARED"
+        )
+        approval = {
+            "required": external,
+            "status": (
+                "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+                if external
+                else "NOT_REQUIRED"
+            ),
+            "approved_by": None,
+            "approved_at": None,
+            "rationale": None,
+        }
+        request = {
+            "schema_version": "review-request/1.0",
+            "review_id": review_id,
+            "program_id": program_id,
+            "type": review_type,
+            "target": target,
+            "scope": scope,
+            "disclosure": disclosure,
+            "destination": destination,
+            "approval": approval,
+            "status": status,
+        }
+        validate_instance("review-request-1.0.json", request)
+        if external and disclosure["includes_credentials"]:
+            raise AthanorError("External Review cannot disclose credentials")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            if program_id not in state["programs"]:
+                raise AthanorError(f"unknown Research Program: {program_id}")
+            if review_id in state["review_requests"]:
+                raise AthanorError(f"Review Request already exists: {review_id}")
+            return "review.requested", review_id, {
+                key: value
+                for key, value in request.items()
+                if key not in {"schema_version", "review_id"}
+            }
+
+        return self.chronicle.transact(build)[1]
+
+    def approve_external_review(
+        self,
+        review_id: str,
+        approved_by: str,
+        rationale: str,
+        *,
+        actor: dict[str, str] | None = None,
+    ) -> Receipt:
+        if not isinstance(approved_by, str) or not approved_by.strip():
+            raise AthanorError("Review disclosure approval requires approved_by")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise AthanorError("Review disclosure approval requires a rationale")
+        approval_actor = dict(
+            actor
+            or {
+                "actor_id": approved_by,
+                "actor_type": "human",
+                "host": "cli",
+                "authenticated_by": "explicit-disclosure-confirmation",
+            }
+        )
+        if (
+            approval_actor.get("actor_type") != "human"
+            or approval_actor.get("actor_id") != approved_by
+        ):
+            raise AthanorError("Review disclosure approval requires the approving human actor")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            review = self._project(events)["review_requests"].get(review_id)
+            if review is None:
+                raise AthanorError(f"unknown Review Request: {review_id}")
+            if (
+                review["type"] != "external_diff_review"
+                or review["status"] != "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+            ):
+                raise AthanorError(
+                    f"Review is not waiting for disclosure authorization: {review_id}"
+                )
+            if review["disclosure"]["includes_credentials"]:
+                raise AthanorError("External Review cannot disclose credentials")
+            return "review.approved", review_id, {
+                "approved_by": approved_by,
+                "rationale": rationale,
+            }
+
+        return self.chronicle.transact(build, actor=approval_actor)[1]
+
+    def record_review(
+        self,
+        review_id: str,
+        task_id: str,
+        reviewer: dict[str, Any],
+        result: dict[str, Any],
+        host: str,
+        *,
+        actor: dict[str, str] | None = None,
+    ) -> Receipt:
+        if host not in {"cli", "codex", "claude-code"}:
+            raise AthanorError(f"unknown Review Host: {host}")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            review = state["review_requests"].get(review_id)
+            if review is None:
+                raise AthanorError(f"unknown Review Request: {review_id}")
+            if review_id in state["review_artifacts"]:
+                raise AthanorError(f"Review already completed: {review_id}")
+            if (
+                review["type"] == "external_diff_review"
+                and review["approval"]["status"] != "APPROVED"
+            ):
+                raise AthanorError(
+                    f"Review is waiting for disclosure authorization: {review_id}"
+                )
+            agent_result = state["agent_results"].get(task_id)
+            expected_capability = (
+                "bench.review.external"
+                if review["type"] == "external_diff_review"
+                else "bench.review.local"
+            )
+            if (
+                agent_result is None
+                or agent_result["schema_version"] != "agent-result-record/1.1"
+                or agent_result["program_id"] != review["program_id"]
+                or agent_result["status"] != "COMPLETED"
+                or agent_result["capability"]["id"] != expected_capability
+                or agent_result.get("bindings", {}).get("review_id") != review_id
+            ):
+                raise AthanorError(
+                    f"Review completion requires its accepted bound Task: {review_id}"
+                )
+            source = {
+                "execution": review["destination"]["execution"],
+                "provider": review["destination"]["provider"],
+                "host": host,
+            }
+            candidate = {
+                "schema_version": "review-artifact/1.0",
+                "review_id": review_id,
+                "task_id": task_id,
+                "program_id": review["program_id"],
+                "source": source,
+                "reviewer": reviewer,
+                "target": review["target"],
+                "scope": review["scope"],
+                "disclosure": review["disclosure"],
+                "approval": review["approval"],
+                "result": result,
+                "status": "COMPLETED",
+                "completed_at": datetime.now(UTC).isoformat(),
+                "completion_receipt": "RC-PENDING",
+                "accepted_at": None,
+                "acceptance_receipt": None,
+            }
+            from .schema_validation import validate_instance
+
+            validate_instance("review-artifact-1.0.json", candidate)
+            return "review.completed", review_id, {
+                "task_id": task_id,
+                "source": source,
+                "reviewer": reviewer,
+                "result": result,
+            }
+
+        return self.chronicle.transact(build, actor=actor)[1]
+
+    def accept_review(
+        self,
+        review_id: str,
+        rationale: str,
+        *,
+        actor: dict[str, str] | None = None,
+    ) -> Receipt:
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise AthanorError("Review acceptance requires a rationale")
+        acceptance_actor = dict(actor or LOCAL_ACTOR)
+        if acceptance_actor.get("actor_type") != "human":
+            raise AthanorError("Review acceptance requires a human actor")
+
+        def build(events: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+            state = self._project(events)
+            artifact = state["review_artifacts"].get(review_id)
+            if artifact is None:
+                raise AthanorError(f"unknown completed Review: {review_id}")
+            if artifact["status"] != "COMPLETED":
+                raise AthanorError(f"Review is not awaiting acceptance: {review_id}")
+            return "review.accepted", review_id, {"rationale": rationale}
+
+        return self.chronicle.transact(build, actor=acceptance_actor)[1]
 
     def create_program(
         self,
@@ -2611,6 +2986,44 @@ class Athanor:
             expected_schemas = {
                 output["schema"] for output in capsule["expected_outputs"]
             }
+            review_capabilities = {
+                "bench.review.local",
+                "bench.review.external",
+                "bench.review.accept",
+            }
+            bound_review_id = capsule.get("bindings", {}).get("review_id")
+            if capability["id"] in review_capabilities:
+                if bound_review_id is None:
+                    raise AthanorError(
+                        "Review Task Capsule is missing its Review Request binding"
+                    )
+                review = state["review_requests"].get(bound_review_id)
+                artifact = state["review_artifacts"].get(bound_review_id)
+                if review is None:
+                    raise AthanorError(
+                        f"unknown Review Request: {bound_review_id}"
+                    )
+                if capability["id"] == "bench.review.local" and (
+                    review["type"] != "local_review"
+                    or review["status"] != "PREPARED"
+                ):
+                    raise AthanorError(
+                        f"Local Review Request is not prepared: {bound_review_id}"
+                    )
+                if capability["id"] == "bench.review.external" and (
+                    review["type"] != "external_diff_review"
+                    or review["status"] != "APPROVED"
+                    or review["approval"]["status"] != "APPROVED"
+                ):
+                    raise AthanorError(
+                        f"Review is waiting for disclosure authorization: {bound_review_id}"
+                    )
+                if capability["id"] == "bench.review.accept" and (
+                    artifact is None or artifact["status"] != "COMPLETED"
+                ):
+                    raise AthanorError(
+                        f"Review is not awaiting acceptance: {bound_review_id}"
+                    )
             provenance = result.get("provenance")
             if (
                 provenance is not None
@@ -2662,7 +3075,15 @@ class Athanor:
                     raise AthanorError(
                         f"Agent Result output Task ID mismatch: {output['uri']}"
                     )
-            return "agent-result.accepted", task_id, {
+                if (
+                    capability["id"] in review_capabilities
+                    and document.get("data", {}).get("review_id")
+                    != bound_review_id
+                ):
+                    raise AthanorError(
+                        "Review Task output does not match its bound Review Request"
+                    )
+            payload = {
                 "host": capsule["host"],
                 "program_id": capsule["program_id"],
                 "capability": capsule["capability"],
@@ -2670,6 +3091,9 @@ class Athanor:
                 "capsule_sigil": capsule["capsule_sigil"],
                 "result": result,
             }
+            if "bindings" in capsule:
+                payload["bindings"] = capsule["bindings"]
+            return "agent-result.accepted", task_id, payload
 
         return self.chronicle.transact(build)[1]
 

@@ -21,4 +21,7 @@ Read [references/checklist.md](references/checklist.md) before acting.
 
 Use native Codex tools for files, patches, shell, Git, web research, and review. Use Benchwork MCP tools for canonical state. Never edit `.benchwork/` directly.
 
-Pause for explicit user confirmation before any RQ, Protocol, or Decision commit and before expensive execution. Do not perform deep stage-specific analysis here when a specialized skill applies.
+Pause for explicit user confirmation before any RQ, Protocol, or Decision commit,
+before expensive execution, and before external Review disclosure. Treat each
+approval as scoped to its exact operation. Do not perform deep stage-specific
+analysis here when a specialized skill applies.

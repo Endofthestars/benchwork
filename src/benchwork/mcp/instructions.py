@@ -5,5 +5,6 @@ SERVER_INSTRUCTIONS = (
     "Use Benchwork tools only for canonical research state. Never edit .benchwork "
     "directly. Treat results as structured facts, not hidden reasoning. Preview and "
     "obtain explicit human confirmation before RQ, Protocol, or Decision seals. "
-    "Record failed and negative Runs."
+    "Do not disclose repository content to an external reviewer without the matching "
+    "Review approval Receipt. Record failed and negative Runs."
 )

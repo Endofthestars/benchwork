@@ -79,11 +79,24 @@ trigger-specific Skills, and concise repository agent rules.
 Implemented: `bwork mcp serve`, STDIO transport, server instructions, stable
 response envelopes, cursor pagination, and read-only project tools.
 
+## M12.5: Host Boundary Verification
+
+Implemented: tiered Kernel, CLI, and IDE Host acceptance; a machine-readable
+Host capability matrix; environment-blocked IDE exceptions that do not weaken
+Core/MCP gates; and a host-neutral external disclosure policy.
+
 ## M13: The Familiar
 
 Implemented: the interactive Task open/get/complete/fail loop with automatic
 semantic output blobs, Sigils, Host Session provenance, Athanor acceptance, and
 same-session Receipts.
+
+## M13.5: Review Provenance
+
+Implemented: local and external Review Capability boundaries, Review Request
+and Review Artifact Schemas, a fail-closed disclosure Gate, and Chronicle
+events for request, approval, completion, and acceptance. Benchwork records
+Review provenance but does not invoke or upload content to a provider.
 
 ## M14: The Wards
 
@@ -100,4 +113,7 @@ implementation, pilot, evaluation, and recovery Skills.
 
 Prerelease candidate: local marketplace packaging, plugin and Skill validation,
 in-memory and spawned-STDIO protocol tests, and the Phase 2 acceptance matrix.
-Manual Codex surface trials remain release-operator checks.
+Codex CLI acceptance is complete. IDE validation is an accepted
+`BLOCKED_BY_ENVIRONMENT` Tier 2 exception until a graphical extension Host is
+available; external diff review remains
+`WAITING_FOR_DISCLOSURE_AUTHORIZATION`.

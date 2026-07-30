@@ -118,6 +118,30 @@ DEFAULT_CAPABILITIES: dict[str, dict[str, Any]] = {
         "max_time_seconds": 1800,
         "requires_approval": False,
     },
+    "bench.review.prepare": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 900,
+        "requires_approval": False,
+    },
+    "bench.review.local": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 1800,
+        "requires_approval": False,
+    },
+    "bench.review.external": {
+        "allowed_tools": ["read", "web"],
+        "network": True,
+        "max_time_seconds": 1800,
+        "requires_approval": True,
+    },
+    "bench.review.accept": {
+        "allowed_tools": ["read"],
+        "network": False,
+        "max_time_seconds": 900,
+        "requires_approval": True,
+    },
 }
 
 DEFAULT_OUTPUT_SCHEMAS = {
@@ -138,6 +162,10 @@ DEFAULT_OUTPUT_SCHEMAS = {
     "bench.analysis.interpret": "analysis-interpretation-result/1.0",
     "bench.decision.review": "decision-review-result/1.0",
     "bench.decision.propose": "decision-proposal-result/1.0",
+    "bench.review.prepare": "review-preparation-result/1.0",
+    "bench.review.local": "review-execution-result/1.0",
+    "bench.review.external": "review-execution-result/1.0",
+    "bench.review.accept": "review-acceptance-result/1.0",
 }
 
 DEFAULT_CAPABILITIES = {
@@ -290,6 +318,7 @@ class CapsuleStore:
         snapshot_sigil: str,
         circle: dict[str, Any],
         host: str = "cli",
+        bindings: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         if not objective.strip():
             raise AthanorError("Task Capsule objective cannot be empty")
@@ -312,6 +341,8 @@ class CapsuleStore:
             "expected_outputs": contract["expected_outputs"],
             "circle": circle,
         }
+        if bindings is not None:
+            capsule["bindings"] = bindings
         capsule["capsule_sigil"] = content_sigil(capsule)
         from .schema_validation import validate_instance
 

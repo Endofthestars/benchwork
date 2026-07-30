@@ -28,6 +28,8 @@ OBJECT_TYPES = {
     "issues": "issue",
     "deviations": "deviation",
     "reproduction_records": "reproduction-record",
+    "review_requests": "review-request",
+    "review_artifacts": "review-artifact",
 }
 
 

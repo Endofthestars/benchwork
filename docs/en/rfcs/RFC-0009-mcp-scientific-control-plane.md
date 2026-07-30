@@ -23,6 +23,8 @@ and blur the proposal/canonical boundary.
 MCP is the host-neutral scientific control plane. `bwork mcp serve` exposes
 STDIO tools for canonical reads, bounded Tasks, scientific objects,
 preview/commit Seals, Experiment facts, Runs, and Alembic analysis.
+It also records Review Requests, disclosure approvals, Review Artifacts, and
+their acceptance provenance without invoking a reviewer.
 
 MCP does not launch a model, execute research shell commands, edit repository
 files, perform Git operations, or search the web. The interactive Host performs
@@ -48,6 +50,9 @@ future non-interactive remote Executor.
   confirmation token.
 - Alembic computes registered statistics; Codex only interprets its Result
   Bundle.
+- External Review completion fails closed until the exact Review Request has a
+  disclosure approval Receipt and its bound Review Task has an accepted Agent
+  Result. MCP never uploads the target itself.
 
 ## Compatibility and migration
 

@@ -6,6 +6,6 @@
 - Changed files and behavior summarized
 - Targeted tests run and exact commands retained
 - Failure output preserved
-- Independent review completed for core changes
+- Local independent review completed for core changes, or external disclosure approval recorded
 - Residual risks stated
 - Content-addressed implementation Artifact registered

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/review-artifact/1.0",
+  "title": "Review Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "review_id",
+    "task_id",
+    "program_id",
+    "source",
+    "reviewer",
+    "target",
+    "scope",
+    "disclosure",
+    "approval",
+    "result",
+    "status",
+    "completed_at",
+    "completion_receipt",
+    "accepted_at",
+    "acceptance_receipt"
+  ],
+  "properties": {
+    "schema_version": {"const": "review-artifact/1.0"},
+    "review_id": {"type": "string", "pattern": "^RV-"},
+    "task_id": {"type": "string", "pattern": "^TK-[A-Z0-9]+$"},
+    "program_id": {
+      "$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/program_id"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution", "provider", "host"],
+      "properties": {
+        "execution": {"enum": ["local", "external"]},
+        "provider": {"type": ["string", "null"], "minLength": 1},
+        "host": {"enum": ["cli", "codex", "claude-code"]}
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"enum": ["human", "agent", "tool"]},
+        "name": {"type": "string", "minLength": 1}
+      }
+    },
+    "target": {
+      "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/target"
+    },
+    "scope": {
+      "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/scope"
+    },
+    "disclosure": {
+      "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/disclosure"
+    },
+    "approval": {
+      "$ref": "https://benchwork.dev/schemas/review-request/1.0#/properties/approval"
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "findings", "residual_risks", "recommendation"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "findings": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "residual_risks": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "recommendation": {"type": "string", "minLength": 1}
+      }
+    },
+    "status": {"enum": ["COMPLETED", "ACCEPTED"]},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "completion_receipt": {"type": "string", "pattern": "^RC-"},
+    "accepted_at": {"type": ["string", "null"], "format": "date-time"},
+    "acceptance_receipt": {"type": ["string", "null"], "pattern": "^RC-"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ACCEPTED"}}},
+      "then": {
+        "properties": {
+          "accepted_at": {"type": "string", "format": "date-time"},
+          "acceptance_receipt": {"type": "string", "pattern": "^RC-"}
+        }
+      }
+    }
+  ]
+}

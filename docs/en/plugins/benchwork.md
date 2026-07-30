@@ -27,6 +27,12 @@ Codex uses native tools for source files, patches, shell, Git, web search, and
 review. The `mcp__benchwork__*` tools read or change research state. Never edit
 `.benchwork/` directly.
 
+Local review is the default. Before any Host transmits a diff or source to an
+external reviewer, prepare the exact Review Request, obtain explicit disclosure
+approval, and open the Ward-gated `bench.review.external` Task. CLI/IDE
+acceptance permission is not disclosure permission. See the
+[Acceptance Exception Policy](acceptance-exception-policy.md).
+
 Scientific Seals use two calls: preview, then commit. Show the user the preview
 and request confirmation. Commit only with the fresh preview Sigil, a new
 idempotency key, and the exact token returned by the preview after the user

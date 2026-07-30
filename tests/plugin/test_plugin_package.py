@@ -3,6 +3,8 @@ import json
 import unittest
 from pathlib import Path
 
+from benchwork.schema_validation import validate_instance
+
 
 ROOT = Path(__file__).parents[2]
 PLUGIN = ROOT / "plugins" / "benchwork"
@@ -49,3 +51,34 @@ class PluginPackageTest(unittest.TestCase):
             for path in files
         }
         self.assertEqual(before, after)
+
+    def test_acceptance_assets_are_machine_readable_and_fail_closed(self) -> None:
+        matrix = json.loads(
+            (PLUGIN / "assets" / "host-capability-matrix.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        review = json.loads(
+            (PLUGIN / "assets" / "review-request-template.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            matrix["tiers"]["tier_2_ide"]["release_gate"],
+            "OPTIONAL_HOST_VALIDATION",
+        )
+        self.assertEqual(
+            matrix["current_acceptance"]["ide_host"],
+            {
+                "status": "BLOCKED_BY_ENVIRONMENT",
+                "exception_id": "HOST-IDE-001",
+                "accepted": True,
+            },
+        )
+        self.assertEqual(
+            matrix["current_acceptance"]["external_review"],
+            "WAITING_FOR_DISCLOSURE_AUTHORIZATION",
+        )
+        self.assertTrue(review["approval"]["required"])
+        self.assertIsNone(review["approval"]["approved_by"])
+        validate_instance("review-request-1.0.json", review)

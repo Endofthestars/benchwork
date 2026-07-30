@@ -31,6 +31,7 @@ class TaskService:
         circle: dict[str, Any],
         *,
         host: str = "cli",
+        bindings: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         contract = self.registry.get(capability)
         contract_sigil = self.registry.contract_sigil(capability)
@@ -51,4 +52,5 @@ class TaskService:
             snapshot_sigil,
             circle,
             host=host,
+            bindings=bindings,
         )

@@ -49,6 +49,11 @@ Sigil. Ward and Agent Result acceptance reload the Registry and require the
 same Contract Sigil. Additive or mutating Registry changes therefore cannot
 silently alter an existing Task.
 
+Phase 2 Review Tasks may also carry an immutable `bindings.review_id`. Local,
+external, and acceptance Review outputs must repeat that identifier. Athanor
+rejects an unbound or mismatched Review Result, and an external Task may be
+opened only after the bound Review Request has a disclosure approval Receipt.
+
 ## Research Snapshot
 
 A Research Snapshot records:

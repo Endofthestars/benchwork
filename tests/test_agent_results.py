@@ -339,7 +339,7 @@ class AgentResultTest(unittest.TestCase):
             [{"schema": "code-inspection-result/1.0"}],
         )
 
-    def test_default_capabilities_match_rfc_0000(self) -> None:
+    def test_default_capabilities_include_the_host_neutral_contracts(self) -> None:
         expected = {
             "bench.research.orchestrate",
             "bench.evidence.discover",
@@ -358,5 +358,9 @@ class AgentResultTest(unittest.TestCase):
             "bench.analysis.interpret",
             "bench.decision.review",
             "bench.decision.propose",
+            "bench.review.prepare",
+            "bench.review.local",
+            "bench.review.external",
+            "bench.review.accept",
         }
         self.assertEqual(set(DEFAULT_CAPABILITIES), expected)
