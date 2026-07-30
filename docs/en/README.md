@@ -12,6 +12,12 @@ English is the canonical source for all Benchwork documentation.
 ## Start here
 
 - [Project overview and quick start](../../README.md)
+- [Installer quick start](install/quick-install.md)
+- [Installer reference](install/installer-reference.md)
+- [Installer security](install/security.md)
+- [Uninstall and rollback](install/uninstall.md)
+- [Installer troubleshooting](install/troubleshooting.md)
+- [Installer RC acceptance](install/ACCEPTANCE.md)
 - [Documentation localization](../LOCALIZATION.md)
 
 ## RFCs
@@ -26,6 +32,7 @@ English is the canonical source for all Benchwork documentation.
 - [RFC-0007: Provider and Executor Runtime Boundaries](rfcs/RFC-0007-provider-executor-runtime-boundaries.md)
 - [RFC-0008: Codex Plugin-first Host Architecture](rfcs/RFC-0008-codex-plugin-first-host-architecture.md)
 - [RFC-0009: MCP as the Scientific Control Plane](rfcs/RFC-0009-mcp-scientific-control-plane.md)
+- [RFC-0010: The Invitation Installer Contract](rfcs/RFC-0010-invitation-installer-contract.md)
 
 ## Architecture
 
@@ -55,6 +62,7 @@ English is the canonical source for all Benchwork documentation.
 - [Benchwork Codex plugin](plugins/benchwork.md)
 - [Acceptance Exception Policy](plugins/acceptance-exception-policy.md)
 - [0.3.0rc1 migration guide](migrations/0.3.0rc1.md)
+- [0.3.0rc2 release notes](releases/0.3.0rc2.md)
 - [0.3.0rc1 release notes](releases/0.3.0rc1.md)
 - [0.2.0rc1 release notes](releases/0.2.0rc1.md)
 

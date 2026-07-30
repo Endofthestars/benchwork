@@ -9,7 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.3.0rc1` release candidate. Phase 2 freezes the Codex
+> Project status: `0.3.0rc2` release candidate. Phase 2 freezes the Codex
 > Plugin-first Instrumentarium while preserving host-neutral scientific
 > contracts.
 
@@ -84,10 +84,21 @@ For the complete boundary, see
 
 ## Requirements
 
-- Python 3.11 or newer
-- `pip`
+- Installer: supported POSIX environment, `curl` or `wget`, a SHA-256 tool,
+  and `python3` or `jq >= 1.6`
+- Source development: Python 3.11 or newer and `pip`
 
 ## Installation
+
+The installer RC uses an isolated uv tool environment by default:
+
+```bash
+curl -LsSf https://benchwork.dev/install.sh | sh -s -- --channel rc
+```
+
+Inspect the script or select an exact version as described in the
+[installer quick start](docs/en/install/quick-install.md). The stable channel
+intentionally fails until a stable package exists.
 
 For development, install the repository in editable mode:
 

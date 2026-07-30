@@ -132,6 +132,17 @@ External Review remains `WAITING_FOR_DISCLOSURE_AUTHORIZATION`, and Claude Code
 CLI remains `PENDING_HOST_VALIDATION`. These states are not reclassified as
 failures or fabricated PASS results.
 
+## M18: The Invitation
+
+Implemented for `0.3.0rc2`: an auditable POSIX installer; exact release and
+channel manifests; uv-first and pipx-isolated bootstrap; installation-level
+diagnostics; safe versioned plugin staging; opt-in Codex and experimental
+Claude MCP setup; PATH, repair, rollback, and uninstall ownership; release
+assets, SBOM, provenance, Pages publication, and installer CI.
+
+M18 does not change the Phase 2 scientific state machine. Installer operations
+must continue to report `Project state: NOT_TOUCHED`.
+
 Phase 3 — The Sanctum may now begin through new RFCs for sandboxing,
 filesystem isolation, execution policy, patch promotion, experiment executors,
 GPU/remote jobs, and Artifact storage. Phase 3 must not weaken the frozen

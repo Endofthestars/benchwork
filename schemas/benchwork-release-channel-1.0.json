@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-release-channel/1.0",
+  "title": "Benchwork Release Channel Descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "channel",
+    "version",
+    "manifest_url",
+    "manifest_sha256",
+    "manifest_size"
+  ],
+  "properties": {
+    "schema_version": {"const": "benchwork-release-channel/1.0"},
+    "channel": {"enum": ["stable", "rc", "nightly"]},
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:(?:a|b|rc|dev)[0-9]+)?$"
+    },
+    "manifest_url": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "manifest_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1048576
+    }
+  }
+}

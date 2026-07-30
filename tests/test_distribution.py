@@ -11,7 +11,7 @@ class DistributionTest(unittest.TestCase):
     def test_package_and_project_versions_match(self) -> None:
         project = loads((Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(benchwork.__version__, project["project"]["version"])
-        self.assertEqual(benchwork.__version__, "0.3.0rc1")
+        self.assertEqual(benchwork.__version__, "0.3.0rc2")
 
     def test_init_creates_both_versioned_registries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

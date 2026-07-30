@@ -1,9 +1,9 @@
 {
   "schema_version": "benchwork-plugin-api/1.0",
   "plugin": "benchwork",
-  "plugin_version": "0.3.0-rc.1",
+  "plugin_version": "0.3.0-rc.2",
   "benchwork_api": "0.3",
-  "minimum_runtime": "0.3.0rc1",
+  "minimum_runtime": "0.3.0rc2",
   "skills_api": "1",
   "mcp_tool_registry": "mcp-tool-registry/1.0",
   "mcp_tool_count": 38

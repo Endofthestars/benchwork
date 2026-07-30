@@ -8,6 +8,27 @@ canonical: true
 M9 makes the RFC command language operational without treating an unavailable
 Provider as completed work.
 
+## Installation-level commands
+
+The following commands operate without discovering a Benchwork research
+project and never create or modify `.benchwork/`:
+
+```text
+bwork install plan
+bwork install doctor
+bwork install configure codex|claude
+bwork install status
+bwork install repair
+bwork install uninstall
+bwork mcp check
+bwork plugin check
+bwork host check codex|claude
+```
+
+They accept `--json`; installation commands also accept `--dry-run` and
+`--project-root` where applicable. `bwork doctor` remains the separate,
+project-scoped Chronicle integrity command.
+
 ## Direct research verbs
 
 `start` creates a Research Program. `investigate`, `design`, `implement`,

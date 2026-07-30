@@ -15,6 +15,12 @@ canonical: true
 6. Publish a GitHub release only after CI succeeds for the exact tag.
 7. The release workflow rebuilds and checks distributions before trusted
    publishing to PyPI.
+8. Build the deterministic Codex plugin archive, release manifest,
+   `SHA256SUMS`, CycloneDX SBOM, and provenance from the same exact tag.
+9. Attach immutable assets to the GitHub Release, then publish byte-identical
+   installer and channel files to the `gh-pages` branch.
+10. Record Linux, macOS, and WSL installer Golden Trials before making an
+    installer channel the documented default.
 
 M10 may publish development or prerelease artifacts. It must not publish a
 stable package while any naming surface remains provisional.

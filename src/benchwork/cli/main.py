@@ -12,6 +12,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from typing import NoReturn, Sequence
 
+from .. import __version__
 from ..athanor import Athanor, AthanorError, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..errors import CommandError, ProjectContextError, classify_error
@@ -58,13 +59,28 @@ def _parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="emit a stable machine-readable response envelope",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init", help="initialize a local Benchwork project")
+    uninstall_alias = subparsers.add_parser(
+        "uninstall",
+        help="remove installer-owned Benchwork assets",
+    )
+    uninstall_alias.add_argument("--project-root", type=Path)
+    uninstall_alias.add_argument("--dry-run", action="store_true")
+    uninstall_alias.add_argument("--purge", action="store_true")
     subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
     mcp = subparsers.add_parser("mcp", help="serve the Benchwork scientific control plane")
     mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
     mcp_commands.add_parser("serve", help="serve Model Context Protocol over STDIO")
+    mcp_check = mcp_commands.add_parser("check", help="verify MCP resources and STDIO startup")
+    mcp_check.add_argument("--project-root", type=Path)
+    mcp_check.add_argument("--dry-run", action="store_true")
     doctor = subparsers.add_parser("doctor", help="verify Chronicle receipts and chain")
     doctor.add_argument(
         "--deep",
@@ -236,6 +252,10 @@ def _parser() -> argparse.ArgumentParser:
     host = subparsers.add_parser("host", help="create provider-neutral host proposals")
     host_commands = host.add_subparsers(dest="host_command", required=True)
     host_commands.add_parser("list", help="list supported host adapters")
+    host_check = host_commands.add_parser("check", help="inspect installation Host configuration")
+    host_check.add_argument("host", choices=("codex", "claude"))
+    host_check.add_argument("--project-root", type=Path)
+    host_check.add_argument("--dry-run", action="store_true")
     propose = host_commands.add_parser("propose", help="create and check a Host Task Capsule")
     propose.add_argument("host", choices=HOSTS)
     propose.add_argument("capability")
@@ -244,6 +264,83 @@ def _parser() -> argparse.ArgumentParser:
     propose.add_argument("--tool", action="append", default=[])
     propose.add_argument("--time-budget", type=int, required=True)
     propose.add_argument("--network", action="store_true")
+
+    install = subparsers.add_parser(
+        "install",
+        help="plan, verify, configure, repair, or remove this Benchwork installation",
+    )
+    install_commands = install.add_subparsers(dest="install_command", required=True)
+    install_plan = install_commands.add_parser("plan", help="print a non-mutating install plan")
+    install_plan.add_argument("--version")
+    install_plan.add_argument("--channel", choices=("stable", "rc", "nightly"), default="stable")
+    install_plan.add_argument("--backend", choices=("auto", "uv", "pipx"), default="auto")
+    install_plan.add_argument("--install-dir")
+    install_plan.add_argument("--bin-dir")
+    install_plan.add_argument(
+        "--plugin-scope",
+        choices=("user", "project", "none"),
+        default="none",
+    )
+    install_plan.add_argument("--project-root", type=Path)
+    install_plan.add_argument("--with-codex", action="store_true")
+    install_plan.add_argument("--with-claude", action="store_true")
+    install_plan.add_argument("--modify-path", action="store_true")
+    install_plan.add_argument("--dry-run", action="store_true")
+
+    for name, help_text in (
+        ("doctor", "verify installed resources without a research project"),
+        ("status", "show installer-owned state"),
+    ):
+        install_subcommand = install_commands.add_parser(name, help=help_text)
+        install_subcommand.add_argument("--project-root", type=Path)
+        install_subcommand.add_argument("--dry-run", action="store_true")
+
+    configure = install_commands.add_parser(
+        "configure",
+        help="configure one detected Host through its supported CLI",
+    )
+    configure.add_argument("host", choices=("codex", "claude"))
+    configure.add_argument("--project-root", type=Path)
+    configure.add_argument("--dry-run", action="store_true")
+
+    repair = install_commands.add_parser(
+        "repair",
+        help="validate state or apply an exact release manifest",
+    )
+    repair.add_argument("--manifest", type=Path)
+    repair.add_argument("--manifest-url")
+    repair.add_argument("--manifest-sha256")
+    repair.add_argument("--backend", choices=("uv", "pipx"))
+    repair.add_argument("--install-dir")
+    repair.add_argument("--bin-dir")
+    repair.add_argument("--bwork-path")
+    repair.add_argument("--backend-bootstrapped", action="store_true")
+    repair.add_argument("--plugin-archive", type=Path)
+    repair.add_argument(
+        "--plugin-scope",
+        choices=("user", "project", "none"),
+        default="none",
+    )
+    repair.add_argument("--project-root", type=Path)
+    repair.add_argument("--with-codex", action="store_true")
+    repair.add_argument("--with-claude", action="store_true")
+    repair.add_argument("--modify-path", action="store_true")
+    repair.add_argument("--dry-run", action="store_true")
+    repair.add_argument("--force", action="store_true")
+
+    uninstall = install_commands.add_parser(
+        "uninstall",
+        help="remove only installer-owned assets and preserve research projects",
+    )
+    uninstall.add_argument("--project-root", type=Path)
+    uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--purge", action="store_true")
+
+    plugin = subparsers.add_parser("plugin", help="inspect installed plugin assets")
+    plugin_commands = plugin.add_subparsers(dest="plugin_command", required=True)
+    plugin_check = plugin_commands.add_parser("check", help="validate installed plugin assets")
+    plugin_check.add_argument("--project-root", type=Path)
+    plugin_check.add_argument("--dry-run", action="store_true")
 
     rite = subparsers.add_parser("rite", help="inspect versioned workflow definitions")
     rite_commands = rite.add_subparsers(dest="rite_command", required=True)
@@ -615,6 +712,92 @@ def _working_projection(athanor: Athanor, working_id: str | None) -> dict:
         raise AthanorError(f"unknown Working: {working_id}") from error
 
 
+def _run_installation_command(args: argparse.Namespace) -> int | None:
+    from ..install import (
+        InstallationError,
+        configure_host,
+        installation_doctor,
+        installation_plan,
+        installation_status,
+        mcp_check,
+        plugin_check,
+        repair_installation,
+        uninstall_installation,
+    )
+    from ..install.manager import host_check
+
+    try:
+        result: dict | None = None
+        if args.command == "install" and args.install_command == "plan":
+            result = installation_plan(
+                version=args.version,
+                channel=args.channel,
+                backend=args.backend,
+                install_dir=args.install_dir,
+                bin_dir=args.bin_dir,
+                plugin_scope=args.plugin_scope,
+                project_root=str(args.project_root) if args.project_root else None,
+                with_codex=args.with_codex,
+                with_claude=args.with_claude,
+                modify_path=args.modify_path,
+            )
+        elif args.command == "install" and args.install_command == "doctor":
+            result = installation_doctor()
+            if not result["ok"]:
+                print(json.dumps(result, indent=2))
+                return 4
+        elif args.command == "install" and args.install_command == "status":
+            result = installation_status()
+        elif args.command == "install" and args.install_command == "configure":
+            result = configure_host(args.host, dry_run=args.dry_run)
+        elif args.command == "install" and args.install_command == "repair":
+            result = repair_installation(
+                manifest_path=args.manifest,
+                manifest_url=args.manifest_url,
+                manifest_sha256=args.manifest_sha256,
+                backend=args.backend,
+                install_dir=args.install_dir,
+                bin_dir=args.bin_dir,
+                bwork_path=args.bwork_path,
+                backend_bootstrapped=args.backend_bootstrapped,
+                plugin_archive=args.plugin_archive,
+                plugin_scope=args.plugin_scope,
+                project_root=args.project_root.resolve() if args.project_root else None,
+                with_codex=args.with_codex,
+                with_claude=args.with_claude,
+                modify_path=args.modify_path,
+                dry_run=args.dry_run,
+                force=args.force,
+            )
+        elif args.command == "install" and args.install_command == "uninstall":
+            result = uninstall_installation(dry_run=args.dry_run, purge=args.purge)
+        elif args.command == "uninstall":
+            result = uninstall_installation(dry_run=args.dry_run, purge=args.purge)
+        elif args.command == "mcp" and args.mcp_command == "check":
+            result = mcp_check()
+            if result["status"] != "PASS":
+                print(json.dumps(result, indent=2))
+                return 4
+        elif args.command == "plugin" and args.plugin_command == "check":
+            result = plugin_check()
+            if result["status"] == "FAIL":
+                print(json.dumps(result, indent=2))
+                return 4
+        elif args.command == "host" and args.host_command == "check":
+            result = host_check(args.host)
+        else:
+            return None
+        print(json.dumps(result, indent=2))
+        return 0
+    except InstallationError as error:
+        raise ProjectContextError(
+            "INSTALLATION_FAILURE",
+            str(error),
+            exit_code=5,
+            details={"action": "Review the installer diagnostics and retry or roll back."},
+        ) from error
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -658,6 +841,9 @@ def main(
 
     try:
         args = _parser().parse_args(arguments)
+        installation_result = _run_installation_command(args)
+        if installation_result is not None:
+            return installation_result
         standalone = args.command == "init" or (
             args.command == "sigil" and args.sigil_command == "verify"
         )
@@ -665,7 +851,7 @@ def main(
         if args.command == "root":
             print(root)
             return 0
-        if args.command == "mcp":
+        if args.command == "mcp" and args.mcp_command == "serve":
             from ..mcp.server import run as run_mcp
 
             run_mcp()

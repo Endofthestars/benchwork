@@ -1,0 +1,8 @@
+{
+  "schema_version": "benchwork-install-compatibility/1.0",
+  "package": "benchwork-arcana",
+  "version": "0.3.0rc2",
+  "plugin_version": "0.3.0-rc.2",
+  "plugin_api": "benchwork-plugin-api/1.0",
+  "mcp_tool_registry": "mcp-tool-registry/1.0"
+}

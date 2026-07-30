@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-release-manifest/1.0",
+  "title": "Benchwork Release Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version",
+    "tag",
+    "channel",
+    "python_requirement",
+    "package",
+    "plugin",
+    "installer",
+    "bootstrap",
+    "assets"
+  ],
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "size"],
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "benchwork-release-manifest/1.0"},
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:(?:a|b|rc|dev)[0-9]+)?$"
+    },
+    "tag": {"type": "string", "pattern": "^v[0-9]"},
+    "channel": {"enum": ["stable", "rc", "nightly"]},
+    "python_requirement": {"const": ">=3.11"},
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "requirement", "wheel", "sdist"],
+      "properties": {
+        "name": {"const": "benchwork-arcana"},
+        "requirement": {
+          "type": "string",
+          "pattern": "^benchwork-arcana==[0-9]"
+        },
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "runtime_requirement", "archive"],
+      "properties": {
+        "name": {"const": "benchwork"},
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:alpha|beta|rc)\\.[0-9]+)?$"
+        },
+        "runtime_requirement": {
+          "type": "string",
+          "pattern": "^benchwork-arcana==[0-9]"
+        },
+        "archive": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "installer": {"$ref": "#/$defs/artifact"},
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uv"],
+      "properties": {
+        "uv": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "installer"],
+          "properties": {
+            "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+            "installer": {"$ref": "#/$defs/artifact"}
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256sums", "sbom", "provenance"],
+      "properties": {
+        "sha256sums": {"$ref": "#/$defs/artifact"},
+        "sbom": {"$ref": "#/$defs/artifact"},
+        "provenance": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  }
+}
