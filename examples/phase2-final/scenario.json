@@ -1,0 +1,40 @@
+{
+  "schema_version": "phase2-acceptance-scenario/1.0",
+  "scenario_id": "phase2-final-repair",
+  "title": "Audit, repair, execute, and seal a REPAIR decision",
+  "user_prompts": [
+    "Audit the current research protocol and decide whether it can enter experimentation.",
+    "Repair the protocol according to the accepted audit, then continue the registered cycle."
+  ],
+  "required_path": [
+    "benchwork_open_task",
+    "benchwork_get_object",
+    "benchwork_complete_task",
+    "athanor_receipt",
+    "benchwork_draft_protocol",
+    "benchwork_preview_protocol_seal",
+    "human_confirmation",
+    "benchwork_commit_protocol_seal",
+    "benchwork_register_artifact",
+    "benchwork_record_run",
+    "benchwork_compute_analysis",
+    "benchwork_record_assessment",
+    "benchwork_preview_decision_seal",
+    "human_confirmation",
+    "benchwork_commit_decision_seal",
+    "chronicle_replay"
+  ],
+  "required_facts": {
+    "audit_capability": "bench.study.audit",
+    "audit_recommendation": "REPAIR",
+    "protocol_status": "FROZEN",
+    "decision": "REPAIR",
+    "failed_run_preserved": true,
+    "excluded_run_preserved": true,
+    "deep_doctor": "PASS"
+  },
+  "accepted_exceptions": {
+    "ide_host": "BLOCKED_BY_ENVIRONMENT",
+    "external_review": "WAITING_FOR_DISCLOSURE_AUTHORIZATION"
+  }
+}

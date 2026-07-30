@@ -57,6 +57,12 @@ python3 scripts/ci/check-doc-links.py
 python3 scripts/ci/check-release-policy.py
 ```
 
+The M17 golden path is published under
+[`examples/phase2-final`](../../examples/phase2-final/README.md). It exercises
+an accepted `bench.study.audit` proposal, replacement Protocol preview/commit,
+registered implementation and Runs, Alembic analysis, Assessment, and a
+human-sealed `REPAIR` Decision through Chronicle replay.
+
 ## 2026-07-30 Host trial
 
 - Codex CLI `0.145.0` loaded Benchwork `0.3.0-alpha.1` from
