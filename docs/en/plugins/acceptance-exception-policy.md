@@ -22,8 +22,10 @@ An unavailable Tier 2 environment is recorded as `BLOCKED_BY_ENVIRONMENT`, not
 the release boundary before which validation becomes required.
 
 Tier 1 is accepted per Host. Codex CLI is the Phase 2 primary Host and has a
-recorded PASS. Claude Code CLI remains `PENDING_HOST_VALIDATION`; the
-host-neutral tool contract does not manufacture an interactive Host result.
+recorded PASS. Claude Code CLI recorded its own PASS on 2026-07-31 from its own
+interactive trial; the host-neutral tool contract does not manufacture an
+interactive Host result, and that trial found and repaired a Task Capsule Host
+defect the shared contract had hidden.
 
 The current IDE exception is:
 

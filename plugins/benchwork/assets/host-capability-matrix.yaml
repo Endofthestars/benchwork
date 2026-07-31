@@ -35,7 +35,7 @@
       "tier": "tier_1_cli",
       "mcp": true,
       "gui": false,
-      "acceptance": "PENDING_HOST_VALIDATION",
+      "acceptance": "PASS",
       "external_review": "REQUIRES_DISCLOSURE_APPROVAL"
     },
     "codex_ide": {
@@ -69,7 +69,7 @@
     "cli_host": "PASS",
     "cli_hosts": {
       "codex_cli": "PASS",
-      "claude_code_cli": "PENDING_HOST_VALIDATION"
+      "claude_code_cli": "PASS"
     },
     "ide_host": {
       "status": "BLOCKED_BY_ENVIRONMENT",

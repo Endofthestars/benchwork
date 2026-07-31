@@ -127,10 +127,14 @@ audit-to-`REPAIR` acceptance; migration and release documentation; and
 release-gated CI coverage.
 
 Phase 2 is sealed with Kernel, MCP, Plugin, and Codex CLI gates passing.
-`HOST-IDE-001` remains an accepted `BLOCKED_BY_ENVIRONMENT` Tier 2 exception,
-External Review remains `WAITING_FOR_DISCLOSURE_AUTHORIZATION`, and Claude Code
-CLI remains `PENDING_HOST_VALIDATION`. These states are not reclassified as
-failures or fabricated PASS results.
+`HOST-IDE-001` remains an accepted `BLOCKED_BY_ENVIRONMENT` Tier 2 exception
+and External Review remains `WAITING_FOR_DISCLOSURE_AUTHORIZATION`. These
+states are not reclassified as failures or fabricated PASS results.
+
+Claude Code CLI was `PENDING_HOST_VALIDATION` at the rc1 seal and recorded its
+own Tier 1 PASS on 2026-07-31, after its trial found and repaired a Task
+Capsule Host defect. See the
+[Host Support Matrix](HOST_SUPPORT_MATRIX.md).
 
 ## M18: The Invitation
 

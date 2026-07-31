@@ -14,12 +14,15 @@ from uuid import uuid4
 from ..athanor import Athanor, AthanorError, _exclusive_lock, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..doctor import deep_doctor
+from ..hosts import HOSTS
 from ..project import ProjectContext, discover_project_root
 from ..schema_validation import _schema_directory, validate_instance
 from ..tasks import TaskService
 from .envelopes import failure, success
 from .pagination import page
 
+
+DEFAULT_HOST = "codex"
 
 CODEX_HUMAN_ACTOR = {
     "actor_id": "interactive-user",
@@ -392,8 +395,9 @@ class BenchworkTools:
         network: bool | None = None,
         approval_reason: str | None = None,
         review_id: str | None = None,
+        host_session: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Open a bounded Codex Task Capsule and evaluate it through Ward."""
+        """Open a bounded Host Task Capsule and evaluate it through Ward."""
         tool = "benchwork_open_task"
 
         def operation() -> dict[str, Any]:
@@ -453,7 +457,7 @@ class BenchworkTools:
                     ),
                     "network": network if network is not None else contract["network"],
                 },
-                host="codex",
+                host=self._acting_host(host_session),
                 bindings=bindings,
             )
             receipt = None
@@ -494,9 +498,20 @@ class BenchworkTools:
         return self._run(tool, operation)
 
     @staticmethod
+    def _acting_host(host_session: dict[str, Any] | None) -> str:
+        """Resolve the Host driving a Task, defaulting to the primary CLI Host."""
+        if host_session is None:
+            return DEFAULT_HOST
+        validate_instance("host-session-provenance-1.0.json", host_session)
+        host = str(host_session["host"])
+        if host not in HOSTS:
+            raise AthanorError(f"unknown Task Host: {host}")
+        return host
+
+    @staticmethod
     def _agent_provenance(host_session: dict[str, Any] | None) -> dict[str, str]:
         if host_session is None:
-            return {"host": "codex", "runtime": "interactive-session"}
+            return {"host": DEFAULT_HOST, "runtime": "interactive-session"}
         validate_instance("host-session-provenance-1.0.json", host_session)
         provenance = {
             "host": host_session["host"],
