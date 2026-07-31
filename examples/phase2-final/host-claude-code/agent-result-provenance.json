@@ -1,0 +1,25 @@
+{
+  "agent_result": {
+    "outputs": [
+      {
+        "blob_sigil": "sha256:f718355fa44902306d2b0680e940769b99c19a91b3f42af56ae4a74faea10860",
+        "schema": "code-inspection-result/1.0",
+        "uri": ".benchwork/mcp/task-results/TK-B280B5160682-f718355fa449.json"
+      }
+    ],
+    "provenance": {
+      "host": "claude-code",
+      "invocation_id": "44444444-4444-4444-8444-444444444444",
+      "model": "claude-opus-5",
+      "provider": "anthropic",
+      "runtime": "claude-code-cli/2.1.220"
+    },
+    "schema_version": "agent-result/1.1",
+    "status": "COMPLETED"
+  },
+  "capsule_host": "claude-code",
+  "event_id": "CE-8E61DDA3265E",
+  "exported_from": "Chronicle event payload of the round B Task completion",
+  "object_id": "TK-B280B5160682",
+  "occurred_at": "2026-07-31T08:46:31.240296+00:00"
+}

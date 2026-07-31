@@ -1,0 +1,121 @@
+{
+  "schema_version": "host-trial-log/1.0",
+  "host": "claude-code",
+  "tier": "tier_1_cli",
+  "date": "2026-07-31",
+  "host_version": "claude-code-cli/2.1.220",
+  "benchwork_version": "0.3.0rc2",
+  "mcp_server": "benchwork 0.3.0rc2",
+  "registry_tool_count": 38,
+  "method": "Fresh ephemeral Claude Code CLI conversations started with --strict-mcp-config against a temporary Benchwork project outside the source repository. Transcripts were captured as stream-json and distilled to tool names, envelope headers and status fields.",
+  "rounds": [
+    {
+      "round": "A",
+      "state": "pre-fix",
+      "trials": [
+        {
+          "id": "trial1-explicit-readonly",
+          "session_id": "11111111-1111-4111-8111-111111111111",
+          "intent": "Explicit read-only MCP discovery and calls",
+          "mcp_server_status": "connected",
+          "benchwork_tools_discovered": 38,
+          "tool_calls": [
+            "mcp__benchwork__benchwork_status",
+            "mcp__benchwork__benchwork_next_actions"
+          ],
+          "envelopes": [
+            {"schema_version": "mcp-tool-result/1.0", "ok": true},
+            {"schema_version": "mcp-tool-result/1.0", "ok": true}
+          ],
+          "shell_or_file_edit_tools_used": [],
+          "outcome": "PASS"
+        },
+        {
+          "id": "trial2-implicit-selection",
+          "session_id": "22222222-2222-4222-8222-222222222222",
+          "intent": "Implicit selection from the broad request 'What should we do next for this study?'",
+          "mcp_server_status": "connected",
+          "benchwork_tools_discovered": 38,
+          "non_mcp_tools_available": 26,
+          "tool_calls": [
+            "mcp__benchwork__benchwork_status",
+            "mcp__benchwork__benchwork_next_actions"
+          ],
+          "envelopes": [
+            {"schema_version": "mcp-tool-result/1.0", "ok": true},
+            {"schema_version": "mcp-tool-result/1.0", "ok": true}
+          ],
+          "shell_or_file_edit_tools_used": [],
+          "notes": "The Host reached the control plane on its own while 26 non-MCP tools remained available. Read was denied by the trial's own restriction and the Host continued within bounds.",
+          "outcome": "PASS"
+        },
+        {
+          "id": "trial3-task-loop",
+          "session_id": "33333333-3333-4333-8333-333333333333",
+          "intent": "Bounded bench.code.inspect Task loop with truthful Host provenance",
+          "program_receipt": "RC-0DD15A0C7771",
+          "task_id": "TK-B8F27F61AD04",
+          "capsule_host": "codex",
+          "declared_host_session": "claude-code",
+          "completion_ok": false,
+          "completion_receipt": null,
+          "error_code": "VALIDATION_REJECTED",
+          "error_message": "Agent Result provenance Host does not match its Task Capsule",
+          "outcome": "BLOCKED",
+          "notes": "benchwork_open_task minted the Capsule with a hardcoded codex Host and exposed no way to declare the acting Host. The Host reported the rejection instead of resubmitting a false codex provenance."
+        }
+      ]
+    },
+    {
+      "round": "B",
+      "state": "post-fix",
+      "trials": [
+        {
+          "id": "trial4-task-loop-repaired",
+          "session_id": "44444444-4444-4444-8444-444444444444",
+          "intent": "Same bounded Task loop after benchwork_open_task accepted host_session",
+          "mcp_server_status": "connected",
+          "benchwork_tools_discovered": 38,
+          "tool_calls": [
+            "mcp__benchwork__benchwork_create_program",
+            "mcp__benchwork__benchwork_open_task",
+            "mcp__benchwork__benchwork_get_task",
+            "Read",
+            "mcp__benchwork__benchwork_complete_task"
+          ],
+          "program_id": "RP-001",
+          "program_receipt": "RC-3913CD0AC6A6",
+          "task_id": "TK-B280B5160682",
+          "capability": "bench.code.inspect",
+          "capsule_host": "claude-code",
+          "capsule_circle": {"tools": ["read"], "network": false, "time_budget_seconds": 900},
+          "ward_status": "PASS",
+          "completion_ok": true,
+          "completion_receipt": "RC-47D74468807A",
+          "output_schema": "code-inspection-result/1.0",
+          "shell_or_file_edit_tools_used": [],
+          "outcome": "PASS"
+        }
+      ]
+    }
+  ],
+  "integrity": {
+    "chronicle_events": 2,
+    "chronicle_verified": true,
+    "receipt_chain_intact": true,
+    "source_repository_benchwork_directory": "absent"
+  },
+  "verdict": {
+    "tier_1_claude_code_cli": "PASS",
+    "requires": {
+      "interactive_session": "PASS",
+      "mcp": "PASS",
+      "tool_calls": "PASS",
+      "receipts": "PASS"
+    },
+    "accepted_exceptions": [
+      "HOST-IDE-001",
+      "EXTERNAL_REVIEW_DISCLOSURE_PENDING"
+    ]
+  }
+}

@@ -27,7 +27,7 @@ states.
 | Tier 0 — Kernel | PASS | Required | Chronicle, Schema, Ward, Capability, replay, and deterministic suites |
 | MCP | PASS | Required | in-memory and spawned-STDIO discovery, envelopes, pagination, Task and canonical tool tests |
 | Tier 1 — Codex CLI Host | PASS | Required before Phase release | fresh Codex CLI explicit/implicit Skill trials and MCP calls |
-| Tier 1 — Claude Code CLI | PENDING_HOST_VALIDATION | Not a claimed Phase 2 Host PASS | host-neutral contract is implemented; independent interactive evidence is pending |
+| Tier 1 — Claude Code CLI | PASS | Second CLI Host gate satisfied | fresh Claude Code CLI MCP discovery, read-only calls, and a bounded Task loop with an Athanor Receipt |
 | Tier 2 — IDE Host | BLOCKED_BY_ENVIRONMENT (accepted) | Does not block Core/MCP/CLI | `HOST-IDE-001`; extension installed, no graphical extension Host available |
 | External Review | WAITING_FOR_DISCLOSURE_AUTHORIZATION | Does not block local review or Core/MCP/CLI | Disclosure Gate denied an unapproved diff review |
 
@@ -78,6 +78,33 @@ The M17 golden path is published under
 an accepted `bench.study.audit` proposal, replacement Protocol preview/commit,
 registered implementation and Runs, Alembic analysis, Assessment, and a
 human-sealed `REPAIR` Decision through Chronicle replay.
+
+## 2026-07-31 Claude Code CLI Tier 1 trial
+
+- Fresh ephemeral Claude Code CLI `2.1.220` conversations loaded the Benchwork
+  MCP server with `--strict-mcp-config` against a temporary project outside the
+  source repository. The server reported `connected` and all 38 registry tools
+  were discovered.
+- `benchwork_status` and `benchwork_next_actions` both returned `ok=true` with
+  `mcp-tool-result/1.0`, from an explicit request and from the broad request
+  "What should we do next for this study?" while 26 non-MCP tools remained
+  available.
+- The first bounded Task loop was blocked. `benchwork_open_task` minted the
+  Capsule with a hardcoded `codex` Host, so truthful `claude-code` provenance
+  was refused with `VALIDATION_REJECTED`. The Host reported the rejection
+  rather than resubmitting a false provenance.
+- `benchwork_open_task` now accepts the optional `host_session` argument that
+  the completion tools already took, defaulting to `codex` and refusing an
+  unregistered Host. The repaired loop completed `bench.code.inspect` as
+  `TK-B280B5160682` with Capsule host `claude-code`, Ward `PASS`, and Receipt
+  `RC-47D74468807A`.
+- The Host used only `Read` alongside the Benchwork tools, matching the Capsule
+  Circle. Deep Doctor reported 2 verified Chronicle events with an intact
+  Receipt chain, and the source repository had no `.benchwork/` directory.
+- Evidence is published under
+  [`examples/phase2-final/host-claude-code`](../../examples/phase2-final/host-claude-code/README.md).
+- IDE execution and External Review were not exercised; `HOST-IDE-001` and
+  `WAITING_FOR_DISCLOSURE_AUTHORIZATION` are unchanged.
 
 ## 2026-07-30 M17 rc1 trial
 

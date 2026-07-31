@@ -5,6 +5,11 @@ versioned schemas plus explicit migration notes for compatibility.
 
 ## 0.3.0rc2 — The Invitation
 
+- Fixed `benchwork_open_task` minting every Task Capsule for the `codex` Host.
+  It now accepts the optional `host_session` argument the completion tools
+  already took, so a non-Codex Host can record truthful provenance. The default
+  remains `codex` and an unregistered Host is refused.
+- Recorded the Claude Code CLI Tier 1 Host PASS from its 2026-07-31 trial.
 - Added the auditable POSIX installer and exact release/channel manifests.
 - Added uv-first isolated installation, pipx fallback, plugin staging,
   installer state, Host diagnostics, repair, rollback, and uninstall.

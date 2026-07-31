@@ -79,7 +79,7 @@ class PluginPackageTest(unittest.TestCase):
         )
         self.assertEqual(
             matrix["current_acceptance"]["cli_hosts"]["claude_code_cli"],
-            "PENDING_HOST_VALIDATION",
+            "PASS",
         )
         self.assertEqual(
             matrix["current_acceptance"]["external_review"],

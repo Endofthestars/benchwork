@@ -112,6 +112,96 @@ class MCPRuntimeTest(unittest.TestCase):
         task = self.tools.benchwork_get_task(task_id)
         self.assertEqual(task["data"]["result"]["status"], "COMPLETED")
 
+    def _claude_code_session(self) -> dict[str, str]:
+        return {
+            "schema_version": "host-session-provenance/1.0",
+            "host": "claude-code",
+            "session_id": "session-claude-code",
+            "provider": "anthropic",
+            "runtime": "claude-code-cli",
+        }
+
+    def _inspection_output(self) -> dict[str, list[str]]:
+        return {
+            "inspected_files": ["hosts/claude-code/README.md"],
+            "findings": ["The adapter preserves the Capsule Circle."],
+            "tests_considered": ["tests/test_hosts.py"],
+            "residual_risks": ["Synthetic fixture rather than a live Host."],
+        }
+
+    def test_declared_host_owns_its_capsule_and_completes_the_task(self) -> None:
+        program = self.tools.benchwork_create_program(
+            "claude-code-host",
+            "Claude Code Host loop",
+            {"statement": "A non-Codex Host completes a bounded Task."},
+        )["data"]["program_id"]
+        session = self._claude_code_session()
+
+        opened = self.tools.benchwork_open_task(
+            "bench.code.inspect",
+            program,
+            "Inspect the Claude Code Host adapter.",
+            host_session=session,
+        )
+        self.assertTrue(opened["ok"])
+        self.assertEqual(opened["data"]["task"]["host"], "claude-code")
+        task_id = opened["data"]["task"]["task_id"]
+
+        completed = self.tools.benchwork_complete_task(
+            task_id,
+            "Inspected the Claude Code Host adapter.",
+            self._inspection_output(),
+            session,
+        )
+        self.assertTrue(completed["ok"])
+        self.assertIsNotNone(completed["receipt"])
+
+    def test_capsule_defaults_to_codex_and_rejects_a_foreign_host_result(self) -> None:
+        program = self.tools.benchwork_create_program(
+            "host-mismatch",
+            "Host mismatch",
+            {"statement": "Provenance must match the Task Capsule."},
+        )["data"]["program_id"]
+
+        opened = self.tools.benchwork_open_task(
+            "bench.code.inspect",
+            program,
+            "Inspect without declaring a Host.",
+        )
+        self.assertEqual(opened["data"]["task"]["host"], "codex")
+
+        rejected = self.tools.benchwork_complete_task(
+            opened["data"]["task"]["task_id"],
+            "Inspected under a mismatched Host.",
+            self._inspection_output(),
+            self._claude_code_session(),
+        )
+        self.assertFalse(rejected["ok"])
+        self.assertNotIn("receipt", rejected)
+        self.assertEqual(rejected["error"]["code"], "VALIDATION_REJECTED")
+        self.assertIn("does not match its Task Capsule", rejected["error"]["message"])
+
+    def test_unknown_task_host_is_refused(self) -> None:
+        program = self.tools.benchwork_create_program(
+            "unknown-host",
+            "Unknown Host",
+            {"statement": "Only registered Hosts may own a Capsule."},
+        )["data"]["program_id"]
+
+        refused = self.tools.benchwork_open_task(
+            "bench.code.inspect",
+            program,
+            "Inspect from an unregistered Host.",
+            host_session={
+                "schema_version": "host-session-provenance/1.0",
+                "host": "unregistered-host",
+                "session_id": "session-unknown",
+            },
+        )
+        self.assertFalse(refused["ok"])
+        self.assertEqual(refused["error"]["code"], "NOT_FOUND")
+        self.assertEqual(refused["error"]["message"], "unregistered-host")
+
     def test_seal_preview_is_idempotent_and_stale_state_fails_closed(self) -> None:
         program_id = self._program_with_hypothesis()
         preview_result = self.tools.benchwork_preview_rq_seal(
