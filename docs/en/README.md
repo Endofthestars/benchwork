@@ -33,6 +33,11 @@ English is the canonical source for all Benchwork documentation.
 - [RFC-0008: Codex Plugin-first Host Architecture](rfcs/RFC-0008-codex-plugin-first-host-architecture.md)
 - [RFC-0009: MCP as the Scientific Control Plane](rfcs/RFC-0009-mcp-scientific-control-plane.md)
 - [RFC-0010: The Invitation Installer Contract](rfcs/RFC-0010-invitation-installer-contract.md)
+- [RFC-0011: Sanctum Execution Model](rfcs/RFC-0011-sanctum-execution-model.md)
+- [RFC-0012: Job, Lease, and Worker Protocol](rfcs/RFC-0012-job-lease-worker-protocol.md)
+- [RFC-0013: Artifact Storage Model](rfcs/RFC-0013-artifact-storage-model.md)
+- [RFC-0014: Patch Promotion Protocol](rfcs/RFC-0014-patch-promotion-protocol.md)
+- [RFC-0015: Experiment Executor API](rfcs/RFC-0015-experiment-executor-api.md)
 
 ## Architecture
 

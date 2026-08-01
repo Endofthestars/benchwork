@@ -3729,6 +3729,13 @@ class Athanor:
                 artifact_path.relative_to(self.root.resolve())
             except ValueError as error:
                 raise AthanorError("Artifact location URI escapes the project") from error
+            managed_storage = (self.root / ".benchwork" / "storage").resolve()
+            try:
+                artifact_path.relative_to(managed_storage)
+            except ValueError:
+                pass
+            else:
+                raise AthanorError("Artifact location cannot use managed storage namespace")
             try:
                 artifact_blob = artifact_path.read_bytes()
             except OSError as error:
