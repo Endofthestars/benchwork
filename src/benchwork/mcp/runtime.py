@@ -15,6 +15,7 @@ from ..athanor import Athanor, AthanorError, _exclusive_lock, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..doctor import deep_doctor
 from ..hosts import HOSTS
+from ..execution import ExecutionService
 from ..project import ProjectContext, discover_project_root
 from ..schema_validation import _schema_directory, validate_instance
 from ..tasks import TaskService
@@ -84,6 +85,36 @@ class BenchworkTools:
 
     def _athanor(self) -> Athanor:
         return Athanor(self._root())
+
+    def _execution(self) -> ExecutionService:
+        return ExecutionService(self._root())
+
+    def _execution_run(
+        self,
+        tool: str,
+        operation: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Render closed executor failures without leaking local runtime detail."""
+        try:
+            return success(tool, operation())
+        except AthanorError as error:
+            message = str(error)
+            lowered = message.lower()
+            if "unknown execution job" in lowered:
+                code = "EXECUTION_NOT_FOUND"
+            elif "no terminal outcome" in lowered:
+                code = "EXECUTION_NOT_READY"
+            elif "idempotency conflict" in lowered:
+                code = "IDEMPOTENCY_CONFLICT"
+            elif "cursor" in lowered:
+                code = "STALE_CURSOR"
+            elif "outcome is ineligible" in lowered:
+                code = "RESULT_INELIGIBLE"
+            elif "revision conflict" in lowered or "not terminalizable" in lowered:
+                code = "EXECUTION_CONFLICT"
+            else:
+                code = "EXECUTION_POLICY_REJECTED"
+            return failure(tool, error, code=code, project_root=self._configured_root or Path.cwd())
 
     def _run(
         self,
@@ -384,6 +415,80 @@ class BenchworkTools:
             )
 
         return self._run(tool, operation)
+
+    def benchwork_start_job(
+        self,
+        execution_specification: dict[str, Any],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Submit a typed pre-conformance Job without accepting a command or shell.
+
+        This Host-neutral adapter is intentionally absent from the published
+        MCP registry until RFC-0012 through RFC-0015 schemas and conformance
+        requirements are implemented.
+        """
+        return self._execution_run(
+            "benchwork_start_job",
+            lambda: self._execution().start(execution_specification, idempotency_key),
+        )
+
+    def benchwork_observe_job(
+        self,
+        job_id: str,
+        limit: int = 50,
+        cursor: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Read a bounded, fixed-prefix operational Job observation."""
+        return self._execution_run(
+            "benchwork_observe_job",
+            lambda: self._execution().observe(job_id, limit=limit, cursor=cursor),
+        )
+
+    def benchwork_cancel_job(
+        self,
+        job_id: str,
+        job_binding_sigil: str,
+        expected_job_revision: int,
+        idempotency_key: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Record an idempotent stop request; no request is a process signal."""
+        return self._execution_run(
+            "benchwork_cancel_job",
+            lambda: self._execution().cancel(
+                job_id,
+                job_binding_sigil,
+                expected_job_revision,
+                idempotency_key,
+                reason,
+            ),
+        )
+
+    def benchwork_get_job_result(self, job_id: str) -> dict[str, Any]:
+        """Derive a terminal operational Outcome without canonical acceptance."""
+        return self._execution_run(
+            "benchwork_get_job_result",
+            lambda: self._execution().get_outcome(job_id),
+        )
+
+    def benchwork_accept_job_result(
+        self,
+        job_id: str,
+        execution_job_outcome_sigil: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Fail closed until an Outcome has complete Agent Result v2 evidence."""
+        def operation() -> dict[str, Any]:
+            if not isinstance(idempotency_key, str) or not idempotency_key:
+                raise AthanorError("execution acceptance idempotency key is invalid")
+            outcome = self._execution().get_outcome(job_id)
+            if execution_job_outcome_sigil != outcome["outcome_sigil"]:
+                raise AthanorError("execution Outcome is ineligible")
+            if not outcome["eligible_for_acceptance"]:
+                raise AthanorError("execution Outcome is ineligible")
+            raise AthanorError("execution Outcome is ineligible")
+
+        return self._execution_run("benchwork_accept_job_result", operation)
 
     def benchwork_open_task(
         self,

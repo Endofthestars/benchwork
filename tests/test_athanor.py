@@ -90,6 +90,23 @@ class AthanorTest(unittest.TestCase):
         self.assertEqual(self.athanor.workings()[working_id]["stage"], "PILOT")
         self.assertEqual(len(self.athanor.workings()[working_id]["history"]), 2)
 
+    def test_artifact_registration_rejects_phase_three_managed_storage(self) -> None:
+        program_id, _ = self.athanor.create_program("storage-boundary", "Storage boundary")
+        managed = self.root / ".benchwork" / "storage" / "blobs" / "candidate"
+        managed.parent.mkdir(parents=True)
+        managed.write_bytes(b"operational-only")
+        with self.assertRaisesRegex(AthanorError, "managed storage namespace"):
+            self.athanor.register_artifact(
+                "AR-001",
+                program_id,
+                "implementation",
+                {
+                    "uri": ".benchwork/storage/blobs/candidate",
+                    "sigil": "sha256:" + hashlib.sha256(b"operational-only").hexdigest(),
+                },
+                program_id,
+            )
+
     def test_schema_files_are_versioned_json_contracts(self) -> None:
         schemas = Path(__file__).parents[1] / "schemas"
         for schema_path in schemas.glob("*.json"):
