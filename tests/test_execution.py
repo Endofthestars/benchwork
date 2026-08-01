@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 
 from benchwork.athanor import Athanor, AthanorError, content_sigil
 from benchwork.execution import ExecutionService, LocalBlobStore
@@ -38,6 +39,29 @@ class LocalBlobStoreTest(unittest.TestCase):
     def test_invalid_blob_sigil_fails_closed(self) -> None:
         with self.assertRaisesRegex(AthanorError, "canonical sha256"):
             self.store.read_bytes("sha256:BAD")
+
+    def test_storage_rejects_invalid_inputs_and_detects_tampering(self) -> None:
+        with self.assertRaisesRegex(AthanorError, "requires bytes"):
+            self.store.import_bytes(cast(bytes, "not bytes"))
+        with self.assertRaisesRegex(AthanorError, "media type"):
+            self.store.import_bytes(b"content", media_type="")
+
+        missing = "sha256:" + "a" * 64
+        with self.assertRaisesRegex(AthanorError, "unavailable"):
+            self.store.read_bytes(missing)
+
+        record = self.store.import_bytes(b"unmodified")
+        blob = Path(self.directory.name) / ".benchwork" / "storage" / "blobs" / record["blob_sigil"][7:]
+        blob.write_bytes(b"modified")
+        with self.assertRaisesRegex(AthanorError, "integrity failure"):
+            self.store.read_bytes(record["blob_sigil"])
+
+    def test_storage_rejects_incompatible_format(self) -> None:
+        self.store.initialize()
+        format_path = Path(self.directory.name) / ".benchwork" / "storage" / "format.json"
+        format_path.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "format is incompatible"):
+            self.store.initialize()
 
 
 class ExecutionServiceTest(unittest.TestCase):
@@ -121,6 +145,68 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)
         self.assertFalse((Path(self.directory.name) / ".benchwork" / "execution").exists())
+
+    def test_specification_and_start_key_validation_fail_closed(self) -> None:
+        with self.assertRaisesRegex(AthanorError, "specification is incomplete"):
+            self.service.start({}, "start-001")
+
+        wrong_version = _specification()
+        wrong_version["schema_version"] = "unknown"
+        with self.assertRaisesRegex(AthanorError, "version is invalid"):
+            self.service.start(wrong_version, "start-001")
+
+        invalid_task = _specification()
+        invalid_task["task_binding"] = {"task_id": "", "task_capsule_sigil": "sha256:" + "1" * 64}
+        invalid_task["specification_sigil"] = content_sigil(
+            {key: value for key, value in invalid_task.items() if key != "specification_sigil"}
+        )
+        with self.assertRaisesRegex(AthanorError, "Task ID"):
+            self.service.start(invalid_task, "start-001")
+
+        with self.assertRaisesRegex(AthanorError, "idempotency key"):
+            self.service.start(_specification(), "\x00")
+
+    def test_observation_and_cancel_validation_fail_closed(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        with self.assertRaisesRegex(AthanorError, "observation limit"):
+            self.service.observe(job["job_id"], limit=0)
+        with self.assertRaisesRegex(AthanorError, "cursor is invalid"):
+            self.service.observe(job["job_id"], cursor={})
+        with self.assertRaisesRegex(AthanorError, "Job ID is invalid"):
+            self.service.observe("invalid")
+        with self.assertRaisesRegex(AthanorError, "Job binding is invalid"):
+            self.service.cancel(job["job_id"], "sha256:" + "2" * 64, 1, "cancel-001", "reason")
+        with self.assertRaisesRegex(AthanorError, "revision conflict"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], job["revision"] + 1, "cancel-001", "reason"
+            )
+
+    def test_completed_job_records_terminal_cancellation_observation(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        completed = self.service.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
+        terminal = completed["job"]
+        observed = self.service.cancel(
+            job["job_id"],
+            job["job_binding_sigil"],
+            terminal["revision"],
+            "terminal-cancel-001",
+            "operator acknowledged result",
+        )
+        self.assertEqual(observed["job"]["state"], "SUCCEEDED")
+        self.assertEqual(self.service.get_outcome(job["job_id"])["terminal_state"], "SUCCEEDED")
+
+    def test_queued_job_can_terminalize_and_invalid_journal_json_is_rejected(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        self.service._append_unlocked("job.queued", {"job_id": job["job_id"]})
+        queued = self.service.observe(job["job_id"])["job"]
+        self.assertEqual(queued["state"], "QUEUED")
+        failed = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        self.assertEqual(failed["job"]["state"], "FAILED")
+
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.write_text("{not-json}\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "invalid JSON"):
+            self.service.observe(job["job_id"])
 
     def test_host_neutral_runtime_returns_stable_execution_errors(self) -> None:
         Athanor(Path(self.directory.name)).initialize()
