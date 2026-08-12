@@ -956,6 +956,45 @@ def validate_execution_worker_session_supplied_worker_v1(
         _fail("Execution Worker Session disagrees with supplied Worker")
 
 
+def validate_execution_lease_v1(lease: dict[str, Any]) -> None:
+    """Validate one immutable Lease offer without granting lease authority."""
+    validate_instance("execution-lease-1.0.json", lease)
+    _check_nfc(lease)
+    if lease["lease_binding_sigil"] != content_sigil(_without(lease, "lease_binding_sigil")):
+        _fail("Execution Lease self-Sigil mismatch")
+    if not (
+        _parse_time(lease["offered_at"])
+        <= _parse_time(lease["claim_due_at"])
+        <= _parse_time(lease["initial_expiry_due_at"])
+        <= _parse_time(lease["maximum_expiry_due_at"])
+    ):
+        _fail("Execution Lease deadlines are not non-decreasing")
+
+
+def validate_execution_lease_supplied_bindings_v1(
+    lease: dict[str, Any],
+    attempt: dict[str, Any],
+    worker: dict[str, Any],
+    session: dict[str, Any],
+) -> None:
+    """Compare a Lease offer to its exact supplied Attempt, Worker, and Session."""
+    validate_execution_lease_v1(lease)
+    validate_execution_attempt_v1(attempt)
+    validate_execution_worker_session_supplied_worker_v1(session, worker)
+    if (
+        lease["job_id"] != attempt["job_id"]
+        or lease["attempt_id"] != attempt["attempt_id"]
+        or lease["fencing_generation"] != attempt["fencing_generation"]
+        or lease["worker_id"] != worker["worker_id"]
+        or lease["worker_binding_sigil"] != worker["worker_binding_sigil"]
+        or lease["worker_session_id"] != session["worker_session_id"]
+        or lease["worker_session_binding_sigil"] != session["worker_session_binding_sigil"]
+        or lease["executor_instance_id"] != session["executor_instance_id"]
+        or lease["executor_epoch"] != session["executor_epoch"]
+    ):
+        _fail("Execution Lease disagrees with supplied Attempt, Worker, or Session")
+
+
 def _find_supplied_v1(
     records: list[dict[str, Any]] | None, identifier: str, member: str, label: str
 ) -> dict[str, Any]:
