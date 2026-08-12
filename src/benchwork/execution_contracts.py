@@ -182,14 +182,18 @@ def load_execution_request_v1(kind: str, raw: str | bytes | bytearray) -> dict[s
     return request
 
 
-def _idempotency_projection(record: dict[str, Any]) -> tuple[int, str, str]:
+def _idempotency_projection(record: dict[str, Any]) -> tuple[int, bytes, str]:
     owner = record if "operation_kind" in record else record["core"]
     operation = owner["operation_kind"]
     try:
         rank = _IDEMPOTENCY_RANK[operation]
     except KeyError:
         _fail(f"unknown idempotency operation: {operation}")
-    return rank, owner["scope_id"], owner["idempotency_key_sigil"]
+    return (
+        rank,
+        _unsigned_ascii(owner["scope_id"], "Idempotency scope ID"),
+        owner["idempotency_key_sigil"],
+    )
 
 
 def _unsigned_ascii(value: str, label: str) -> bytes:
