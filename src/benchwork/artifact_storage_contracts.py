@@ -807,10 +807,14 @@ def _reduce_artifact_storage_clock_gate_v1(
 def _reduce_artifact_storage_epoch_started_v1(
     state: dict[str, Any], event: dict[str, Any],
 ) -> dict[str, Any]:
-    """Apply an ordinary no-Recovery coordinator epoch restart."""
-    if event["event_type"] != "storage.epoch_started" or state["store_status"] not in {"INITIALIZING", "ACTIVE"}:
+    """Apply a coordinator restart, retaining any active Recovery identity."""
+    if event["event_type"] != "storage.epoch_started" or state["store_status"] not in {
+        "INITIALIZING", "ACTIVE", "RECOVERING"
+    }:
         _fail("Artifact Storage epoch reducer has an invalid source state or Event")
     payload = event["payload"]
+    recovering = state["store_status"] == "RECOVERING"
+    active_recovery_id = state["active_recovery_id"]
     if (
         event["journal_id"] != state["journal_id"]
         or event["sequence"] != state["applied_event_count"] + 1
@@ -818,8 +822,9 @@ def _reduce_artifact_storage_epoch_started_v1(
         or event["epoch"] != payload["next_epoch"]
         or payload["previous_epoch"] != state["current_epoch"]
         or payload["next_epoch"] != state["current_epoch"] + 1
-        or payload["active_recovery_id"] is not None
-        or payload["tail_recovery"] is not None
+        or (recovering and payload["active_recovery_id"] != active_recovery_id)
+        or (not recovering and payload["active_recovery_id"] is not None)
+        or (not recovering and payload["tail_recovery"] is not None)
         or event["entity_revisions"] != [{
             "entity_type": "STORE", "entity_id": "STORE",
             "previous_revision": event["sequence"] - 1, "next_revision": event["sequence"],
@@ -834,6 +839,11 @@ def _reduce_artifact_storage_epoch_started_v1(
     reduced.update({
         "current_epoch": payload["next_epoch"], "clock_anchor": payload["clock"],
         "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+        "recoveries": [
+            {**recovery, "epoch_ids": [*recovery["epoch_ids"], payload["next_epoch"]]}
+            if recovery["recovery_id"] == active_recovery_id else recovery
+            for recovery in state["recoveries"]
+        ] if recovering else state["recoveries"],
     })
     reduced["state_sigil"] = content_sigil(reduced)
     validate_artifact_storage_state_v1(reduced)
@@ -1022,6 +1032,17 @@ def replay_artifact_storage_journal_prefix_v1(
         state = _reduce_artifact_storage_activation_v1(state, events[1])
         state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
         state = _reduce_artifact_storage_recovery_completed_v1(state, events[3])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(
+                head, events[3], state["state_sigil"]
+            )
+        return state
+    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
+        "storage.activation_completed", "storage.recovery_started", "storage.epoch_started",
+    ]:
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
+        state = _reduce_artifact_storage_epoch_started_v1(state, events[3])
         if head is not None:
             validate_artifact_storage_journal_head_supplied_event_v1(
                 head, events[3], state["state_sigil"]

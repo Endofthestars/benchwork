@@ -288,6 +288,30 @@ def test_storage_replay_completes_an_empty_recovery_to_its_frozen_origin() -> No
     recovering = replay_artifact_storage_journal_prefix_v1([initial, activation, started])
     assert recovering["store_status"] == "RECOVERING"
     assert recovering["active_recovery_id"] == "RECOVERY"
+    restarted = _next_event(started)
+    restarted.update({
+        "event_id": "SE-RESTART", "sequence": 4, "event_type": "storage.epoch_started",
+        "epoch": 3, "recorded_at": "2026-08-06T00:00:03Z",
+        "observed_at": "2026-08-06T00:00:02Z",
+        "entity_revisions": [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": 3, "next_revision": 4,
+        }], "quota_effects": [],
+        "payload": {
+            "previous_epoch": 2, "next_epoch": 3, "active_recovery_id": "RECOVERY",
+            "tail_recovery": None,
+            "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+            "clock": {**started["payload"]["clock"], "utc": "2026-08-06T00:00:02Z"},
+        },
+    })
+    restarted["event_sigil"] = content_sigil({
+        key: value for key, value in restarted.items() if key != "event_sigil"
+    })
+    restarted_state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, started, restarted]
+    )
+    assert restarted_state["current_epoch"] == 3
+    assert restarted_state["recoveries"][0]["epoch_ids"] == [2, 3]
     completed = _next_event(started)
     completed.update({
         "event_id": "SE-FOUR", "sequence": 4, "event_type": "storage.recovery_completed",
