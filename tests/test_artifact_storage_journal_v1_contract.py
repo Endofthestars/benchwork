@@ -1259,6 +1259,32 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="commit Intent disagrees with record state"):
         validate_artifact_storage_state_v1(missing_intent)
 
+    disposition_state = deepcopy(state)
+    disposition_state["dispositions"] = [{
+        "disposition_id": "SD-ONE", "record_sigil": SIGIL, "state": "EXECUTING",
+        "execution_intent_id": "INTENT", "outcome_sigil": None,
+        "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    disposition_state["open_intents"] = [{
+        "intent_kind": "DISPOSITION", "intent_id": "INTENT", "owner_id": "SD-ONE",
+        "source_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                         "event_sigil": SIGIL}, "intent_sigil": SIGIL, "revision": 1,
+        "last_event_sigil": SIGIL, "authorization_expires_at": STAMP,
+        "target_kind": "STAGING", "target_object": committing_object,
+    }]
+    disposition_state["state_sigil"] = content_sigil({
+        key: member for key, member in disposition_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(disposition_state)
+
+    missing_disposition_intent = deepcopy(disposition_state)
+    missing_disposition_intent["open_intents"] = []
+    missing_disposition_intent["state_sigil"] = content_sigil({
+        key: member for key, member in missing_disposition_intent.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Disposition execution Intent disagrees"):
+        validate_artifact_storage_state_v1(missing_disposition_intent)
+
     mismatched_selected = deepcopy(committed_state)
     mismatched_selected["replicas"][0]["record"]["object"]["generation"] = "OTHER"
     mismatched_selected["replicas"][0]["record"]["record_sigil"] = content_sigil({

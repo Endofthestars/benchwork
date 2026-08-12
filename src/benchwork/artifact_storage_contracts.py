@@ -881,6 +881,44 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
                 or intent["target_object"] != commit_intent["target_object"]
             ):
                 _fail(f"Artifact Storage State {collection} commit Intent disagrees with record")
+    disposition_intents_by_owner: dict[str, list[dict[str, Any]]] = {}
+    for intent in state["open_intents"]:
+        if intent["intent_kind"] == "DISPOSITION":
+            disposition_intents_by_owner.setdefault(intent["owner_id"], []).append(intent)
+    for disposition in state["dispositions"]:
+        intents = disposition_intents_by_owner.pop(disposition["disposition_id"], [])
+        executing = disposition["state"] == "EXECUTING"
+        if (
+            (executing and (
+                len(intents) != 1 or intents[0]["intent_id"] != disposition["execution_intent_id"]
+            ))
+            or (not executing and intents)
+        ):
+            _fail("Artifact Storage State Disposition execution Intent disagrees with projection")
+    if disposition_intents_by_owner:
+        _fail("Artifact Storage State Disposition execution Intent lacks a projection")
+    gc_intents = [intent for intent in state["open_intents"] if intent["intent_kind"] == "GC_DELETE"]
+    gc_intent_keys: set[tuple[str, str]] = set()
+    for plan in state["gc_plans"]:
+        for target in plan["target_states"]:
+            intents = [
+                intent for intent in gc_intents
+                if intent["intent_id"] == target["deletion_intent_id"]
+            ]
+            deleting = target["state"] == "DELETING"
+            if (
+                (deleting and (
+                    len(intents) != 1
+                    or intents[0]["owner_id"] != plan["gc_plan_id"]
+                    or intents[0]["target_id"] != target["target_id"]
+                ))
+                or (not deleting and intents)
+            ):
+                _fail("Artifact Storage State GC deletion Intent disagrees with projection")
+            if deleting:
+                gc_intent_keys.add((plan["gc_plan_id"], target["deletion_intent_id"]))
+    if gc_intent_keys != {(intent["owner_id"], intent["intent_id"]) for intent in gc_intents}:
+        _fail("Artifact Storage State GC deletion Intent lacks a target projection")
     availability_counts = {
         "AVAILABLE": 0, "DEGRADED": 0, "UNAVAILABLE": 0, "INCIDENT": 0,
     }
