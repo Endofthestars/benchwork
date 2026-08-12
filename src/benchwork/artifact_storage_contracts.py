@@ -194,6 +194,76 @@ def load_artifact_storage_legacy_protection_v1(
     return protection
 
 
+def validate_artifact_storage_tail_evidence_v1(evidence: dict[str, Any]) -> None:
+    """Validate immutable recovery evidence without reading its raw bytes."""
+    validate_instance("artifact-storage-tail-evidence-1.0.json", evidence)
+    _check_nfc_and_numbers(evidence)
+    if evidence["record_sigil"] != content_sigil(_without(evidence, "record_sigil")):
+        _fail("Artifact Storage Tail Evidence self-Sigil mismatch")
+
+
+def load_artifact_storage_tail_evidence_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    evidence = _load_strict_object(raw, "Artifact Storage Tail Evidence")
+    validate_artifact_storage_tail_evidence_v1(evidence)
+    return evidence
+
+
+_RECOVERY_MARKER_PREPARED_PHASES = {
+    "RECOVERY_EVENT_PREPARED",
+    "RECOVERY_EVENT_RETRY_EVIDENCE_DURABLE",
+    "RECOVERY_EVENT_COMMITTED",
+}
+
+
+def validate_artifact_storage_recovery_marker_v1(marker: dict[str, Any]) -> None:
+    """Validate a Recovery Marker locally without inspecting journal frames."""
+    validate_instance("artifact-storage-recovery-marker-1.0.json", marker)
+    _check_nfc_and_numbers(marker)
+    if marker["record_sigil"] != content_sigil(_without(marker, "record_sigil")):
+        _fail("Artifact Storage Recovery Marker self-Sigil mismatch")
+    if marker["last_complete_byte_length"] > marker["old_committed_byte_length"]:
+        _fail("Artifact Storage Recovery Marker last complete length exceeds old committed length")
+    if marker["discarded_suffix_size"] != (
+        marker["old_committed_byte_length"] - marker["last_complete_byte_length"]
+    ):
+        _fail("Artifact Storage Recovery Marker discarded suffix size mismatch")
+    event_fields = (
+        "recovery_event_id", "recovery_event_sigil", "recovery_event_seed_record_sigil",
+    )
+    frame_fields = (
+        "recovery_frame_start", "recovery_frame_size", "recovery_frame_sigil",
+        "prepared_frame_evidence_record_sigil",
+    )
+    phase = marker["phase"]
+    if phase in {"EVIDENCE_DURABLE", "TAIL_TRUNCATED"}:
+        if any(marker[field] is not None for field in event_fields + frame_fields):
+            _fail("Artifact Storage Recovery Marker early phase has recovery Event fields")
+    elif phase == "RECOVERY_EVENT_ID_DURABLE":
+        if any(marker[field] is None for field in event_fields) or any(
+            marker[field] is not None for field in frame_fields
+        ):
+            _fail("Artifact Storage Recovery Marker ID-durable phase fields are inconsistent")
+    elif phase in _RECOVERY_MARKER_PREPARED_PHASES and any(
+        marker[field] is None for field in event_fields + frame_fields
+    ):
+        _fail("Artifact Storage Recovery Marker prepared phase lacks fixed frame fields")
+    if marker["retry_count"] == 0:
+        if marker["latest_retry_evidence_record_sigil"] is not None:
+            _fail("Artifact Storage Recovery Marker zero retry count has retry evidence")
+    elif marker["latest_retry_evidence_record_sigil"] is None:
+        _fail("Artifact Storage Recovery Marker retry count lacks retry evidence")
+
+
+def load_artifact_storage_recovery_marker_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    marker = _load_strict_object(raw, "Artifact Storage Recovery Marker")
+    validate_artifact_storage_recovery_marker_v1(marker)
+    return marker
+
+
 def validate_artifact_storage_state_supplied_control_records_v1(
     state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
     reference_intents: list[dict[str, Any]],

@@ -10,8 +10,10 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
     load_artifact_storage_legacy_protection_v1,
+    load_artifact_storage_recovery_marker_v1,
     load_artifact_storage_reference_intent_v1,
     load_artifact_storage_reference_set_v1,
+    load_artifact_storage_tail_evidence_v1,
     load_artifact_storage_state_v1,
     require_artifact_storage_journal_replay_authority_v1,
     require_artifact_storage_runtime_authority_v1,
@@ -21,11 +23,13 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_head_v1,
     validate_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_legacy_protection_v1,
+    validate_artifact_storage_recovery_marker_v1,
     validate_artifact_storage_head_supplied_state_v1,
     validate_artifact_storage_state_v1,
     validate_artifact_storage_reference_intent_v1,
     validate_artifact_storage_reference_set_v1,
     validate_artifact_storage_state_supplied_control_records_v1,
+    validate_artifact_storage_tail_evidence_v1,
 )
 
 
@@ -184,6 +188,39 @@ def _legacy_protection() -> dict[str, object]:
     return protection
 
 
+def _tail_evidence() -> dict[str, object]:
+    evidence: dict[str, object] = {
+        "schema_version": "artifact-storage-tail-evidence/1.0", "evidence_id": "EVIDENCE",
+        "recovery_id": "RECOVERY", "journal_id": "SJ-ONE",
+        "kind": "ORIGINAL_INTERRUPTED_APPEND", "frame_start": 1, "observed_size": 1,
+        "observed_bytes_sigil": SIGIL, "previous_evidence_record_sigil": None,
+        "created_at": STAMP, "record_sigil": "",
+    }
+    evidence["record_sigil"] = content_sigil({
+        key: member for key, member in evidence.items() if key != "record_sigil"
+    })
+    return evidence
+
+
+def _recovery_marker() -> dict[str, object]:
+    marker: dict[str, object] = {
+        "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
+        "journal_id": "SJ-ONE", "prior_head_sigil": SIGIL, "old_committed_byte_length": 2,
+        "last_complete_byte_length": 1, "discarded_suffix_size": 1,
+        "discarded_suffix_sigil": SIGIL, "evidence_record_sigil": SIGIL,
+        "phase": "EVIDENCE_DURABLE", "recovery_event_id": None, "recovery_event_sigil": None,
+        "recovery_event_seed_record_sigil": None, "recovery_frame_start": None,
+        "recovery_frame_size": None, "recovery_frame_sigil": None,
+        "prepared_frame_evidence_record_sigil": None, "retry_count": 0,
+        "latest_retry_evidence_record_sigil": None, "created_at": STAMP, "updated_at": STAMP,
+        "record_sigil": "",
+    }
+    marker["record_sigil"] = content_sigil({
+        key: member for key, member in marker.items() if key != "record_sigil"
+    })
+    return marker
+
+
 def test_storage_journal_event_checks_self_sigil_order_and_strict_loading() -> None:
     event = _event()
     validate_artifact_storage_journal_event_v1(event)
@@ -327,6 +364,54 @@ def test_legacy_protection_is_self_signed_and_matches_state_projection() -> None
     })
     with pytest.raises(AthanorError, match="Legacy Protection disagrees"):
         validate_artifact_storage_state_v1(mismatched)
+
+
+def test_recovery_evidence_and_marker_phase_matrix() -> None:
+    evidence = _tail_evidence()
+    validate_artifact_storage_tail_evidence_v1(evidence)
+    assert load_artifact_storage_tail_evidence_v1(json.dumps(evidence)) == evidence
+
+    marker = _recovery_marker()
+    validate_artifact_storage_recovery_marker_v1(marker)
+    assert load_artifact_storage_recovery_marker_v1(json.dumps(marker)) == marker
+
+    id_durable = deepcopy(marker)
+    id_durable.update({
+        "phase": "RECOVERY_EVENT_ID_DURABLE", "recovery_event_id": "SE-RECOVERY",
+        "recovery_event_sigil": SIGIL, "recovery_event_seed_record_sigil": evidence["record_sigil"],
+    })
+    id_durable["record_sigil"] = content_sigil({
+        key: member for key, member in id_durable.items() if key != "record_sigil"
+    })
+    validate_artifact_storage_recovery_marker_v1(id_durable)
+
+    malformed = deepcopy(id_durable)
+    malformed["recovery_frame_start"] = 1
+    malformed["record_sigil"] = content_sigil({
+        key: member for key, member in malformed.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="ID-durable phase"):
+        validate_artifact_storage_recovery_marker_v1(malformed)
+
+    retried = deepcopy(id_durable)
+    retried.update({
+        "phase": "RECOVERY_EVENT_RETRY_EVIDENCE_DURABLE", "recovery_frame_start": 1,
+        "recovery_frame_size": 1, "recovery_frame_sigil": SIGIL,
+        "prepared_frame_evidence_record_sigil": SIGIL, "retry_count": 1,
+        "latest_retry_evidence_record_sigil": SIGIL_B,
+    })
+    retried["record_sigil"] = content_sigil({
+        key: member for key, member in retried.items() if key != "record_sigil"
+    })
+    validate_artifact_storage_recovery_marker_v1(retried)
+
+    zero_retry = deepcopy(retried)
+    zero_retry["retry_count"] = 0
+    zero_retry["record_sigil"] = content_sigil({
+        key: member for key, member in zero_retry.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="zero retry"):
+        validate_artifact_storage_recovery_marker_v1(zero_retry)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
