@@ -1281,6 +1281,32 @@ def _reduce_late_result_rejected_v1(state: dict[str, Any], event: dict[str, Any]
     return build_execution_state_v1(reduced)
 
 
+def _reduce_log_closed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Freeze one open log stream using its already-recorded local counters."""
+    payload, executor = event["payload"], state["executor"]
+    matches = [stream for stream in state["log_streams"] if stream["log_stream_id"] == payload["log_stream_id"]]
+    if len(matches) != 1:
+        _fail("Log close Event has no unique Log-stream projection")
+    stream = matches[0]
+    if (
+        event["event_type"] != "log.closed" or stream["state"] != "OPEN"
+        or payload["stream"] != stream["stream"] or payload["final_sequence"] != (stream["next_sequence"] - 1 if stream["next_sequence"] else None)
+        or payload["captured_bytes"] != stream["captured_bytes"] or payload["dropped_bytes"] != stream["dropped_bytes"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LOG_STREAM", "entity_id": stream["log_stream_id"], "preceding_revision": stream["revision"], "next_revision": stream["revision"] + 1}]
+    ):
+        _fail("Log close Event disagrees with open Log-stream projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["log_streams"] = [
+        {**candidate, "revision": candidate["revision"] + 1, "state": "CLOSED",
+         "final_sequence": payload["final_sequence"], "stream_set_sigil": payload["stream_set_sigil"],
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["log_stream_id"] == stream["log_stream_id"] else candidate
+        for candidate in state["log_streams"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close a running Attempt after its immutable result disposition."""
     if len(state["attempts"]) != 1:
@@ -1745,6 +1771,8 @@ def replay_execution_supplied_state_suffix_v1(
                 current = _reduce_result_rejected_v1(current, event, evidence, receipt)
             else:
                 current = _reduce_late_result_rejected_v1(current, event)
+        elif event["event_type"] == "log.closed":
+            current = _reduce_log_closed_v1(current, event)
         elif event["event_type"] == "attempt.draining":
             current = _reduce_attempt_draining_v1(current, event)
         elif event["event_type"] == "attempt.cleaning":

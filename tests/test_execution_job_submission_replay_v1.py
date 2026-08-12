@@ -535,6 +535,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert late_rejected_state["attempts"][0]["result_binding"] == accepted_state["attempts"][0]["result_binding"]
     assert late_rejected_state["attempts"][0]["revision"] == 12
 
+    stdout_stream = next(stream for stream in closed_state["log_streams"] if stream["stream"] == "STDOUT")
+    log_closed = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LOGCLOSED", "sequence": 16, "event_type": "log.closed", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "LOG_STREAM", "entity_id": stdout_stream["log_stream_id"], "preceding_revision": 0, "next_revision": 1}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"log_stream_id": stdout_stream["log_stream_id"], "stream": "STDOUT", "final_sequence": None, "captured_bytes": 0, "dropped_bytes": 0, "stream_set_sigil": SIGIL, "freeze_binding": {"kind": "NONE"}, "closure_intent_id": "LCI-ONE"}, "previous_event_sigil": closed["event_sigil"]})
+    log_closed_state = replay_execution_supplied_state_suffix_v1(closed_state, [log_closed])
+    assert next(stream for stream in log_closed_state["log_streams"] if stream["stream"] == "STDOUT")["state"] == "CLOSED"
+
+    wrong_log_close = deepcopy(log_closed)
+    wrong_log_close["payload"]["captured_bytes"] = 1
+    wrong_log_close = build_execution_journal_event_v1({key: value for key, value in wrong_log_close.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(closed_state, [wrong_log_close])
+
     wrong_late_rejection = deepcopy(late_rejection)
     wrong_late_rejection["payload"]["historical_disposition_event_id"] = None
     wrong_late_rejection = build_execution_journal_event_v1({key: value for key, value in wrong_late_rejection.items() if key != "event_sigil"})
