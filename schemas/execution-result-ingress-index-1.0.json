@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-result-ingress-index/1.0",
+  "title": "Execution Result Ingress Index v1",
+  "description": "Closed RFC-0012 O2 single-Attempt Result-ingress replacement row. Structural validation does not establish canonical-path visibility, Journal/CAS/due authority, live ownership, Result acceptance, or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ingress_index_id", "attempt_id", "result_sigil", "idempotency_key_sigil", "event_id", "result_ingress_receipt", "ingress_event_intent", "status", "created_at", "index_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-result-ingress-index/1.0"},
+    "ingress_index_id": {"$ref": "#/$defs/ingress_index_id"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "result_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "idempotency_key_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"},
+    "result_ingress_receipt": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0"},
+    "ingress_event_intent": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-event-intent/1.0"},
+    "status": {"oneOf": [{"$ref": "#/$defs/pending_event"}, {"$ref": "#/$defs/committed"}, {"$ref": "#/$defs/aborted"}]},
+    "created_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "index_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  },
+  "$defs": {
+    "ingress_index_id": {"type": "string", "pattern": "^OIX-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "abort_predicate": {"enum": ["EXECUTOR_EPOCH_CHANGED", "FENCE_STALE", "ATTEMPT_NOT_RUNNING", "JOB_NOT_ACTIVE", "LEASE_NOT_ACTIVE", "LEASE_EXPIRED", "LEASE_REVOKED", "WORKER_SESSION_NOT_CURRENT", "CONTROL_CHANNEL_NOT_CURRENT", "STOP_OR_DUE_ALREADY_WON", "RESULT_MODE_DISALLOWS"]},
+    "pending_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "expected_prior_index_sigil", "expected_journal_head", "installed_at"],
+      "properties": {"kind": {"const": "PENDING_EVENT"}, "expected_prior_index_sigil": {"type": "null"}, "expected_journal_head": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0"}, "installed_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"}}
+    },
+    "committed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "expected_prior_index_sigil", "actual_event_ref", "committed_at"],
+      "properties": {"kind": {"const": "COMMITTED"}, "expected_prior_index_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "actual_event_ref": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_ref"}, "committed_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"}}
+    },
+    "aborted": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "expected_prior_index_sigil", "recovered_journal_head", "due_cutoff_at", "failed_predicate", "aborted_at"],
+      "properties": {"kind": {"const": "ABORTED"}, "expected_prior_index_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "recovered_journal_head": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0"}, "due_cutoff_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"}, "failed_predicate": {"$ref": "#/$defs/abort_predicate"}, "aborted_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"}}
+    }
+  }
+}
+

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-local-execution-worker/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "worker_id",
+    "definition_revision",
+    "implementation_name",
+    "implementation_version",
+    "maximum_concurrency",
+    "worker_binding_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "benchwork-local-execution-worker/0.1"},
+    "worker_id": {"type": "string", "pattern": "^WK-[A-Z0-9][A-Z0-9._-]*$"},
+    "definition_revision": {"type": "integer", "minimum": 0},
+    "implementation_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "implementation_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "maximum_concurrency": {"const": 1},
+    "worker_binding_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
+

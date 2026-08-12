@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-source-tree/1.0",
+  "title": "Benchwork Source Tree v1",
+  "description": "Closed RFC-0012 canonical retained-source manifest and BWSOURCE1 bundle identity. Filesystem scan completeness, hard-link/sparse-file detection, Specification resolution, Storage durability, and terminal-source binding remain external conformance checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_tree_id", "manifest", "bundle_blob", "verified_at", "source_tree_sigil"],
+  "properties": {
+    "schema_version": {"const": "benchwork-source-tree/1.0"},
+    "source_tree_id": {"$ref": "#/$defs/sourceTreeId"},
+    "manifest": {"$ref": "#/$defs/manifest"},
+    "bundle_blob": {"$ref": "#/$defs/blobRef"},
+    "verified_at": {"$ref": "#/$defs/timestamp"},
+    "source_tree_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "sourceTreeId": {"type": "string", "pattern": "^BTS-[A-F0-9]{64}$", "not": {"pattern": "[\\r\\n]"}, "minLength": 68, "maxLength": 68},
+    "jobId": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attemptId": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"},
+    "baseIdentity": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/token"},
+    "blobRef": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"},
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^/\\u0000-\\u001F\\u007F-\\u009F]+(?:/[^/\\u0000-\\u001F\\u007F-\\u009F]+)*$", "not": {"pattern": "[\\r\\n]"}},
+    "symlinkTarget": {"type": "string", "maxLength": 4096, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$", "not": {"pattern": "[\\r\\n]"}},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_kind", "included_paths", "excluded_paths"],
+      "properties": {
+        "root_kind": {"const": "CRUCIBLE"},
+        "included_paths": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/path"}},
+        "excluded_paths": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/path"}}
+      }
+    },
+    "pathSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["separator", "unicode_normalization", "case_mode", "dot_segments", "link_traversal", "reserved_name_policy"],
+      "properties": {
+        "separator": {"const": "SLASH"},
+        "unicode_normalization": {"const": "NFC"},
+        "case_mode": {"enum": ["SENSITIVE", "INSENSITIVE_REJECT_COLLISIONS"]},
+        "dot_segments": {"const": "REJECT"},
+        "link_traversal": {"const": "NOFOLLOW"},
+        "reserved_name_policy": {"const": "REJECT"}
+      }
+    },
+    "directoryEntry": {"type": "object", "additionalProperties": false, "required": ["path", "kind", "entry_sigil"], "properties": {"path": {"$ref": "#/$defs/path"}, "kind": {"const": "DIRECTORY"}, "entry_sigil": {"$ref": "#/$defs/sigil"}}},
+    "fileEntry": {"type": "object", "additionalProperties": false, "required": ["path", "kind", "blob", "executable"], "properties": {"path": {"$ref": "#/$defs/path"}, "kind": {"const": "FILE"}, "blob": {"$ref": "#/$defs/blobRef"}, "executable": {"type": "boolean"}}},
+    "symlinkEntry": {"type": "object", "additionalProperties": false, "required": ["path", "kind", "target", "target_sigil"], "properties": {"path": {"$ref": "#/$defs/path"}, "kind": {"const": "SYMLINK"}, "target": {"$ref": "#/$defs/symlinkTarget"}, "target_sigil": {"$ref": "#/$defs/sigil"}}},
+    "entry": {"oneOf": [{"$ref": "#/$defs/directoryEntry"}, {"$ref": "#/$defs/fileEntry"}, {"$ref": "#/$defs/symlinkEntry"}]},
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "job_id", "attempt_id", "attempt_binding_sigil", "crucible_base_identity", "crucible_base_sigil", "scope", "path_semantics", "entries", "file_count", "byte_count", "manifest_sigil"],
+      "properties": {
+        "format_version": {"const": "BENCHWORK_SOURCE_TREE_V1"},
+        "job_id": {"$ref": "#/$defs/jobId"},
+        "attempt_id": {"$ref": "#/$defs/attemptId"},
+        "attempt_binding_sigil": {"$ref": "#/$defs/sigil"},
+        "crucible_base_identity": {"$ref": "#/$defs/baseIdentity"},
+        "crucible_base_sigil": {"$ref": "#/$defs/sigil"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "path_semantics": {"$ref": "#/$defs/pathSemantics"},
+        "entries": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/entry"}},
+        "file_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "byte_count": {"$ref": "#/$defs/u63"},
+        "manifest_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}
+

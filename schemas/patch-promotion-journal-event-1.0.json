@@ -1,0 +1,4227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0",
+  "title": "Patch Promotion Journal Event v1",
+  "description": "Closed RFC-0014 Promotion Journal Event wire contract. Contract-only validation does not resolve a Journal prefix, replay State, Receipt, HoldBinding, Storage/Chronicle record, or grant Promotion or recovery authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "journal_id",
+    "event_id",
+    "sequence",
+    "coordinator_id",
+    "coordinator_epoch",
+    "event_type",
+    "recorded_at",
+    "entity_revisions",
+    "causation_event_id",
+    "idempotency_key_sigil",
+    "payload",
+    "previous_event_sigil",
+    "event_sigil"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "patch-promotion-journal-event/1.0"
+    },
+    "journal_id": {
+      "$ref": "#/$defs/pj"
+    },
+    "event_id": {
+      "$ref": "#/$defs/pje"
+    },
+    "sequence": {
+      "$ref": "#/$defs/positiveU64"
+    },
+    "coordinator_id": {
+      "$ref": "#/$defs/pc"
+    },
+    "coordinator_epoch": {
+      "$ref": "#/$defs/u64"
+    },
+    "event_type": {
+      "$ref": "#/$defs/eventType"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "entity_revisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/entityRevision"
+      }
+    },
+    "causation_event_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/pje"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotency_key_sigil": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sigil"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "previous_event_sigil": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sigil"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "event_sigil": {
+      "$ref": "#/$defs/sigil"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "event_type": {
+          "const": "coordinator.epoch-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "coordinator.replay-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload2"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "coordinator.integrity-failed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload3"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "coordinator.clock-uncertain"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload4"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "coordinator.clock-restored"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload5"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "canonical.receipt-observed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload6"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "preview.prepared"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload7"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "preview.decision-submission-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload8"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "preview.decision-failed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload9"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "preview.expired"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload10"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-acquire-intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload11"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-acquired"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload12"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-renew-intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload13"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-renewed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload14"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-validated"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload15"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-release-intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload16"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-fence-intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload17"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-fenced"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload18"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-released"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload19"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "target.guard-failed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload20"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.attempt-created"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload21"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.preflight-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload22"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.checkpoint-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload23"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.ready"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload24"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.mutation-intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload25"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.verification-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload26"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.applied"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload27"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.recovered-postimage-observed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload28"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.already-applied"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload29"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.stale"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload30"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.conflicted"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload31"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.failed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload32"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.partial"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload33"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "promotion.cancelled"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload34"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.attempt-created"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload35"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.preflight-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload36"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.checkpoint-verified"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload37"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.ready"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload38"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.intent-committed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload39"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.verification-started"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload40"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.base-restored"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload41"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.postimage-accepted"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload42"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.abandoned"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload43"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.stale"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload44"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.failed"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload45"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.partial"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload46"
+        }
+      }
+    },
+    {
+      "properties": {
+        "event_type": {
+          "const": "recovery.cancelled"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload47"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709552000
+    },
+    "positiveU64": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709552000
+    },
+    "positiveU63": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854776000
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    },
+    "text64": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 64,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "text128": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "text256": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "text512": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 512,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "eventType": {
+      "enum": [
+        "coordinator.epoch-started",
+        "coordinator.replay-started",
+        "coordinator.integrity-failed",
+        "coordinator.clock-uncertain",
+        "coordinator.clock-restored",
+        "canonical.receipt-observed",
+        "preview.prepared",
+        "preview.decision-submission-started",
+        "preview.decision-failed",
+        "preview.expired",
+        "target.guard-acquire-intent-committed",
+        "target.guard-acquired",
+        "target.guard-renew-intent-committed",
+        "target.guard-renewed",
+        "target.guard-validated",
+        "target.guard-release-intent-committed",
+        "target.guard-fence-intent-committed",
+        "target.guard-fenced",
+        "target.guard-released",
+        "target.guard-failed",
+        "promotion.attempt-created",
+        "promotion.preflight-started",
+        "promotion.checkpoint-committed",
+        "promotion.ready",
+        "promotion.mutation-intent-committed",
+        "promotion.verification-started",
+        "promotion.applied",
+        "promotion.recovered-postimage-observed",
+        "promotion.already-applied",
+        "promotion.stale",
+        "promotion.conflicted",
+        "promotion.failed",
+        "promotion.partial",
+        "promotion.cancelled",
+        "recovery.attempt-created",
+        "recovery.preflight-started",
+        "recovery.checkpoint-verified",
+        "recovery.ready",
+        "recovery.intent-committed",
+        "recovery.verification-started",
+        "recovery.base-restored",
+        "recovery.postimage-accepted",
+        "recovery.abandoned",
+        "recovery.stale",
+        "recovery.failed",
+        "recovery.partial",
+        "recovery.cancelled"
+      ]
+    },
+    "pj": {
+      "type": "string",
+      "pattern": "^PJ-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "pje": {
+      "type": "string",
+      "pattern": "^PJE-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pc": {
+      "type": "string",
+      "pattern": "^PC-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "ptri": {
+      "type": "string",
+      "pattern": "^PTRI-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 6,
+      "maxLength": 128
+    },
+    "proot": {
+      "type": "string",
+      "pattern": "^PROOT-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 7,
+      "maxLength": 128
+    },
+    "pg": {
+      "type": "string",
+      "pattern": "^PG-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "prv": {
+      "type": "string",
+      "pattern": "^PRV-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "ce": {
+      "type": "string",
+      "pattern": "^CE-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "rc": {
+      "type": "string",
+      "pattern": "^RC-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "pat": {
+      "type": "string",
+      "pattern": "^PAT-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pck": {
+      "type": "string",
+      "pattern": "^PCK-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pmi": {
+      "type": "string",
+      "pattern": "^PMI-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pra": {
+      "type": "string",
+      "pattern": "^PRA-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pri": {
+      "type": "string",
+      "pattern": "^PRI-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pt": {
+      "type": "string",
+      "pattern": "^PT-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "po": {
+      "type": "string",
+      "pattern": "^PO-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "prr": {
+      "type": "string",
+      "pattern": "^PRR-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pp": {
+      "type": "string",
+      "pattern": "^PP-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "per": {
+      "type": "string",
+      "pattern": "^PER-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "pdf": {
+      "type": "string",
+      "pattern": "^PDF-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 5,
+      "maxLength": 128
+    },
+    "porp": {
+      "type": "string",
+      "pattern": "^PORP-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 6,
+      "maxLength": 128
+    },
+    "sj": {
+      "type": "string",
+      "pattern": "^SJ-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "se": {
+      "type": "string",
+      "pattern": "^SE-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "sh": {
+      "type": "string",
+      "pattern": "^SH-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "rs": {
+      "type": "string",
+      "pattern": "^RS-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "sp": {
+      "type": "string",
+      "pattern": "^SP-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "pckRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sigil"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pck"
+        },
+        "sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "pmiRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sigil"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pmi"
+        },
+        "sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "pgRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sigil"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pg"
+        },
+        "sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "priRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sigil"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pri"
+        },
+        "sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "receipt": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-authorization/1.0#/$defs/receipt"
+    },
+    "actor": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-rejection/1.0#/$defs/actor"
+    },
+    "host": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-rejection/1.0#/$defs/host"
+    },
+    "headRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-head/1.0"
+    },
+    "storageEventRef": {
+      "$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"
+    },
+    "storagePrefixRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journal_id",
+        "through_sequence",
+        "terminal_event_sigil",
+        "projected_state_sigil"
+      ],
+      "properties": {
+        "journal_id": {
+          "$ref": "#/$defs/sj"
+        },
+        "through_sequence": {
+          "$ref": "#/$defs/positiveU63"
+        },
+        "terminal_event_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "projected_state_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "referenceSetRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference_set_id",
+        "reference_set_sigil"
+      ],
+      "properties": {
+        "reference_set_id": {
+          "$ref": "#/$defs/rs"
+        },
+        "reference_set_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "rootPlanRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sigil"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/porp"
+        },
+        "sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "holdAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject_id",
+        "authorization_sigil"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "PROMOTION_CONTROL",
+            "JOURNAL_RECOVERY",
+            "EXECUTION_ROOT_IMPORT"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/$defs/text128"
+        },
+        "authorization_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "holdBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_plan",
+        "hold_id",
+        "hold_set_event",
+        "frozen_storage_prefix",
+        "target_reference_set",
+        "policy_id",
+        "policy_sigil",
+        "authorization"
+      ],
+      "properties": {
+        "root_plan": {
+          "$ref": "#/$defs/rootPlanRef"
+        },
+        "hold_id": {
+          "$ref": "#/$defs/sh"
+        },
+        "hold_set_event": {
+          "$ref": "#/$defs/storageEventRef"
+        },
+        "frozen_storage_prefix": {
+          "$ref": "#/$defs/storagePrefixRef"
+        },
+        "target_reference_set": {
+          "$ref": "#/$defs/referenceSetRef"
+        },
+        "policy_id": {
+          "$ref": "#/$defs/sp"
+        },
+        "policy_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "authorization": {
+          "$ref": "#/$defs/holdAuthorization"
+        }
+      }
+    },
+    "promotionEventRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_id",
+        "protocol_version",
+        "journal_id",
+        "event_id",
+        "sequence",
+        "event_type",
+        "event_sigil"
+      ],
+      "properties": {
+        "protocol_id": {
+          "const": "benchwork.patch-promotion"
+        },
+        "protocol_version": {
+          "const": "1.0"
+        },
+        "journal_id": {
+          "$ref": "#/$defs/pj"
+        },
+        "event_id": {
+          "$ref": "#/$defs/pje"
+        },
+        "sequence": {
+          "$ref": "#/$defs/positiveU64"
+        },
+        "event_type": {
+          "$ref": "#/$defs/eventType"
+        },
+        "event_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "logicalFencePromotionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "outcome_id",
+        "outcome_sigil",
+        "receipt"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PROMOTION_OUTCOME"
+        },
+        "outcome_id": {
+          "$ref": "#/$defs/po"
+        },
+        "outcome_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        }
+      }
+    },
+    "logicalFenceRecoveryRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "recovery_record_id",
+        "recovery_record_sigil",
+        "receipt"
+      ],
+      "properties": {
+        "kind": {
+          "const": "RECOVERY_RECORD"
+        },
+        "recovery_record_id": {
+          "$ref": "#/$defs/prr"
+        },
+        "recovery_record_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        }
+      }
+    },
+    "abandonedLineage": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-authorization/1.0#/$defs/abandoned"
+    },
+    "logicalFenceReceiptTransition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target_id",
+            "logical_fence_generation",
+            "parent_attempt_id",
+            "terminal_event",
+            "canonical_record"
+          ],
+          "properties": {
+            "kind": {
+              "const": "PROMOTION_PARTIAL_CANONICALIZED"
+            },
+            "target_id": {
+              "$ref": "#/$defs/pt"
+            },
+            "logical_fence_generation": {
+              "$ref": "#/$defs/u64"
+            },
+            "parent_attempt_id": {
+              "$ref": "#/$defs/pat"
+            },
+            "terminal_event": {
+              "$ref": "#/$defs/promotionEventRef"
+            },
+            "canonical_record": {
+              "$ref": "#/$defs/logicalFencePromotionRecord"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target_id",
+            "logical_fence_generation",
+            "parent_attempt_id",
+            "recovery_attempt_id",
+            "terminal_status",
+            "terminal_event",
+            "canonical_record",
+            "next_state"
+          ],
+          "properties": {
+            "kind": {
+              "const": "RECOVERY_RECORD_CANONICALIZED"
+            },
+            "target_id": {
+              "$ref": "#/$defs/pt"
+            },
+            "logical_fence_generation": {
+              "$ref": "#/$defs/u64"
+            },
+            "parent_attempt_id": {
+              "$ref": "#/$defs/pat"
+            },
+            "recovery_attempt_id": {
+              "$ref": "#/$defs/pra"
+            },
+            "terminal_status": {
+              "enum": [
+                "BASE_RESTORED",
+                "POSTIMAGE_ACCEPTED",
+                "ABANDONED",
+                "STALE",
+                "FAILED",
+                "PARTIAL",
+                "CANCELLED"
+              ]
+            },
+            "terminal_event": {
+              "$ref": "#/$defs/promotionEventRef"
+            },
+            "canonical_record": {
+              "$ref": "#/$defs/logicalFenceRecoveryRecord"
+            },
+            "next_state": {
+              "enum": [
+                "ACTIVE",
+                "ABANDONED",
+                "CLEAR"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target_id",
+            "logical_fence_generation",
+            "attempt_id",
+            "terminal_status",
+            "terminal_event",
+            "abandoned_lineage",
+            "canonical_record"
+          ],
+          "properties": {
+            "kind": {
+              "const": "ABANDONED_REENTRY_RESOLVED"
+            },
+            "target_id": {
+              "$ref": "#/$defs/pt"
+            },
+            "logical_fence_generation": {
+              "$ref": "#/$defs/u64"
+            },
+            "attempt_id": {
+              "$ref": "#/$defs/pat"
+            },
+            "terminal_status": {
+              "enum": [
+                "APPLIED",
+                "RECOVERED_POSTIMAGE_OBSERVED",
+                "ALREADY_APPLIED"
+              ]
+            },
+            "terminal_event": {
+              "$ref": "#/$defs/promotionEventRef"
+            },
+            "abandoned_lineage": {
+              "$ref": "#/$defs/abandonedLineage"
+            },
+            "canonical_record": {
+              "$ref": "#/$defs/logicalFencePromotionRecord"
+            }
+          }
+        }
+      ]
+    },
+    "guardRecoveryStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "origin_state",
+        "guard_sigil",
+        "last_physical_intent_event_id",
+        "last_physical_intent_event_sigil",
+        "backend_request_sigil",
+        "prior_backend_generation",
+        "intended_backend_generation",
+        "prior_fence_floor",
+        "intended_fence_floor",
+        "last_readback_evidence_sigil"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "origin_state": {
+          "enum": [
+            "ACQUIRING",
+            "HELD",
+            "RENEWING",
+            "RELEASING",
+            "FENCING",
+            "RECOVERING"
+          ]
+        },
+        "guard_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "last_physical_intent_event_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pje"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_physical_intent_event_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backend_request_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prior_backend_generation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intended_backend_generation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prior_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "intended_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "last_readback_evidence_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "patchErrorDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error_id",
+        "retryable",
+        "entity_kind",
+        "entity_id",
+        "state",
+        "expected_sigil",
+        "observed_sigil",
+        "due_at",
+        "idempotency_key_sigil",
+        "failure_id",
+        "reason_code",
+        "evidence_sigils",
+        "detail_sigil"
+      ],
+      "properties": {
+        "error_id": {
+          "$ref": "#/$defs/per"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "entity_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "PROPOSAL",
+                "PREVIEW",
+                "DECISION",
+                "GUARD",
+                "PROMOTION_ATTEMPT",
+                "RECOVERY_ATTEMPT",
+                "REFERENCE_INTENT",
+                "JOURNAL"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entity_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idempotency_key_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pdf"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "SCHEMA_INVALID",
+            "NOT_FOUND",
+            "INELIGIBLE",
+            "STALE",
+            "CAS_CONFLICT",
+            "KEY_REUSED",
+            "PREVIEW_EXPIRED",
+            "DECISION_PENDING",
+            "DEFINITIVE_PRECOMMIT_ABORT",
+            "CHRONICLE_HEAD_CONFLICT",
+            "POLICY_INELIGIBLE",
+            "STALE_BINDING",
+            "DEADLINE_CROSSED",
+            "TOKEN_INVALID",
+            "CLOCK_UNCERTAIN",
+            "ACTIVE_GUARD_LIMIT",
+            "GUARD_BACKEND_UNAVAILABLE",
+            "INTEGRITY_FAILURE",
+            "STORAGE_UNAVAILABLE",
+            "CHRONICLE_UNAVAILABLE",
+            "REFERENCE_PIN_FAILED",
+            "RECOVERY_REQUIRED",
+            "OUTCOME_INVALID",
+            "UNSUPPORTED_TARGET"
+          ]
+        },
+        "evidence_sigils": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "detail_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "entityRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_type",
+        "entity_id",
+        "prior_revision",
+        "next_revision"
+      ],
+      "properties": {
+        "entity_type": {
+          "$ref": "#/$defs/text64"
+        },
+        "entity_id": {
+          "$ref": "#/$defs/text128"
+        },
+        "prior_revision": {
+          "$ref": "#/$defs/u64"
+        },
+        "next_revision": {
+          "$ref": "#/$defs/u64"
+        }
+      }
+    },
+    "payload1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_epoch",
+        "new_epoch",
+        "replayed_head",
+        "replayed_state_sigil",
+        "clock_evidence_sigil",
+        "completed_tail_recovery_id",
+        "deactivated_operational_root_ids",
+        "started_at"
+      ],
+      "properties": {
+        "prior_epoch": {
+          "$ref": "#/$defs/u64"
+        },
+        "new_epoch": {
+          "$ref": "#/$defs/u64"
+        },
+        "replayed_head": {
+          "$ref": "#/$defs/headRef"
+        },
+        "replayed_state_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "clock_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "completed_tail_recovery_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ptri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deactivated_operational_root_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1000000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/proot"
+          }
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_epoch",
+        "recovery_epoch",
+        "validated_head",
+        "frames_file_size",
+        "tail_recovery_id",
+        "tail_recovery_intent_sigil",
+        "suffix_evidence_sigil",
+        "suffix_evidence_protection",
+        "unresolved_guards",
+        "started_at"
+      ],
+      "properties": {
+        "prior_epoch": {
+          "$ref": "#/$defs/u64"
+        },
+        "recovery_epoch": {
+          "$ref": "#/$defs/u64"
+        },
+        "validated_head": {
+          "$ref": "#/$defs/headRef"
+        },
+        "frames_file_size": {
+          "$ref": "#/$defs/u64"
+        },
+        "tail_recovery_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ptri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tail_recovery_intent_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suffix_evidence_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suffix_evidence_protection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/holdBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unresolved_guards": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/guardRecoveryStart"
+          }
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "evidence_sigils",
+        "first_bad_offset",
+        "first_bad_event_id",
+        "detected_at"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "JOURNAL",
+            "HEAD",
+            "FRAME",
+            "CLOCK",
+            "GUARD",
+            "TARGET",
+            "STORAGE",
+            "CHRONICLE",
+            "SCHEMA"
+          ]
+        },
+        "evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "first_bad_offset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "first_bad_event_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pje"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detected_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "last_trusted_utc",
+        "observed_utc",
+        "monotonic_status",
+        "divergence_seconds",
+        "cause",
+        "prior_anchor_evidence_sigil",
+        "guards_to_fence",
+        "detected_at"
+      ],
+      "properties": {
+        "last_trusted_utc": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "observed_utc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "monotonic_status": {
+          "enum": [
+            "OK",
+            "RESET",
+            "UNAVAILABLE"
+          ]
+        },
+        "divergence_seconds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cause": {
+          "enum": [
+            "ROLLBACK",
+            "FORWARD_JUMP",
+            "EXCESSIVE_SLEW",
+            "MONOTONIC_RESET",
+            "SUSPEND_UNKNOWN",
+            "SOURCE_UNTRUSTED",
+            "ARITHMETIC"
+          ]
+        },
+        "prior_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "guards_to_fence": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pg"
+          }
+        },
+        "detected_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trusted_source_sigil",
+        "policy_sigil",
+        "restored_utc",
+        "new_anchor_evidence_sigil",
+        "resolved_decision_ids",
+        "fenced_guard_ids"
+      ],
+      "properties": {
+        "trusted_source_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "policy_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "restored_utc": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "new_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "resolved_decision_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/prv"
+          }
+        },
+        "fenced_guard_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pg"
+          }
+        }
+      }
+    },
+    "payload6": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject_id",
+        "submission_event_id",
+        "canonical_event_id",
+        "event_body_sigil",
+        "receipt",
+        "request_sigil",
+        "canonical_commit_event",
+        "resulting_chronicle_head_sigil",
+        "logical_fence_transition",
+        "deactivated_operational_root_ids",
+        "observed_at"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "AUTHORIZATION",
+            "REJECTION",
+            "PROPOSAL",
+            "VALIDATION",
+            "PROMOTION_OUTCOME",
+            "RECOVERY_RECORD"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/$defs/text128"
+        },
+        "submission_event_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pje"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canonical_event_id": {
+          "$ref": "#/$defs/ce"
+        },
+        "event_body_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "canonical_commit_event": {
+          "$ref": "#/$defs/storageEventRef"
+        },
+        "resulting_chronicle_head_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "logical_fence_transition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/logicalFenceReceiptTransition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deactivated_operational_root_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1000000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/proot"
+          }
+        },
+        "observed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload7": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preview",
+        "prepare_request_sigil",
+        "prepare_binding_sigil",
+        "confirmation_token_ciphertext",
+        "token_storage_profile_sigil",
+        "idempotency_key_sigil",
+        "monotonic_anchor_evidence_sigil",
+        "original_remaining_ns"
+      ],
+      "properties": {
+        "preview": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-preview/1.0"
+        },
+        "prepare_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "prepare_binding_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "confirmation_token_ciphertext": {
+          "$ref": "#/$defs/text512"
+        },
+        "token_storage_profile_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "idempotency_key_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "monotonic_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        }
+      }
+    },
+    "payload8": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preview_id",
+        "decision",
+        "decision_at",
+        "clock_policy_sigil",
+        "clock_evidence_sigil",
+        "redacted_request_sigil",
+        "idempotency_key_sigil",
+        "actor",
+        "host",
+        "expected_chronicle_head_sigil"
+      ],
+      "properties": {
+        "preview_id": {
+          "$ref": "#/$defs/prv"
+        },
+        "decision": {
+          "enum": [
+            "AUTHORIZE",
+            "REJECT"
+          ]
+        },
+        "decision_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "clock_policy_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "clock_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "redacted_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "idempotency_key_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "expected_chronicle_head_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "payload9": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preview_id",
+        "decision",
+        "redacted_request_sigil",
+        "idempotency_key_sigil",
+        "reason",
+        "error_details",
+        "chronicle_absence_evidence_sigil",
+        "deadline_evidence_sigil",
+        "failed_at"
+      ],
+      "properties": {
+        "preview_id": {
+          "$ref": "#/$defs/prv"
+        },
+        "decision": {
+          "enum": [
+            "AUTHORIZE",
+            "REJECT"
+          ]
+        },
+        "redacted_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "idempotency_key_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "reason": {
+          "enum": [
+            "DEFINITIVE_PRECOMMIT_ABORT",
+            "CHRONICLE_HEAD_CONFLICT",
+            "POLICY_INELIGIBLE",
+            "STALE_BINDING",
+            "DEADLINE_CROSSED"
+          ]
+        },
+        "error_details": {
+          "$ref": "#/$defs/patchErrorDetails"
+        },
+        "chronicle_absence_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "deadline_evidence_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload10": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preview_id",
+        "expires_at",
+        "trusted_utc",
+        "deadline_basis",
+        "monotonic_elapsed_ns",
+        "original_remaining_ns",
+        "anchor_evidence_sigil",
+        "decision_absence_evidence_sigil",
+        "idempotency_key_sigil"
+      ],
+      "properties": {
+        "preview_id": {
+          "$ref": "#/$defs/prv"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "trusted_utc": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "deadline_basis": {
+          "enum": [
+            "UTC",
+            "MONOTONIC",
+            "BOTH"
+          ]
+        },
+        "monotonic_elapsed_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "decision_absence_evidence_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idempotency_key_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "payload11": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard",
+        "prior_backend_generation",
+        "intended_backend_generation",
+        "prior_fence_floor",
+        "intended_fence_floor",
+        "target_content_generation",
+        "deadline_policy_sigil",
+        "clock_anchor_evidence_sigil",
+        "original_remaining_ns",
+        "backend_request_sigil",
+        "committed_at"
+      ],
+      "properties": {
+        "guard": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-target-guard/1.0"
+        },
+        "prior_backend_generation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intended_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "prior_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "intended_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "deadline_policy_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "clock_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload12": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "backend_request_sigil",
+        "backend_receipt_sigil",
+        "observed_backend_generation",
+        "observed_fence_floor",
+        "fencing_generation",
+        "expires_at",
+        "clock_anchor_evidence_sigil",
+        "original_remaining_ns",
+        "readback_evidence_sigil"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "backend_receipt_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "observed_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "clock_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "readback_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "payload13": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "prior_backend_generation",
+        "intended_backend_generation",
+        "prior_expires_at",
+        "intended_expires_at",
+        "fencing_generation",
+        "fence_floor",
+        "intended_anchor_evidence_sigil",
+        "intended_original_remaining_ns",
+        "backend_request_sigil",
+        "committed_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "prior_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "intended_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "prior_expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "intended_expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "intended_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "intended_original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload14": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "backend_request_sigil",
+        "backend_receipt_sigil",
+        "observed_backend_generation",
+        "prior_expires_at",
+        "new_expires_at",
+        "fencing_generation",
+        "fence_floor",
+        "new_anchor_evidence_sigil",
+        "new_original_remaining_ns",
+        "readback_evidence_sigil"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "backend_receipt_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "prior_expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "new_expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "new_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "new_original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "readback_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "payload15": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "attempt_id",
+        "operation_step",
+        "backend_generation",
+        "fencing_generation",
+        "fence_floor",
+        "target_content_generation",
+        "intended_target_content_generation",
+        "prior_step_receipt_sigil",
+        "prior_step_protection",
+        "expires_at",
+        "trusted_utc",
+        "monotonic_elapsed_ns",
+        "original_remaining_ns",
+        "clock_anchor_evidence_sigil",
+        "readback_evidence_sigil"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/text128"
+        },
+        "operation_step": {
+          "$ref": "#/$defs/u64"
+        },
+        "backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "intended_target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "prior_step_receipt_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prior_step_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "trusted_utc": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "monotonic_elapsed_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "original_remaining_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "clock_anchor_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "readback_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "payload16": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "prior_backend_generation",
+        "intended_absence_generation",
+        "fencing_generation",
+        "fence_floor",
+        "cause",
+        "backend_request_sigil",
+        "committed_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "prior_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "intended_absence_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "cause": {
+          "enum": [
+            "TERMINAL",
+            "CANCELLED",
+            "RECOVERY_COMPLETE",
+            "SHUTDOWN"
+          ]
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload17": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "origin_state",
+        "prior_backend_generation",
+        "intended_backend_generation",
+        "prior_fence_floor",
+        "intended_fence_floor",
+        "prior_fencing_generation",
+        "intended_fencing_generation",
+        "cause",
+        "cause_evidence_sigil",
+        "backend_request_sigil",
+        "committed_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "origin_state": {
+          "enum": [
+            "ACQUIRING",
+            "HELD",
+            "RENEWING",
+            "RELEASING",
+            "RECOVERING"
+          ]
+        },
+        "prior_backend_generation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intended_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "prior_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "intended_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "prior_fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "intended_fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "cause": {
+          "enum": [
+            "EPOCH_CHANGE",
+            "CLOCK_UNCERTAIN",
+            "DEADLINE",
+            "CRASH_RECOVERY",
+            "PARTIAL",
+            "INTEGRITY"
+          ]
+        },
+        "cause_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload18": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "fence_intent_event_id",
+        "backend_request_sigil",
+        "backend_receipt_sigil",
+        "observed_backend_generation",
+        "observed_fence_floor",
+        "observed_fencing_generation",
+        "readback_evidence_sigil",
+        "fenced_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "fence_intent_event_id": {
+          "$ref": "#/$defs/pje"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "backend_receipt_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_backend_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "observed_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "observed_fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "readback_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "fenced_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload19": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "release_intent_event_id",
+        "backend_request_sigil",
+        "backend_receipt_sigil",
+        "observed_absence_generation",
+        "observed_fencing_generation",
+        "observed_fence_floor",
+        "readback_evidence_sigil",
+        "released_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "release_intent_event_id": {
+          "$ref": "#/$defs/pje"
+        },
+        "backend_request_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "backend_receipt_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_absence_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "observed_fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "observed_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "readback_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "released_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload20": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "guard_id",
+        "failed_phase",
+        "backend_request_sigil",
+        "observed_absence_generation",
+        "observed_fencing_generation",
+        "observed_fence_floor",
+        "failure_evidence_sigil",
+        "reason",
+        "failed_at"
+      ],
+      "properties": {
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "failed_phase": {
+          "enum": [
+            "ACQUIRE",
+            "RENEW",
+            "RELEASE",
+            "RECOVER"
+          ]
+        },
+        "backend_request_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_absence_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "observed_fencing_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "observed_fence_floor": {
+          "$ref": "#/$defs/u64"
+        },
+        "failure_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "reason": {
+          "enum": [
+            "DEFINITIVE_REJECT",
+            "LOST_BEFORE_USE",
+            "UNSUPPORTED"
+          ]
+        },
+        "failed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload21": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt",
+        "authorization_receipt",
+        "created_at"
+      ],
+      "properties": {
+        "attempt": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-attempt/1.0"
+        },
+        "authorization_receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload22": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "authorization_sigil",
+        "target_state_evidence_sigil",
+        "target_content_generation",
+        "adapter_sigil",
+        "started_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "authorization_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_state_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "adapter_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload23": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "checkpoint",
+        "checkpoint_protection",
+        "checkpoint_verification_sigil",
+        "committed_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/pckRef"
+        },
+        "checkpoint_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "checkpoint_verification_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload24": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "guard",
+        "checkpoint",
+        "base_identity_sigil",
+        "target_content_generation",
+        "control_revalidation_sigil",
+        "ready_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/pckRef"
+        },
+        "base_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "control_revalidation_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "ready_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload25": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "mutation_intent",
+        "intent_protection",
+        "guard",
+        "target_content_generation",
+        "committed_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "mutation_intent": {
+          "$ref": "#/$defs/pmiRef"
+        },
+        "intent_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload26": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "mutation_intent",
+        "guard",
+        "fresh_target_identity_sigil",
+        "fresh_target_content_generation",
+        "adapter_write_evidence_sigil",
+        "evidence_protection",
+        "scan_evidence_sigil",
+        "started_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "mutation_intent": {
+          "$ref": "#/$defs/pmiRef"
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "fresh_target_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "fresh_target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "adapter_write_evidence_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "scan_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload27": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "guard_id",
+        "adapter_write_evidence_sigil",
+        "verifier_evidence_sigils",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "APPLIED"
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "mutation_intent_id": {
+          "$ref": "#/$defs/pmi"
+        },
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "adapter_write_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "verifier_evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload28": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "guard_id",
+        "adapter_write_evidence_sigil",
+        "verifier_evidence_sigils",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "RECOVERED_POSTIMAGE_OBSERVED"
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "mutation_intent_id": {
+          "$ref": "#/$defs/pmi"
+        },
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "adapter_write_evidence_sigil": {
+          "type": "null"
+        },
+        "verifier_evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload29": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "observed_postimage_sigil",
+        "target_content_generation",
+        "scan_evidence_sigil",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "ALREADY_APPLIED"
+        },
+        "observed_postimage_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "scan_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pck"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mutation_intent_id": {
+          "type": "null"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload30": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "stale_kind",
+        "expected_sigil",
+        "observed_sigil",
+        "target_identity_sigil",
+        "target_content_generation",
+        "evidence_sigil",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "STALE"
+        },
+        "stale_kind": {
+          "enum": [
+            "CONTROL",
+            "VALIDATION",
+            "TARGET",
+            "AUTHORIZATION"
+          ]
+        },
+        "expected_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload31": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "conflict_kind",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "evidence_sigil",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "CONFLICT"
+        },
+        "conflict_kind": {
+          "enum": [
+            "PATH",
+            "ADD_OCCUPIED",
+            "TYPE",
+            "CASE",
+            "GENERATION_CAS",
+            "TOPOLOGY"
+          ]
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "mutation_intent_id": {
+          "$ref": "#/$defs/pmi"
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload32": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "failed_phase",
+        "base_identity_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "evidence_sigil",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "FAILED"
+        },
+        "failed_phase": {
+          "enum": [
+            "PREFLIGHT",
+            "READY",
+            "MUTATION",
+            "VERIFICATION",
+            "RECOVERY_REPLAY"
+          ]
+        },
+        "base_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pck"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mutation_intent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pmi"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload33": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "base_identity_sigil",
+        "postimage_identity_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "checkpoint_id",
+        "mutation_intent_id",
+        "logical_fence_generation",
+        "evidence_sigil",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "PARTIAL"
+        },
+        "base_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "postimage_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "mutation_intent_id": {
+          "$ref": "#/$defs/pmi"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload34": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "terminal_status",
+        "cancel_request_sigil",
+        "no_intent_proof_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "path_observations_sigil",
+        "diagnostics_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/pat"
+        },
+        "terminal_status": {
+          "const": "CANCELLED"
+        },
+        "cancel_request_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "no_intent_proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "path_observations_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "diagnostics_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload35": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt",
+        "authorization_receipt",
+        "parent_outcome_receipt",
+        "logical_fence_generation",
+        "created_at"
+      ],
+      "properties": {
+        "recovery_attempt": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-recovery-attempt/1.0"
+        },
+        "authorization_receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "parent_outcome_receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload36": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "action",
+        "guard",
+        "target_state_evidence_sigil",
+        "target_content_generation",
+        "started_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "target_state_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload37": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "checkpoint",
+        "checkpoint_protection",
+        "checkpoint_verification_sigil",
+        "verified_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/pckRef"
+        },
+        "checkpoint_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "checkpoint_verification_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "verified_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload38": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "action",
+        "guard",
+        "checkpoint",
+        "bound_before_identity_sigil",
+        "target_content_generation",
+        "ready_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/pckRef"
+        },
+        "bound_before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "ready_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload39": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "recovery_intent",
+        "intent_protection",
+        "guard",
+        "target_content_generation",
+        "committed_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "recovery_intent": {
+          "$ref": "#/$defs/priRef"
+        },
+        "intent_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "guard": {
+          "$ref": "#/$defs/pgRef"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "committed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload40": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "recovery_intent",
+        "action",
+        "scan_status",
+        "fresh_target_identity_sigil",
+        "fresh_target_content_generation",
+        "evidence_protection",
+        "scan_evidence_sigil",
+        "started_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "recovery_intent": {
+          "$ref": "#/$defs/priRef"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "scan_status": {
+          "enum": [
+            "VERIFIED",
+            "UNVERIFIABLE"
+          ]
+        },
+        "fresh_target_identity_sigil": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sigil"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fresh_target_content_generation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/text256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "scan_evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload41": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "recovery_intent_id",
+        "guard_id",
+        "verifier_evidence_sigils",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "BASE_RESTORED"
+        },
+        "action": {
+          "const": "RESTORE_BASE"
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "recovery_intent_id": {
+          "$ref": "#/$defs/pri"
+        },
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "verifier_evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload42": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "recovery_intent_id",
+        "guard_id",
+        "verifier_evidence_sigils",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "POSTIMAGE_ACCEPTED"
+        },
+        "action": {
+          "const": "ACCEPT_POSTIMAGE"
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "recovery_intent_id": {
+          "$ref": "#/$defs/pri"
+        },
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "verifier_evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload43": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "before_identity_sigil",
+        "after_identity_sigil",
+        "before_generation",
+        "after_generation",
+        "checkpoint_id",
+        "recovery_intent_id",
+        "guard_id",
+        "verifier_evidence_sigils",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "ABANDONED"
+        },
+        "action": {
+          "const": "ABANDON"
+        },
+        "before_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "after_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "before_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "after_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "recovery_intent_id": {
+          "$ref": "#/$defs/pri"
+        },
+        "guard_id": {
+          "$ref": "#/$defs/pg"
+        },
+        "verifier_evidence_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sigil"
+          }
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload44": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "expected_identity_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "recovery_intent_id",
+        "verification_event_id",
+        "evidence_sigil",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "STALE"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "expected_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "recovery_intent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verification_event_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pje"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload45": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "failed_phase",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "recovery_intent_id",
+        "verification_event_id",
+        "evidence_sigil",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "FAILED"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "failed_phase": {
+          "enum": [
+            "PREFLIGHT",
+            "READY",
+            "VERIFICATION",
+            "CRASH_REPLAY"
+          ]
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "recovery_intent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verification_event_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pje"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload46": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "base_identity_sigil",
+        "postimage_identity_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "checkpoint_id",
+        "recovery_intent_id",
+        "verification_event_id",
+        "logical_fence_generation",
+        "evidence_sigil",
+        "evidence_protection",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "PARTIAL"
+        },
+        "action": {
+          "const": "RESTORE_BASE"
+        },
+        "base_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "postimage_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "checkpoint_id": {
+          "$ref": "#/$defs/pck"
+        },
+        "recovery_intent_id": {
+          "$ref": "#/$defs/pri"
+        },
+        "verification_event_id": {
+          "$ref": "#/$defs/pje"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "payload47": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_attempt_id",
+        "terminal_status",
+        "action",
+        "no_intent_proof_sigil",
+        "observed_identity_sigil",
+        "target_content_generation",
+        "evidence_protection",
+        "logical_fence_generation",
+        "terminal_at"
+      ],
+      "properties": {
+        "recovery_attempt_id": {
+          "$ref": "#/$defs/pra"
+        },
+        "terminal_status": {
+          "const": "CANCELLED"
+        },
+        "action": {
+          "enum": [
+            "RESTORE_BASE",
+            "ACCEPT_POSTIMAGE",
+            "ABANDON"
+          ]
+        },
+        "no_intent_proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "observed_identity_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "target_content_generation": {
+          "$ref": "#/$defs/text256"
+        },
+        "evidence_protection": {
+          "$ref": "#/$defs/holdBinding"
+        },
+        "logical_fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "terminal_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    }
+  }
+}
+

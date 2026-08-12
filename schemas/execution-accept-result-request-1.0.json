@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-accept-result-request/1.0",
+  "title": "Execution Accept Result Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "execution_job_outcome_sigil",
+    "idempotency_key"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-accept-result-request/1.0"},
+    "job_id": {"$ref": "#/$defs/job_id"},
+    "execution_job_outcome_sigil": {"$ref": "#/$defs/sigil"},
+    "idempotency_key": {"$ref": "#/$defs/opaque"}
+  },
+  "$defs": {
+    "job_id": {
+      "type": "string",
+      "pattern": "^JB-[A-F0-9]{64}$",
+      "minLength": 67,
+      "maxLength": 67
+    },
+    "sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "opaque": {
+      "type": "string",
+      "not": {"pattern": "[\\u0000-\\u001F\\u007F-\\u009F]"},
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}
+

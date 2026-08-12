@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-heartbeat-authenticated-ingress/1.0",
+  "title": "Execution Heartbeat Authenticated Ingress v1",
+  "description": "Closed RFC-0012 H8 immutable first-authenticated-ingress record. Structural validity and local byte checks do not prove a protected handshake, current channel or Session authority, package durability, committed visibility, Heartbeat admission, or Journal/State effects.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authenticated_ingress_record_id",
+    "owner_kind",
+    "owner_id",
+    "message_kind",
+    "authenticated_envelope",
+    "envelope_canonical_size_bytes",
+    "envelope_canonical_bytes_sigil",
+    "received_frame_size_bytes",
+    "received_frame_bytes_sigil",
+    "created_at",
+    "authenticated_ingress_record_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-heartbeat-authenticated-ingress/1.0"},
+    "authenticated_ingress_record_id": {"$ref": "#/$defs/authenticatedIngressRecordId"},
+    "owner_kind": {"enum": ["WORKER_SESSION", "LEASE"]},
+    "owner_id": {"type": "string"},
+    "message_kind": {"enum": ["WORKER_SESSION_HEARTBEAT", "LEASE_HEARTBEAT"]},
+    "authenticated_envelope": {"$ref": "https://benchwork.dev/schemas/execution-authenticated-heartbeat-envelope/1.0"},
+    "envelope_canonical_size_bytes": {"$ref": "#/$defs/u63"},
+    "envelope_canonical_bytes_sigil": {"$ref": "#/$defs/sigil"},
+    "received_frame_size_bytes": {"$ref": "#/$defs/u63"},
+    "received_frame_bytes_sigil": {"$ref": "#/$defs/sigil"},
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "authenticated_ingress_record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"owner_kind": {"const": "WORKER_SESSION"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/workerSessionId"},
+          "message_kind": {"const": "WORKER_SESSION_HEARTBEAT"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"owner_kind": {"const": "LEASE"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/leaseId"},
+          "message_kind": {"const": "LEASE_HEARTBEAT"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "workerSessionId": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "leaseId": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "authenticatedIngressRecordId": {
+      "type": "string",
+      "pattern": "^HAI-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    }
+  }
+}
+

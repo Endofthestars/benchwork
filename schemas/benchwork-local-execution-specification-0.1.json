@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-local-execution-specification/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "specification_id",
+    "task_binding",
+    "specification_sigil"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "benchwork-local-execution-specification/0.1"
+    },
+    "specification_id": {
+      "type": "string",
+      "pattern": "^ES-[A-Z0-9][A-Z0-9._-]*$"
+    },
+    "task_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "task_capsule_sigil"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_capsule_sigil": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "specification_sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}
+

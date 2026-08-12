@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/tool-execution-definition/1.0",
+  "title": "Tool Execution Definition v1",
+  "description": "Closed RFC-0011 immutable Tool-to-executable implementation binding. Installed argument-Schema resolution and ToolGrant equality are semantic checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tool_id", "tool_version", "executable_id", "executable_version", "executable_sigil", "runtime_id", "runtime_version", "runtime_sigil", "entrypoint", "argument_schema_id", "argument_schema_sigil", "tool_sigil"],
+  "properties": {
+    "schema_version": {"const": "tool-execution-definition/1.0"},
+    "tool_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/toolId"},
+    "tool_version": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/version"},
+    "executable_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/executableId"},
+    "executable_version": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/version"},
+    "executable_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "runtime_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/runtimeId"},
+    "runtime_version": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/version"},
+    "runtime_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "entrypoint": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/relativePath"},
+    "argument_schema_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/schemaId"},
+    "argument_schema_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "tool_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  }
+}
+

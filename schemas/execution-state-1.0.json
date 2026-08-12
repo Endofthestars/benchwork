@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-state/1.0",
+  "title": "Execution State v1",
+  "description": "Closed replaceable RFC-0012 replay cache. Validation grants no replay, append, worker, lease, result, storage, or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "limit_profile", "journal_binding", "executor", "recoveries", "workers", "worker_sessions", "jobs", "attempts", "leases", "log_streams", "deadlines", "idempotency_records", "state_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-state/1.0"},
+    "limit_profile": {"const": "EXECUTION_JOURNAL_V1_FIXED_LIMITS"},
+    "journal_binding": {"$ref": "#/$defs/journal_binding"},
+    "executor": {"type": "object"},
+    "recoveries": {"type": "array", "maxItems": 4096, "items": {"type": "object"}},
+    "workers": {"type": "array", "maxItems": 4096, "items": {"type": "object"}},
+    "worker_sessions": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/worker_session_projection"}},
+    "jobs": {"type": "array", "maxItems": 4096, "items": {"type": "object"}},
+    "attempts": {"type": "array", "maxItems": 4096, "items": {"type": "object"}},
+    "leases": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/lease_projection"}},
+    "log_streams": {"type": "array", "maxItems": 12288, "items": {"type": "object"}},
+    "deadlines": {"type": "array", "maxItems": 32768, "items": {"type": "object"}},
+    "idempotency_records": {"type": "array", "maxItems": 65536, "items": {"$ref": "#/$defs/idempotency_record"}},
+    "state_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "positive_u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63"},
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "opaque_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_:+-]{0,127}$", "minLength": 1, "maxLength": 128},
+    "event_id": {"type": "string", "pattern": "^JE-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+    "journal_id": {"type": "string", "pattern": "^EJ-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+    "nullable_sigil": {"oneOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]},
+    "nullable_u63": {"oneOf": [{"$ref": "#/$defs/u63"}, {"type": "null"}]},
+    "nullable_timestamp": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+    "nullable_event_id": {"oneOf": [{"$ref": "#/$defs/event_id"}, {"type": "null"}]},
+    "public_fence_tuple": {
+      "type": "object", "additionalProperties": false,
+      "required": ["journal_id", "executor_epoch", "job_id", "attempt_id", "lease_id", "fencing_generation"],
+      "properties": {
+        "journal_id": {"$ref": "#/$defs/journal_id"}, "executor_epoch": {"$ref": "#/$defs/u64"},
+        "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+        "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"},
+        "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+        "fencing_generation": {"$ref": "#/$defs/u64"}
+      }
+    },
+    "journal_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["journal_id", "through_sequence", "through_event_id", "through_event_sigil"],
+      "properties": {"journal_id": {"$ref": "#/$defs/journal_id"}, "through_sequence": {"$ref": "#/$defs/positive_u63"}, "through_event_id": {"$ref": "#/$defs/event_id"}, "through_event_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "resource_counter_floors": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cpu_time_seconds", "storage_bytes_written", "network_egress_bytes"],
+      "properties": {"cpu_time_seconds": {"$ref": "#/$defs/nullable_u63"}, "storage_bytes_written": {"$ref": "#/$defs/nullable_u63"}, "network_egress_bytes": {"$ref": "#/$defs/nullable_u63"}}
+    },
+    "worker_session_state": {"enum": ["REGISTERED", "READY", "BUSY", "DRAINING", "OFFLINE", "QUARANTINED", "CLOSED"]},
+    "worker_session_projection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["worker_session_id", "revision", "state", "worker_id", "worker_binding_sigil", "worker_session_binding_sigil", "executor_epoch", "worker_session_heartbeat_policy_id", "worker_session_heartbeat_policy_sigil", "capacity", "capacity_in_use", "last_heartbeat_sequence", "last_heartbeat_message_sigil", "last_resource_sample_sigil", "resource_counter_floors", "next_heartbeat_due_at", "lease_ids", "last_event_id", "last_event_sigil"],
+      "properties": {
+        "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"}, "revision": {"$ref": "#/$defs/u64"}, "state": {"$ref": "#/$defs/worker_session_state"},
+        "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"}, "worker_binding_sigil": {"$ref": "#/$defs/sigil"}, "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"}, "executor_epoch": {"$ref": "#/$defs/u64"},
+        "worker_session_heartbeat_policy_id": {"oneOf": [{"type": "string", "pattern": "^WSHP-[0-9A-F]{64}$"}, {"type": "null"}]}, "worker_session_heartbeat_policy_sigil": {"$ref": "#/$defs/nullable_sigil"},
+        "capacity": {"$ref": "#/$defs/nullable_u63"}, "capacity_in_use": {"$ref": "#/$defs/u63"}, "last_heartbeat_sequence": {"$ref": "#/$defs/nullable_u63"}, "last_heartbeat_message_sigil": {"$ref": "#/$defs/nullable_sigil"}, "last_resource_sample_sigil": {"$ref": "#/$defs/nullable_sigil"}, "resource_counter_floors": {"$ref": "#/$defs/resource_counter_floors"}, "next_heartbeat_due_at": {"$ref": "#/$defs/nullable_timestamp"},
+        "lease_ids": {"type": "array", "maxItems": 4096, "items": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}, "uniqueItems": true}, "last_event_id": {"$ref": "#/$defs/event_id"}, "last_event_sigil": {"$ref": "#/$defs/sigil"}
+      },
+      "allOf": [
+        {"if": {"properties": {"capacity": {"type": "null"}}}, "then": {"properties": {"worker_session_heartbeat_policy_id": {"type": "null"}, "worker_session_heartbeat_policy_sigil": {"type": "null"}, "capacity_in_use": {"const": 0}}}},
+        {"if": {"properties": {"capacity": {"type": "integer"}}}, "then": {"properties": {"worker_session_heartbeat_policy_id": {"type": "string"}, "worker_session_heartbeat_policy_sigil": {"type": "string"}}}}
+      ]
+    },
+    "lease_state": {"enum": ["OFFERED", "ACTIVE", "RELEASED", "REVOKED", "EXPIRED", "FENCED"]},
+    "terminal_event_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "terminal_state", "terminal_event_id", "terminal_event_sigil", "terminal_sequence", "terminal_recorded_at"], "properties": {"kind": {"const": "PRESENT"}, "terminal_state": {"type": "string"}, "terminal_event_id": {"$ref": "#/$defs/event_id"}, "terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "terminal_sequence": {"$ref": "#/$defs/positive_u63"}, "terminal_recorded_at": {"$ref": "#/$defs/timestamp"}}}
+      ]
+    },
+    "lease_projection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lease_id", "revision", "state", "lease_binding_sigil", "job_id", "attempt_id", "worker_id", "worker_session_id", "executor_epoch", "fencing_generation", "claim_due_at", "expiry_due_at", "maximum_expiry_due_at", "last_heartbeat_sequence", "last_heartbeat_message_sigil", "last_resource_sample_sigil", "resource_counter_floors", "next_heartbeat_due_at", "renewal_counter", "terminal_event_binding", "tombstone_generation", "tombstone_event_sigil", "last_event_id", "last_event_sigil"],
+      "properties": {
+        "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}, "revision": {"$ref": "#/$defs/u64"}, "state": {"$ref": "#/$defs/lease_state"}, "lease_binding_sigil": {"$ref": "#/$defs/sigil"}, "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"}, "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"}, "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"}, "executor_epoch": {"$ref": "#/$defs/u64"}, "fencing_generation": {"$ref": "#/$defs/u64"},
+        "claim_due_at": {"$ref": "#/$defs/timestamp"}, "expiry_due_at": {"$ref": "#/$defs/timestamp"}, "maximum_expiry_due_at": {"$ref": "#/$defs/timestamp"}, "last_heartbeat_sequence": {"$ref": "#/$defs/nullable_u63"}, "last_heartbeat_message_sigil": {"$ref": "#/$defs/nullable_sigil"}, "last_resource_sample_sigil": {"$ref": "#/$defs/nullable_sigil"}, "resource_counter_floors": {"$ref": "#/$defs/resource_counter_floors"}, "next_heartbeat_due_at": {"$ref": "#/$defs/nullable_timestamp"}, "renewal_counter": {"$ref": "#/$defs/u63"}, "terminal_event_binding": {"$ref": "#/$defs/terminal_event_binding"}, "tombstone_generation": {"oneOf": [{"$ref": "#/$defs/u64"}, {"type": "null"}]}, "tombstone_event_sigil": {"$ref": "#/$defs/nullable_sigil"}, "last_event_id": {"$ref": "#/$defs/event_id"}, "last_event_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "idempotency_operation_kind": {"enum": ["START_JOB", "CANCEL_JOB", "REGISTER_WORKER_SESSION", "CLAIM_LEASE", "RENEW_LEASE", "RELEASE_LEASE", "PREALLOCATE_OUTPUT_STAGING", "RECEIVE_RESULT_INGRESS", "SUBMIT_RESULT", "APPEND_LOG_CHUNK", "CLOSE_LOG_STREAM"]},
+    "ordinary_operation_kind": {"enum": ["START_JOB", "CANCEL_JOB", "REGISTER_WORKER_SESSION", "CLAIM_LEASE", "RENEW_LEASE", "RELEASE_LEASE", "PREALLOCATE_OUTPUT_STAGING", "RECEIVE_RESULT_INGRESS", "SUBMIT_RESULT"]},
+    "log_operation_kind": {"enum": ["APPEND_LOG_CHUNK", "CLOSE_LOG_STREAM"]},
+    "ordinary_idempotency_record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation_kind", "scope_id", "idempotency_key_sigil", "request_sigil", "disposition_event_id", "disposition_event_sigil"],
+      "properties": {"operation_kind": {"$ref": "#/$defs/ordinary_operation_kind"}, "scope_id": {"$ref": "#/$defs/opaque_id"}, "idempotency_key_sigil": {"$ref": "#/$defs/sigil"}, "request_sigil": {"$ref": "#/$defs/sigil"}, "disposition_event_id": {"$ref": "#/$defs/event_id"}, "disposition_event_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "log_idempotency_core": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation_kind", "scope_id", "idempotency_key_sigil", "full_request_identity_sigil", "intake_kind", "intake_id", "intake_record_sigil", "intent_id", "intent_sigil", "disposition_kind", "disposition_anchor_event", "ordered_disposition_events", "latest_disposition_event"],
+      "properties": {"operation_kind": {"$ref": "#/$defs/log_operation_kind"}, "scope_id": {"$ref": "#/$defs/opaque_id"}, "idempotency_key_sigil": {"$ref": "#/$defs/sigil"}, "full_request_identity_sigil": {"$ref": "#/$defs/sigil"}, "intake_kind": {"type": "string"}, "intake_id": {"$ref": "#/$defs/opaque_id"}, "intake_record_sigil": {"$ref": "#/$defs/sigil"}, "intent_id": {"$ref": "#/$defs/opaque_id"}, "intent_sigil": {"$ref": "#/$defs/sigil"}, "disposition_kind": {"type": "string"}, "disposition_anchor_event": {"type": "object"}, "ordered_disposition_events": {"type": "array", "items": {"type": "object"}}, "latest_disposition_event": {"type": "object"}}
+    },
+    "log_pending_ack_record": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "core", "core_projection_sigil"],
+      "properties": {"kind": {"const": "PENDING_ACK"}, "core": {"$ref": "#/$defs/log_idempotency_core"}, "core_projection_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "log_acked_record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "core", "core_projection_sigil", "acknowledgement_intent_id", "acknowledgement_intent_sigil", "acknowledgement_kind", "acknowledgement_id", "acknowledgement_sigil", "response_binding", "acked_projection_sigil"],
+      "properties": {"kind": {"const": "ACKED"}, "core": {"$ref": "#/$defs/log_idempotency_core"}, "core_projection_sigil": {"$ref": "#/$defs/sigil"}, "acknowledgement_intent_id": {"$ref": "#/$defs/opaque_id"}, "acknowledgement_intent_sigil": {"$ref": "#/$defs/sigil"}, "acknowledgement_kind": {"type": "string"}, "acknowledgement_id": {"$ref": "#/$defs/opaque_id"}, "acknowledgement_sigil": {"$ref": "#/$defs/sigil"}, "response_binding": {"type": "object"}, "acked_projection_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "idempotency_record": {"oneOf": [{"$ref": "#/$defs/ordinary_idempotency_record"}, {"$ref": "#/$defs/log_pending_ack_record"}, {"$ref": "#/$defs/log_acked_record"}]}
+  }
+}
+

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/patch-promotion-attempt/1.0",
+  "title": "Patch Promotion Attempt v1",
+  "description": "Closed RFC-0014 patch-promotion-attempt/1.0 contract-only record. Validation is local and does not resolve Authorization, Target, Adapter, Profile, or Promotion Journal history.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "attempt_id", "authorization", "operation_sigil", "target", "target_content_generation", "adapter", "mode", "created_at", "state", "revision", "attempt_sigil"],
+  "properties": {
+    "schema_version": {"const": "patch-promotion-attempt/1.0"}, "attempt_id": {"$ref": "#/$defs/pat"}, "authorization": {"$ref": "#/$defs/pauRef"}, "operation_sigil": {"$ref": "#/$defs/sigil"}, "target": {"$ref": "#/$defs/target"}, "target_content_generation": {"$ref": "#/$defs/text256"}, "adapter": {"$ref": "#/$defs/ppaRef"}, "mode": {"enum": ["FULL_TREE_ATOMIC_CAS", "PER_ENTRY_GENERATIONAL_CAS"]}, "created_at": {"$ref": "#/$defs/timestamp"}, "state": {"enum": ["CREATED", "PREFLIGHTING", "READY", "MUTATING", "VERIFYING", "APPLIED", "RECOVERED_POSTIMAGE_OBSERVED", "ALREADY_APPLIED", "STALE", "CONFLICT", "FAILED", "PARTIAL", "CANCELLED"]}, "revision": {"$ref": "#/$defs/u64"}, "attempt_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71}, "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "text128": {"type": "string", "minLength": 0, "maxLength": 128, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$", "not": {"pattern": "[\\r\\n]"}}, "text256": {"type": "string", "minLength": 0, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$", "not": {"pattern": "[\\r\\n]"}},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$", "minLength": 20, "maxLength": 27},
+    "pat": {"type": "string", "pattern": "^PAT-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 5, "maxLength": 128}, "pau": {"type": "string", "pattern": "^PAU-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 5, "maxLength": 128}, "pt": {"type": "string", "pattern": "^PT-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128}, "pbip": {"type": "string", "pattern": "^PBIP-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 6, "maxLength": 128}, "ppa": {"type": "string", "pattern": "^PPA-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 5, "maxLength": 128},
+    "pauRef": {"type": "object", "additionalProperties": false, "required": ["id", "sigil"], "properties": {"id": {"$ref": "#/$defs/pau"}, "sigil": {"$ref": "#/$defs/sigil"}}}, "pbipRef": {"type": "object", "additionalProperties": false, "required": ["id", "sigil"], "properties": {"id": {"$ref": "#/$defs/pbip"}, "sigil": {"$ref": "#/$defs/sigil"}}}, "ppaRef": {"type": "object", "additionalProperties": false, "required": ["id", "sigil"], "properties": {"id": {"$ref": "#/$defs/ppa"}, "sigil": {"$ref": "#/$defs/sigil"}}},
+    "root": {"type": "object", "additionalProperties": false, "required": ["root_object_sigil", "root_generation", "topology_sigil"], "properties": {"root_object_sigil": {"$ref": "#/$defs/sigil"}, "root_generation": {"$ref": "#/$defs/text256"}, "topology_sigil": {"$ref": "#/$defs/sigil"}}},
+    "target": {"type": "object", "additionalProperties": false, "required": ["target_id", "target_class", "identity_profile", "root_identity", "selection_authorization_sigil"], "properties": {"target_id": {"$ref": "#/$defs/pt"}, "target_class": {"enum": ["WORKTREE", "DIRECTORY"]}, "identity_profile": {"$ref": "#/$defs/pbipRef"}, "root_identity": {"$ref": "#/$defs/root"}, "selection_authorization_sigil": {"$ref": "#/$defs/sigil"}}}
+  }
+}
+

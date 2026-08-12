@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0",
+  "title": "Execution Storage Root Manifest v1",
+  "description": "Closed RFC-0012 ESM1–ESM5 contract-only wire. Shape and locally provable integrity only; owner resolution, Transfer/Provenance/Quarantine truth, atomic no-transfer proof installation, RFC-0013 replay, Reference Set/hold mutation, Journal authority, and runtime conformance remain external and fail closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "root_kind",
+    "job_id",
+    "attempt_id",
+    "owner_binding",
+    "entries",
+    "blob_refs",
+    "protection_plan",
+    "created_at",
+    "manifest_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-storage-root-manifest/1.0"},
+    "manifest_id": {"$ref": "#/$defs/manifestId"},
+    "root_kind": {"$ref": "#/$defs/rootKind"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, {"type": "null"}]},
+    "owner_binding": {"$ref": "#/$defs/ownerBinding"},
+    "entries": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/storageRootEntry"}},
+    "blob_refs": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}},
+    "protection_plan": {"$ref": "#/$defs/protectionPlan"},
+    "created_at": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/timestamp"},
+    "manifest_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"root_kind": {"const": "JOB_INPUT"}}, "required": ["root_kind"]},
+      "then": {
+        "properties": {
+          "attempt_id": {"type": "null"},
+          "owner_binding": {"$ref": "#/$defs/jobInputOwner"},
+          "entries": {"items": {"$ref": "#/$defs/jobInputEntry"}},
+          "protection_plan": {"$ref": "#/$defs/inputProtectionPlan"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"root_kind": {"const": "ATTEMPT_INPUT"}}, "required": ["root_kind"]},
+      "then": {
+        "properties": {
+          "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+          "owner_binding": {"$ref": "#/$defs/attemptInputOwner"},
+          "entries": {"items": {"$ref": "#/$defs/attemptInputEntry"}},
+          "protection_plan": {"$ref": "#/$defs/inputProtectionPlan"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"root_kind": {"const": "ATTEMPT_OUTPUT"}}, "required": ["root_kind"]},
+      "then": {
+        "properties": {
+          "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+          "owner_binding": {"$ref": "#/$defs/attemptOutputOwner"},
+          "entries": {"items": {"$ref": "#/$defs/attemptOutputEntry"}},
+          "protection_plan": {"$ref": "#/$defs/outputProtectionPlan"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "manifestId": {"type": "string", "pattern": "^ESM-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "rootKind": {"enum": ["JOB_INPUT", "ATTEMPT_INPUT", "ATTEMPT_OUTPUT"]},
+    "ownerBinding": {"oneOf": [{"$ref": "#/$defs/jobInputOwner"}, {"$ref": "#/$defs/attemptInputOwner"}, {"$ref": "#/$defs/attemptOutputOwner"}]},
+    "jobInputOwner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "start_request_sigil", "task_id", "task_capsule_sigil", "specification_id", "specification_sigil", "input_set_sigil"],
+      "properties": {
+        "kind": {"const": "JOB_INPUT"},
+        "start_request_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "task_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/taskId"},
+        "task_capsule_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "specification_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/specificationId"},
+        "specification_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "input_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "attemptInputOwner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "job_binding_sigil", "attempt_binding_sigil", "preflight_plan_sigil", "materialization_id", "materialization_record_sigil", "input_set_sigil"],
+      "properties": {
+        "kind": {"const": "ATTEMPT_INPUT"},
+        "job_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "attempt_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "preflight_plan_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "materialization_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/materializationId"},
+        "materialization_record_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "input_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "attemptOutputOwner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "job_binding_sigil", "attempt_binding_sigil", "result_binding", "log_set_sigil", "output_set_sigil", "control_evidence_set_binding", "terminal_source_binding", "quarantine_plan_sigil"],
+      "properties": {
+        "kind": {"const": "ATTEMPT_OUTPUT"},
+        "job_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "attempt_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "result_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/result_binding"},
+        "log_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "output_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "control_evidence_set_binding": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0#/$defs/controlEvidenceSetBinding"},
+        "terminal_source_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/terminal_source_binding"},
+        "quarantine_plan_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "storageRootEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storage_subject_id", "subject", "claimed_blob", "storage_origin", "entry_sigil"],
+      "properties": {
+        "storage_subject_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "subject": {"$ref": "#/$defs/subject"},
+        "claimed_blob": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}, {"type": "null"}]},
+        "storage_origin": {"$ref": "#/$defs/storageOrigin"},
+        "entry_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "jobInputEntry": {"allOf": [{"$ref": "#/$defs/storageRootEntry"}, {"properties": {"subject": {"$ref": "#/$defs/jobInputSubject"}}}]},
+    "attemptInputEntry": {"allOf": [{"$ref": "#/$defs/storageRootEntry"}, {"properties": {"subject": {"$ref": "#/$defs/attemptInputSubject"}}}]},
+    "attemptOutputEntry": {"allOf": [{"$ref": "#/$defs/storageRootEntry"}, {"properties": {"subject": {"oneOf": [{"$ref": "#/$defs/attemptOutputSubject"}, {"$ref": "#/$defs/logStreamSubject"}, {"$ref": "#/$defs/resourceEvidenceSubject"}, {"$ref": "#/$defs/terminalSourceSubject"}]}}}]},
+    "subject": {"oneOf": [{"$ref": "#/$defs/jobInputSubject"}, {"$ref": "#/$defs/attemptInputSubject"}, {"$ref": "#/$defs/attemptOutputSubject"}, {"$ref": "#/$defs/logStreamSubject"}, {"$ref": "#/$defs/resourceEvidenceSubject"}, {"$ref": "#/$defs/terminalSourceSubject"}]},
+    "jobInputSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "input_ordinal", "input_identity", "input_sigil"],
+      "properties": {"kind": {"const": "JOB_INPUT"}, "input_ordinal": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}, "input_identity": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/visibleInput"}, "input_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "attemptInputSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "input_ordinal", "input_identity", "input_sigil", "materialization_id"],
+      "properties": {"kind": {"const": "ATTEMPT_INPUT"}, "input_ordinal": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}, "input_identity": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/visibleInput"}, "input_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "materialization_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/materializationId"}}
+    },
+    "attemptOutputSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "logical_name", "schema_id", "schema_sigil", "staging_reference_sigil", "byte_size", "blob_sigil"],
+      "properties": {"kind": {"const": "ATTEMPT_OUTPUT"}, "logical_name": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/logicalName"}, "schema_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/schemaId"}, "schema_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "staging_reference_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}, "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "logStreamSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "stream", "log_stream_id", "stream_set_sigil", "byte_size", "blob_sigil"],
+      "properties": {"kind": {"const": "LOG_STREAM"}, "stream": {"enum": ["STDOUT", "STDERR", "STRUCTURED"]}, "log_stream_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/logStreamId"}, "stream_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}, "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "resourceEvidenceSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "control_evidence_id", "control_evidence_sigil", "control_dimension", "phase", "phase_evidence_entry_sigil", "byte_size", "blob_sigil"],
+      "properties": {"kind": {"const": "RESOURCE_EVIDENCE"}, "control_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlEvidenceId"}, "control_evidence_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "control_dimension": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlDimension"}, "phase": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/phase"}, "phase_evidence_entry_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}, "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "terminalSourceSubject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "disposition", "terminal_source_identity", "terminal_source_sigil", "storage_blob", "retention_policy_sigil", "file_count", "byte_count"],
+      "properties": {"kind": {"const": "TERMINAL_SOURCE"}, "disposition": {"enum": ["VERIFIED", "QUARANTINED"]}, "terminal_source_identity": {"$ref": "https://benchwork.dev/schemas/benchwork-source-tree/1.0#/$defs/sourceTreeId"}, "terminal_source_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "storage_blob": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}, "retention_policy_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "file_count": {"type": "integer", "minimum": 0, "maximum": 100000}, "byte_count": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}}
+    },
+    "storageOrigin": {"oneOf": [{"$ref": "#/$defs/committedBlobOrigin"}, {"$ref": "#/$defs/quarantineOrigin"}, {"$ref": "#/$defs/notStoredOrigin"}]},
+    "committedBlobOrigin": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "transfer", "provenance_id", "provenance_sigil", "blob_record_sigil", "terminal_event"],
+      "properties": {"kind": {"const": "COMMITTED_BLOB"}, "transfer": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferRef"}, "provenance_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"}, "provenance_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "blob_record_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "terminal_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}}
+    },
+    "quarantineOrigin": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "transfer", "provenance_id", "provenance_sigil", "quarantine_id", "quarantine_origin_event"],
+      "properties": {"kind": {"const": "QUARANTINE"}, "transfer": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferRef"}, "provenance_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"}, "provenance_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "quarantine_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/quarantineId"}, "quarantine_origin_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}}
+    },
+    "notStoredOrigin": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "transfer", "terminal_reason", "evidence_sigil"],
+      "properties": {"kind": {"const": "NOT_STORED"}, "transfer": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferRef"}, {"type": "null"}]}, "terminal_reason": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}, "evidence_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "protectionPlan": {"oneOf": [{"$ref": "#/$defs/noProtection"}, {"$ref": "#/$defs/plannedProtection"}]},
+    "inputProtectionPlan": {"oneOf": [{"$ref": "#/$defs/noProtection"}, {"allOf": [{"$ref": "#/$defs/plannedProtection"}, {"properties": {"hold_lifetime": {"$ref": "#/$defs/ownerTerminalLifetime"}}}]}]},
+    "outputProtectionPlan": {"oneOf": [{"$ref": "#/$defs/noProtection"}, {"allOf": [{"$ref": "#/$defs/plannedProtection"}, {"properties": {"hold_lifetime": {"$ref": "#/$defs/outputRetentionLifetime"}}}]}]},
+    "noProtection": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+    "plannedProtection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "reference_set_registration_event_id", "hold_id", "hold_set_event_id", "policy_id", "policy_sigil", "hold_lifetime"],
+      "properties": {"kind": {"const": "PLANNED"}, "reference_set_registration_event_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventId"}, "hold_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/holdId"}, "hold_set_event_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventId"}, "policy_id": {"const": "SP-EXECUTION-ROOT-HOLD-V1"}, "policy_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}, "hold_lifetime": {"$ref": "#/$defs/holdLifetime"}}
+    },
+    "holdLifetime": {"oneOf": [{"$ref": "#/$defs/ownerTerminalLifetime"}, {"$ref": "#/$defs/outputRetentionLifetime"}]},
+    "ownerTerminalLifetime": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "OWNER_TERMINAL"}}},
+    "outputRetentionLifetime": {"type": "object", "additionalProperties": false, "required": ["kind", "maximum_duration_seconds"], "properties": {"kind": {"const": "OUTPUT_RETENTION"}, "maximum_duration_seconds": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}}}
+  }
+}
+

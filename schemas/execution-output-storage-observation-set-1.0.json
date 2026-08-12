@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0",
+  "title": "Execution Output Storage Observation Set v1",
+  "description": "Closed RFC-0012 contract-only frozen output storage observation. Shape and locally provable identity only; Execution/Storage replay, immutable-record resolution, Blob bytes, Quarantine truth, Replica availability, durable allocation, Journal append, and runtime authority remain external and fail closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_set_id", "job_id", "attempt_id", "attempt_binding_sigil", "result_binding", "log_closure_sigil", "output_closure_sigil", "control_evidence_set_binding", "quarantine_binding_set_binding", "terminalization_storage_manifest_binding", "output_root_protection", "terminal_source_binding", "storage_event", "storage_state_sigil", "members", "blob_sigils", "observation_set_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-output-storage-observation-set/1.0"},
+    "observation_set_id": {"$ref": "#/$defs/outputStorageObservationSetId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "result_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/result_binding"},
+    "log_closure_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "output_closure_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "control_evidence_set_binding": {"$ref": "#/$defs/control_evidence_set_binding"},
+    "quarantine_binding_set_binding": {"$ref": "#/$defs/quarantine_binding_set_binding"},
+    "terminalization_storage_manifest_binding": {"$ref": "#/$defs/terminalization_storage_manifest_binding"},
+    "output_root_protection": {"$ref": "#/$defs/output_root_protection"},
+    "terminal_source_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/terminal_source_binding"},
+    "storage_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+    "storage_state_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "members": {"type": "array", "minItems": 6, "maxItems": 4096, "items": {"$ref": "#/$defs/member"}},
+    "blob_sigils": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}},
+    "observation_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  },
+  "$defs": {
+    "outputStorageObservationSetId": {"type": "string", "pattern": "^OS-[0-9A-F]{64}$", "minLength": 67, "maxLength": 67},
+    "control_evidence_set_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "control_evidence_set_id", "control_evidence_set_sigil"],
+      "properties": {"kind": {"const": "FROZEN"}, "control_evidence_set_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0#/$defs/controlEvidenceSetId"}, "control_evidence_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "quarantine_binding_set_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "quarantine_binding_set_id", "quarantine_binding_set_sigil"],
+      "properties": {"kind": {"const": "FROZEN"}, "quarantine_binding_set_id": {"$ref": "https://benchwork.dev/schemas/execution-quarantine-binding-set/1.0#/$defs/quarantineBindingSetId"}, "quarantine_binding_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "terminalization_storage_manifest_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "storage_root_manifest_id", "storage_root_manifest_sigil"],
+      "properties": {"kind": {"const": "FROZEN"}, "storage_root_manifest_id": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/manifestId"}, "storage_root_manifest_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}}
+    },
+    "output_root_protection": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/output_root_protection"},
+    "member": {"oneOf": [{"$ref": "#/$defs/attempt_outputs_none_member"}, {"$ref": "#/$defs/attempt_output_member"}, {"$ref": "#/$defs/log_stream_member"}, {"$ref": "#/$defs/resource_evidence_none_member"}, {"$ref": "#/$defs/resource_evidence_member"}, {"$ref": "#/$defs/terminal_source_not_applicable_member"}, {"$ref": "#/$defs/terminal_source_none_member"}, {"$ref": "#/$defs/terminal_source_member"}]},
+    "attempt_outputs_none_member": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "reason"],
+      "properties": {"kind": {"const": "ATTEMPT_OUTPUTS_NONE"}, "reason": {"enum": ["NO_RESULT", "RESULT_REJECTED", "OUTPUT_ARRAY_EMPTY"]}}
+    },
+    "attempt_output_member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "storage_subject_id", "manifest_entry_sigil", "logical_name", "schema_id", "schema_sigil", "staging_reference_sigil", "byte_size", "blob_sigil", "storage_origin", "storage"],
+      "properties": {
+        "kind": {"const": "ATTEMPT_OUTPUT"}, "storage_subject_id": {"$ref": "#/$defs/sigil"}, "manifest_entry_sigil": {"$ref": "#/$defs/sigil"},
+        "logical_name": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/logicalName"}, "schema_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/schemaId"}, "schema_sigil": {"$ref": "#/$defs/sigil"}, "staging_reference_sigil": {"$ref": "#/$defs/sigil"}, "byte_size": {"$ref": "#/$defs/u63"}, "blob_sigil": {"$ref": "#/$defs/sigil"},
+        "storage_origin": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/storageOrigin"}, "storage": {"$ref": "#/$defs/storage_observation"}
+      }
+    },
+    "log_stream_member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "storage_subject_id", "manifest_entry_sigil", "stream", "log_stream_id", "final_sequence", "captured_bytes", "dropped_bytes", "truncated", "stream_set_sigil", "closure_event_id", "closure_event_sigil", "storage_origin", "content"],
+      "properties": {
+        "kind": {"const": "LOG_STREAM"}, "storage_subject_id": {"$ref": "#/$defs/sigil"}, "manifest_entry_sigil": {"$ref": "#/$defs/sigil"}, "stream": {"enum": ["STDOUT", "STDERR", "STRUCTURED"]}, "log_stream_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/logStreamId"}, "final_sequence": {"anyOf": [{"$ref": "#/$defs/u63"}, {"type": "null"}]}, "captured_bytes": {"$ref": "#/$defs/u63"}, "dropped_bytes": {"$ref": "#/$defs/u63"}, "truncated": {"type": "boolean"}, "stream_set_sigil": {"$ref": "#/$defs/sigil"}, "closure_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"}, "closure_event_sigil": {"$ref": "#/$defs/sigil"}, "storage_origin": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/storageOrigin"}, "content": {"$ref": "#/$defs/log_content"}
+      }
+    },
+    "log_content": {"oneOf": [{"$ref": "#/$defs/empty_log_content"}, {"$ref": "#/$defs/captured_log_content"}]},
+    "empty_log_content": {"type": "object", "additionalProperties": false, "required": ["kind", "blob_sigil", "storage"], "properties": {"kind": {"const": "EMPTY"}, "blob_sigil": {"$ref": "#/$defs/sigil"}, "storage": {"$ref": "#/$defs/storage_observation"}}},
+    "captured_log_content": {"type": "object", "additionalProperties": false, "required": ["kind", "blob_sigil", "storage"], "properties": {"kind": {"const": "CAPTURED"}, "blob_sigil": {"$ref": "#/$defs/sigil"}, "storage": {"$ref": "#/$defs/storage_observation"}}},
+    "resource_evidence_none_member": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "RESOURCE_EVIDENCE_NONE"}}},
+    "resource_evidence_member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "storage_subject_id", "manifest_entry_sigil", "control_evidence_id", "control_evidence_sigil", "control_dimension", "phase", "phase_evidence_entry_sigil", "evidence_kind", "producer_identity", "verifier_identity", "collected_at", "byte_size", "blob_sigil", "storage_origin", "storage"],
+      "properties": {
+        "kind": {"const": "RESOURCE_EVIDENCE"}, "storage_subject_id": {"$ref": "#/$defs/sigil"}, "manifest_entry_sigil": {"$ref": "#/$defs/sigil"}, "control_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlEvidenceId"}, "control_evidence_sigil": {"$ref": "#/$defs/sigil"}, "control_dimension": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlDimension"}, "phase": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/phase"}, "phase_evidence_entry_sigil": {"$ref": "#/$defs/sigil"}, "evidence_kind": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/evidenceKind"}, "producer_identity": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/evidenceIdentity"}, "verifier_identity": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/evidenceIdentity"}, "collected_at": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/timestamp"}, "byte_size": {"$ref": "#/$defs/u63"}, "blob_sigil": {"$ref": "#/$defs/sigil"}, "storage_origin": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/storageOrigin"}, "storage": {"$ref": "#/$defs/storage_observation"}
+      }
+    },
+    "terminal_source_not_applicable_member": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "TERMINAL_SOURCE_NOT_APPLICABLE"}}},
+    "terminal_source_none_member": {"type": "object", "additionalProperties": false, "required": ["kind", "reason_codes"], "properties": {"kind": {"const": "TERMINAL_SOURCE_NONE"}, "reason_codes": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/quarantined_terminal_source_binding/properties/reason_codes/items"}}}},
+    "terminal_source_member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "storage_subject_id", "manifest_entry_sigil", "disposition", "terminal_source_identity", "terminal_source_sigil", "storage_blob", "retention_policy_sigil", "file_count", "byte_count", "storage_origin", "storage"],
+      "properties": {"kind": {"const": "TERMINAL_SOURCE"}, "storage_subject_id": {"$ref": "#/$defs/sigil"}, "manifest_entry_sigil": {"$ref": "#/$defs/sigil"}, "disposition": {"enum": ["VERIFIED", "QUARANTINED"]}, "terminal_source_identity": {"$ref": "https://benchwork.dev/schemas/benchwork-source-tree/1.0#/$defs/sourceTreeId"}, "terminal_source_sigil": {"$ref": "#/$defs/sigil"}, "storage_blob": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}, "retention_policy_sigil": {"$ref": "#/$defs/sigil"}, "file_count": {"$ref": "#/$defs/u63"}, "byte_count": {"$ref": "#/$defs/u63"}, "storage_origin": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/storageOrigin"}, "storage": {"$ref": "#/$defs/storage_observation"}}
+    },
+    "storage_observation": {"oneOf": [{"$ref": "#/$defs/no_storage"}, {"$ref": "#/$defs/blob_storage"}, {"$ref": "#/$defs/quarantined_storage"}, {"$ref": "#/$defs/quarantine_terminal_negative_storage"}]},
+    "no_storage": {"type": "object", "additionalProperties": false, "required": ["kind", "terminal_storage_status"], "properties": {"kind": {"const": "NONE"}, "terminal_storage_status": {"const": "UNAVAILABLE"}}},
+    "blob_storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "terminal_storage_status", "blob_sigil", "size_bytes", "blob_record_sigil", "availability", "availability_as_of", "availability_basis_sigil", "integrity_event_sigils", "quarantine", "replica"],
+      "properties": {"kind": {"const": "BLOB"}, "terminal_storage_status": {"enum": ["AVAILABLE", "DEGRADED", "UNAVAILABLE", "INCIDENT"]}, "blob_sigil": {"$ref": "#/$defs/sigil"}, "size_bytes": {"$ref": "#/$defs/u63"}, "blob_record_sigil": {"$ref": "#/$defs/sigil"}, "availability": {"enum": ["AVAILABLE", "DEGRADED", "UNAVAILABLE", "INCIDENT"]}, "availability_as_of": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}, "availability_basis_sigil": {"$ref": "#/$defs/sigil"}, "integrity_event_sigils": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/sigil"}}, "quarantine": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}}, "replica": {"$ref": "#/$defs/replica_selection"}}
+    },
+    "replica_selection": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}}, {"$ref": "#/$defs/selected_replica"}]},
+    "selected_replica": {"type": "object", "additionalProperties": false, "required": ["kind", "replica_id", "replica_record_sigil", "state", "backend", "object", "verification"], "properties": {"kind": {"const": "SELECTED"}, "replica_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/replicaId"}, "replica_record_sigil": {"$ref": "#/$defs/sigil"}, "state": {"const": "AVAILABLE"}, "backend": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/backendRef"}, "object": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/backendObjectRef"}, "verification": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/verificationRef"}}},
+    "quarantined_storage": {"$ref": "#/$defs/quarantine_storage_base", "properties": {"kind": {"const": "QUARANTINED"}, "terminal_storage_status": {"const": "QUARANTINED"}, "state": {"enum": ["HELD", "DISPOSAL_FAILED"]}}, "required": ["kind", "terminal_storage_status", "claimed_blob_sigil", "claimed_size_bytes", "quarantine_binding_sigil", "quarantine_id", "owner_kind", "owner_id", "state", "source_object", "destination_object", "quarantine_record_sigil", "quarantine_event", "reason"]},
+    "quarantine_terminal_negative_storage": {"$ref": "#/$defs/quarantine_storage_base", "properties": {"kind": {"const": "QUARANTINE_TERMINAL_NEGATIVE"}, "terminal_storage_status": {"const": "UNAVAILABLE"}, "state": {"enum": ["FAILED", "DISPOSAL_FAILED", "DISPOSED"]}}, "required": ["kind", "terminal_storage_status", "claimed_blob_sigil", "claimed_size_bytes", "quarantine_binding_sigil", "quarantine_id", "owner_kind", "owner_id", "state", "source_object", "destination_object", "quarantine_record_sigil", "origin_event", "observation_event", "reason"]},
+    "quarantine_storage_base": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"kind": {"enum": ["QUARANTINED", "QUARANTINE_TERMINAL_NEGATIVE"]}, "terminal_storage_status": {"enum": ["QUARANTINED", "UNAVAILABLE"]}, "claimed_blob_sigil": {"$ref": "#/$defs/sigil"}, "claimed_size_bytes": {"$ref": "#/$defs/u63"}, "quarantine_binding_sigil": {"$ref": "#/$defs/sigil"}, "quarantine_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantineId"}, "owner_kind": {"const": "TRANSFER_ATTEMPT"}, "owner_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferAttemptId"}, "state": {"enum": ["HELD", "FAILED", "DISPOSAL_FAILED", "DISPOSED"]}, "source_object": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/backendObjectRef"}, {"type": "null"}]}, "destination_object": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/backendObjectRef"}, "quarantine_record_sigil": {"$ref": "#/$defs/sigil"}, "quarantine_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}, "origin_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}, "observation_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}, "reason": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/reason"}}
+    },
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}
+  }
+}
+

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-approval-subject/1.0",
+  "title": "Execution Approval Subject v1",
+  "description": "Closed RFC-0011 pre-approval Execution Specification subject. Candidate binding, content-derived identity, permission-set Sigil, and self-Sigil are semantic requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "approval_subject_id",
+    "specification_id",
+    "preapproval_specification_sigil",
+    "registry_binding",
+    "task_id",
+    "task_capsule_sigil",
+    "capability_binding",
+    "snapshot_binding",
+    "circle_id",
+    "circle_sigil",
+    "ward_decision_id",
+    "ward_decision_sigil",
+    "approval_policy_id",
+    "approval_policy_version",
+    "approval_policy_sigil",
+    "assurance_requirement",
+    "resolved_permission_set_sigil",
+    "approval_subject_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-approval-subject/1.0"},
+    "approval_subject_id": {"$ref": "#/$defs/approvalSubjectId"},
+    "specification_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/specificationId"},
+    "preapproval_specification_sigil": {"$ref": "#/$defs/sigil"},
+    "registry_binding": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/registryBinding"},
+    "task_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/taskId"},
+    "task_capsule_sigil": {"$ref": "#/$defs/sigil"},
+    "capability_binding": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/capabilityBinding"},
+    "snapshot_binding": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/snapshotBinding"},
+    "circle_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/circleId"},
+    "circle_sigil": {"$ref": "#/$defs/sigil"},
+    "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+    "ward_decision_sigil": {"$ref": "#/$defs/sigil"},
+    "approval_policy_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/approvalPolicyId"},
+    "approval_policy_version": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/version"},
+    "approval_policy_sigil": {"$ref": "#/$defs/sigil"},
+    "assurance_requirement": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/assuranceRequirement"},
+    "resolved_permission_set_sigil": {"$ref": "#/$defs/sigil"},
+    "approval_subject_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "approvalSubjectId": {
+      "type": "string",
+      "pattern": "^EA-[A-F0-9]{64}$",
+      "minLength": 67,
+      "maxLength": 67
+    }
+  }
+}
+

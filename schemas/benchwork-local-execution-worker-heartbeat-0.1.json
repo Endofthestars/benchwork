@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-local-execution-worker-heartbeat/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "worker_id",
+    "worker_session_id",
+    "worker_session_binding_sigil",
+    "executor_epoch",
+    "sequence",
+    "prior_accepted_sequence",
+    "message_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "benchwork-local-execution-worker-heartbeat/0.1"},
+    "scope": {"const": "WORKER"},
+    "worker_id": {"type": "string", "pattern": "^WK-[A-Z0-9][A-Z0-9._-]*$"},
+    "worker_session_id": {"type": "string", "pattern": "^WS-[A-Z0-9][A-Z0-9._-]*$"},
+    "worker_session_binding_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executor_epoch": {"type": "integer", "minimum": 1},
+    "sequence": {"type": "integer", "minimum": 0},
+    "prior_accepted_sequence": {"type": ["integer", "null"], "minimum": 0},
+    "message_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
+

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result-acceptance-policy/1.0",
+  "title": "Agent Result Acceptance Policy v1",
+  "description": "Closed RFC-0015 immutable predicate inventory. Validity proves only the exact policy record and self-Sigil; it does not execute a predicate or authorize an Agent Result transition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "policy_version",
+    "canonical_event_type",
+    "transition_request_schema",
+    "authorization_schema",
+    "agent_result_schema",
+    "job_outcome_schema",
+    "reference_intent_schema",
+    "chronicle_event_schema",
+    "receipt_schema",
+    "ward_evaluator_profile",
+    "actor_authentication_profile",
+    "predicate_profile",
+    "predicates",
+    "policy_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "agent-result-acceptance-policy/1.0"},
+    "policy_id": {"const": "agent-result-acceptance"},
+    "policy_version": {"const": "1.0"},
+    "canonical_event_type": {"const": "agent-result.accepted"},
+    "transition_request_schema": {
+      "const": "agent-result-acceptance-transition-request/1.0"
+    },
+    "authorization_schema": {
+      "const": "agent-result-acceptance-authorization/1.0"
+    },
+    "agent_result_schema": {"const": "agent-result/2.0"},
+    "job_outcome_schema": {"const": "execution-job-outcome/1.0"},
+    "reference_intent_schema": {
+      "const": "artifact-storage-reference-intent/1.0"
+    },
+    "chronicle_event_schema": {"const": "chronicle-event/1.1"},
+    "receipt_schema": {"const": "receipt/1.1"},
+    "ward_evaluator_profile": {
+      "const": "sanctum-authority-intersection/1.0"
+    },
+    "actor_authentication_profile": {
+      "const": "mcp-authenticated-invocation/1.0"
+    },
+    "predicate_profile": {
+      "const": "agent-result-acceptance-predicates/1.0"
+    },
+    "predicates": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "prefixItems": [
+        {"const": "EXPECTED_HEAD_ADMISSIBLE"},
+        {"const": "AUTHENTICATED_INVOCATION_MATCH"},
+        {"const": "TASK_AUTHORITY_CHAIN_VALID"},
+        {"const": "CURRENT_WARD_PASS"},
+        {"const": "APPROVAL_CHAIN_VALID"},
+        {"const": "OUTCOME_REDERIVATION_MATCH"},
+        {"const": "TERMINAL_SUCCESS_ELIGIBLE"},
+        {"const": "EXECUTION_EVIDENCE_VALID"},
+        {"const": "BUDGET_SETTLED"},
+        {"const": "ASSURANCE_EVIDENCE_VALID"},
+        {"const": "STORAGE_OBSERVATION_VALID"},
+        {"const": "TERMINAL_SOURCE_VALID"},
+        {"const": "EVIDENCE_SELECTION_FINAL"},
+        {"const": "AGENT_RESULT_DERIVATION_MATCH"},
+        {"const": "REFERENCE_SET_CLOSURE_VALID"},
+        {"const": "ACCEPTANCE_STORAGE_PREFIX_VALID"}
+      ],
+      "items": false
+    },
+    "policy_sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    }
+  }
+}
+

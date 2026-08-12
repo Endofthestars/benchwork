@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-lease/1.0",
+  "title": "Execution Lease v1",
+  "description": "Closed RFC-0012 immutable Lease offer. Parent Worker, Session, Specification, and durable allocation-slot conformance require semantic resolvers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lease_id", "job_id", "attempt_id", "worker_id", "worker_binding_sigil", "worker_session_id", "worker_session_binding_sigil", "executor_instance_id", "executor_epoch", "fencing_generation", "offered_at", "claim_due_at", "initial_expiry_due_at", "maximum_expiry_due_at", "heartbeat_policy", "lease_credential_digest", "lease_binding_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-lease/1.0"},
+    "lease_id": {"$ref": "#/$defs/leaseId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"},
+    "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"},
+    "worker_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"},
+    "executor_epoch": {"$ref": "#/$defs/u64"},
+    "fencing_generation": {"$ref": "#/$defs/u64"},
+    "offered_at": {"$ref": "#/$defs/timestamp"},
+    "claim_due_at": {"$ref": "#/$defs/timestamp"},
+    "initial_expiry_due_at": {"$ref": "#/$defs/timestamp"},
+    "maximum_expiry_due_at": {"$ref": "#/$defs/timestamp"},
+    "heartbeat_policy": {"$ref": "#/$defs/heartbeatPolicy"},
+    "lease_credential_digest": {"$ref": "#/$defs/sigil"},
+    "lease_binding_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "positiveU63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63"},
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "leaseId": {"type": "string", "pattern": "^LS-[0-7][0-9A-HJKMNP-TV-Z]{25}$", "not": {"pattern": "[\\r\\n]"}, "minLength": 29, "maxLength": 29},
+    "heartbeatPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heartbeat_interval_seconds", "heartbeat_timeout_seconds"],
+      "properties": {
+        "heartbeat_interval_seconds": {"$ref": "#/$defs/positiveU63"},
+        "heartbeat_timeout_seconds": {"$ref": "#/$defs/positiveU63"}
+      }
+    }
+  }
+}
+

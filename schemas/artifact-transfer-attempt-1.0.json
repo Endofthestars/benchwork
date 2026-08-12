@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/artifact-transfer-attempt/1.0",
+  "title": "Artifact Transfer Attempt v1",
+  "description": "Closed RFC-0013 transfer execution record. Journal transition legality, reservations, State replay, and backend effects are semantic/runtime checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transfer_attempt_id", "transfer_id", "attempt_number", "state", "staging_state", "reservation", "staging_object", "commit_intent", "residual_staging_cleanup", "computed_blob_sigil", "computed_size_bytes", "selected_replica_id", "quarantine_id", "terminal_reason", "started_at", "terminal_at", "revision", "record_sigil"],
+  "properties": {
+    "schema_version": {"const": "artifact-transfer-attempt/1.0"},
+    "transfer_attempt_id": {"$ref": "#/$defs/transferAttemptId"},
+    "transfer_id": {"$ref": "#/$defs/transferId"},
+    "attempt_number": {"$ref": "#/$defs/positiveU63"},
+    "state": {"enum": ["PREPARED", "STREAMING", "VERIFYING", "COMMITTING", "COMMITTED", "FAILED", "CANCELLED", "QUARANTINED"]},
+    "staging_state": {"enum": ["NOT_CREATED", "PRESENT", "MISSING", "HELD_FOR_DISPOSITION"]},
+    "reservation": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reservationRef"},
+    "staging_object": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, {"type": "null"}]},
+    "commit_intent": {"anyOf": [{"$ref": "#/$defs/transferCommitIntent"}, {"type": "null"}]},
+    "residual_staging_cleanup": {"$ref": "#/$defs/residualStagingCleanup"},
+    "computed_blob_sigil": {"anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]},
+    "computed_size_bytes": {"anyOf": [{"$ref": "#/$defs/u63"}, {"type": "null"}]},
+    "selected_replica_id": {"anyOf": [{"$ref": "#/$defs/replicaId"}, {"type": "null"}]},
+    "quarantine_id": {"anyOf": [{"$ref": "#/$defs/quarantineId"}, {"type": "null"}]},
+    "terminal_reason": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}, {"type": "null"}]},
+    "started_at": {"$ref": "#/$defs/timestamp"},
+    "terminal_at": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+    "revision": {"$ref": "#/$defs/positiveU63"},
+    "record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {"if": {"properties": {"state": {"const": "PREPARED"}}, "required": ["state"]}, "then": {"properties": {"staging_state": {"const": "NOT_CREATED"}, "staging_object": {"type": "null"}, "commit_intent": {"type": "null"}, "terminal_at": {"type": "null"}, "selected_replica_id": {"type": "null"}, "quarantine_id": {"type": "null"}, "terminal_reason": {"type": "null"}}}},
+    {"if": {"properties": {"state": {"enum": ["STREAMING", "VERIFYING"]}}, "required": ["state"]}, "then": {"properties": {"staging_state": {"const": "PRESENT"}, "staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, "terminal_at": {"type": "null"}, "selected_replica_id": {"type": "null"}, "quarantine_id": {"type": "null"}, "terminal_reason": {"type": "null"}}}},
+    {"if": {"properties": {"state": {"const": "COMMITTING"}}, "required": ["state"]}, "then": {"properties": {"staging_state": {"const": "PRESENT"}, "staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, "commit_intent": {"$ref": "#/$defs/transferCommitIntent"}, "terminal_at": {"type": "null"}, "selected_replica_id": {"type": "null"}, "quarantine_id": {"type": "null"}, "terminal_reason": {"type": "null"}}}},
+    {"if": {"properties": {"state": {"const": "COMMITTED"}}, "required": ["state"]}, "then": {"properties": {"commit_intent": {"$ref": "#/$defs/transferCommitIntent"}, "selected_replica_id": {"$ref": "#/$defs/replicaId"}, "quarantine_id": {"type": "null"}, "terminal_reason": {"type": "null"}, "terminal_at": {"$ref": "#/$defs/timestamp"}, "residual_staging_cleanup": {"$ref": "#/$defs/terminalCleanup"}}}},
+    {"if": {"properties": {"state": {"const": "QUARANTINED"}}, "required": ["state"]}, "then": {"properties": {"selected_replica_id": {"type": "null"}, "quarantine_id": {"$ref": "#/$defs/quarantineId"}, "terminal_reason": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}, "terminal_at": {"$ref": "#/$defs/timestamp"}, "residual_staging_cleanup": {"$ref": "#/$defs/terminalCleanup"}}}},
+    {"if": {"properties": {"state": {"enum": ["FAILED", "CANCELLED"]}}, "required": ["state"]}, "then": {"properties": {"selected_replica_id": {"type": "null"}, "quarantine_id": {"type": "null"}, "terminal_reason": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}, "terminal_at": {"$ref": "#/$defs/timestamp"}, "residual_staging_cleanup": {"$ref": "#/$defs/terminalCleanup"}}}}
+  ],
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71},
+    "u63": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "positiveU63": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$", "minLength": 20, "maxLength": 27},
+    "transferId": {"type": "string", "pattern": "^ST-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "transferAttemptId": {"type": "string", "pattern": "^SA-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "replicaId": {"type": "string", "pattern": "^SR-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "quarantineId": {"type": "string", "pattern": "^SQ-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "blobRef": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"},
+    "transferCommitIntent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["intent_id", "provisional_replica_id", "staging_object", "target_object", "computed_blob", "execution_fence", "reservation", "recorded_clock"],
+      "properties": {
+        "intent_id": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/opaque"},
+        "provisional_replica_id": {"$ref": "#/$defs/replicaId"},
+        "staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"},
+        "target_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"},
+        "computed_blob": {"$ref": "#/$defs/blobRef"},
+        "execution_fence": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/fence"}, {"type": "null"}]},
+        "reservation": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reservationRef"},
+        "recorded_clock": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/clockRef"}
+      }
+    },
+    "residualStagingCleanup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "staging_object", "evidence_sigil", "reason"],
+      "properties": {
+        "state": {"enum": ["NOT_REQUIRED", "PENDING", "CLEANED", "FAILED", "HELD_FOR_DISPOSITION"]},
+        "staging_object": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, {"type": "null"}]},
+        "evidence_sigil": {"anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]},
+        "reason": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "NOT_REQUIRED"}}, "required": ["state"]}, "then": {"properties": {"staging_object": {"type": "null"}, "evidence_sigil": {"type": "null"}, "reason": {"type": "null"}}}},
+        {"if": {"properties": {"state": {"const": "PENDING"}}, "required": ["state"]}, "then": {"properties": {"staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, "evidence_sigil": {"type": "null"}, "reason": {"type": "null"}}}},
+        {"if": {"properties": {"state": {"const": "CLEANED"}}, "required": ["state"]}, "then": {"properties": {"staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, "evidence_sigil": {"$ref": "#/$defs/sigil"}, "reason": {"type": "null"}}}},
+        {"if": {"properties": {"state": {"enum": ["FAILED", "HELD_FOR_DISPOSITION"]}}, "required": ["state"]}, "then": {"properties": {"staging_object": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/backendObjectRef"}, "evidence_sigil": {"$ref": "#/$defs/sigil"}, "reason": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/reason"}}}}
+      ]
+    },
+    "terminalCleanup": {"allOf": [{"$ref": "#/$defs/residualStagingCleanup"}, {"properties": {"state": {"enum": ["NOT_REQUIRED", "CLEANED", "HELD_FOR_DISPOSITION"]}}, "required": ["state"]}]}
+  }
+}
+

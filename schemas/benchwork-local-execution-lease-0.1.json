@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/benchwork-local-execution-lease/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lease_id",
+    "job_id",
+    "attempt_id",
+    "worker_id",
+    "worker_binding_sigil",
+    "worker_session_id",
+    "worker_session_binding_sigil",
+    "executor_instance_id",
+    "executor_epoch",
+    "fencing_generation",
+    "offered_at",
+    "claim_due_at",
+    "lease_binding_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "benchwork-local-execution-lease/0.1"},
+    "lease_id": {"type": "string", "pattern": "^LS-[A-Z0-9][A-Z0-9._-]*$"},
+    "job_id": {"type": "string", "pattern": "^JB-[A-F0-9]{64}$"},
+    "attempt_id": {"type": "string", "pattern": "^AT-[A-Z0-9][A-Z0-9._-]*$"},
+    "worker_id": {"type": "string", "pattern": "^WK-[A-Z0-9][A-Z0-9._-]*$"},
+    "worker_binding_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "worker_session_id": {"type": "string", "pattern": "^WS-[A-Z0-9][A-Z0-9._-]*$"},
+    "worker_session_binding_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executor_instance_id": {"type": "string", "pattern": "^XI-[A-Z0-9][A-Z0-9._-]*$"},
+    "executor_epoch": {"type": "integer", "minimum": 1},
+    "fencing_generation": {"type": "integer", "minimum": 1},
+    "offered_at": {"type": "string", "format": "date-time"},
+    "claim_due_at": {"type": "string", "format": "date-time"},
+    "lease_binding_sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
+

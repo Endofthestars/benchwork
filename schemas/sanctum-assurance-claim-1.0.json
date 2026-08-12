@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/sanctum-assurance-claim/1.0",
+  "title": "Sanctum Assurance Claim v1",
+  "description": "Closed RFC-0012 AC1-AC10 contract-only Claim wire. Schema validity and local deterministic checks do not resolve Journal, State, Profile, CES, predicate, registry, signature, verification-bundle, atomic-installation, or runtime authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assurance_claim_id",
+    "job_id",
+    "attempt_id",
+    "attempt_binding_sigil",
+    "attempt_terminal_event",
+    "requested_assurance",
+    "realized_level",
+    "satisfies_request",
+    "assurance_profile_binding",
+    "backend_identity",
+    "backend_configuration_sigil",
+    "host_binding",
+    "policy_set_sigil",
+    "result_binding",
+    "control_evidence_set_binding",
+    "terminal_status",
+    "evidence_cut",
+    "verifier_binding",
+    "issued_at",
+    "assurance_claim_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "sanctum-assurance-claim/1.0"},
+    "assurance_claim_id": {"$ref": "#/$defs/assuranceClaimId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "attempt_terminal_event": {"$ref": "#/$defs/eventRef"},
+    "requested_assurance": {"$ref": "#/$defs/level"},
+    "realized_level": {"$ref": "#/$defs/level"},
+    "satisfies_request": {"type": "boolean"},
+    "assurance_profile_binding": {"$ref": "#/$defs/assuranceProfileBinding"},
+    "backend_identity": {"$ref": "#/$defs/token"},
+    "backend_configuration_sigil": {"$ref": "#/$defs/sigil"},
+    "host_binding": {"$ref": "#/$defs/hostBinding"},
+    "policy_set_sigil": {"$ref": "#/$defs/sigil"},
+    "result_binding": {"$ref": "#/$defs/resultBinding"},
+    "control_evidence_set_binding": {"$ref": "#/$defs/frozenControlEvidenceSetBinding"},
+    "terminal_status": {"$ref": "#/$defs/terminalStatus"},
+    "evidence_cut": {"$ref": "#/$defs/evidenceCut"},
+    "verifier_binding": {"$ref": "#/$defs/verifierBinding"},
+    "issued_at": {"$ref": "#/$defs/timestamp"},
+    "assurance_claim_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {"pattern": "[\\r\\n]"},
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "upperId": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$",
+      "not": {"pattern": "[\\r\\n]"},
+      "minLength": 3,
+      "maxLength": 128
+    },
+    "u63": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    },
+    "assuranceClaimId": {
+      "type": "string",
+      "pattern": "^AC-[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+      "minLength": 29,
+      "maxLength": 29
+    },
+    "level": {"enum": ["SANCTUM-A0", "SANCTUM-A1", "SANCTUM-A2"]},
+    "eventRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["journal_id", "sequence", "event_id", "event_sigil"],
+      "properties": {
+        "journal_id": {"type": "string", "pattern": "^EJ-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+        "sequence": {"$ref": "#/$defs/u63"},
+        "event_id": {"type": "string", "pattern": "^JE-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+        "event_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "journalPrefix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["journal_id", "ending_sequence", "ending_event_id", "ending_event_sigil"],
+      "properties": {
+        "journal_id": {"type": "string", "pattern": "^EJ-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+        "ending_sequence": {"$ref": "#/$defs/u63"},
+        "ending_event_id": {"type": "string", "pattern": "^JE-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+        "ending_event_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "assuranceProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_version", "profile_sigil", "conformance_suite_id", "conformance_suite_sigil"],
+      "properties": {
+        "profile_version": {"type": "string", "pattern": "^[0-9]+[.][0-9]+(?:[.][0-9]+)?$", "minLength": 3, "maxLength": 32},
+        "profile_sigil": {"$ref": "#/$defs/sigil"},
+        "conformance_suite_id": {"type": "string", "pattern": "^CS-[A-Z0-9]+(?:[._-][A-Z0-9]+)*$", "minLength": 4, "maxLength": 128},
+        "conformance_suite_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "hostBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "NONE"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "worker_id", "worker_binding_sigil", "worker_session_id", "worker_session_binding_sigil", "host_identity_sigil"],
+          "properties": {
+            "kind": {"const": "BOUND"},
+            "worker_id": {"type": "string", "pattern": "^WK-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+            "worker_binding_sigil": {"$ref": "#/$defs/sigil"},
+            "worker_session_id": {"type": "string", "pattern": "^WS-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+            "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+            "host_identity_sigil": {"$ref": "#/$defs/sigil"}
+          }
+        }
+      ]
+    },
+    "resultReasonCode": {
+      "description": "Closed-value ownership belongs to the not-yet-published Execution Journal Event contract; the pure dependency validator must receive and enforce its exact canonical order.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "resultBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "NONE"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "result_sigil", "disposition_event"],
+          "properties": {
+            "kind": {"const": "ACCEPTED"},
+            "result_sigil": {"$ref": "#/$defs/sigil"},
+            "disposition_event": {"$ref": "#/$defs/eventRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "message_sigil", "disposition_event", "reason_codes"],
+          "properties": {
+            "kind": {"const": "REJECTED"},
+            "message_sigil": {"$ref": "#/$defs/sigil"},
+            "disposition_event": {"$ref": "#/$defs/eventRef"},
+            "reason_codes": {"type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/resultReasonCode"}}
+          }
+        }
+      ]
+    },
+    "frozenControlEvidenceSetBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "control_evidence_set_id", "control_evidence_set_sigil"],
+      "properties": {
+        "kind": {"const": "FROZEN"},
+        "control_evidence_set_id": {"type": "string", "pattern": "^CES-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "control_evidence_set_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "terminalStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_state", "process_termination_status", "handle_revocation_status", "cleanup_status", "quarantine_status"],
+      "properties": {
+        "attempt_state": {"enum": ["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "POLICY_VIOLATION", "LEASE_EXPIRED", "LOST", "FENCED", "REJECTED"]},
+        "process_termination_status": {"enum": ["NOT_STARTED", "EXITED", "TERMINATED", "QUARANTINED", "UNVERIFIABLE"]},
+        "handle_revocation_status": {"enum": ["NOT_APPLICABLE", "REVOKED", "FENCED", "QUARANTINED", "UNVERIFIABLE"]},
+        "cleanup_status": {"enum": ["NOT_APPLICABLE", "VERIFIED", "PARTIAL", "FAILED", "QUARANTINED"]},
+        "quarantine_status": {"enum": ["NOT_REQUIRED", "COMPLETE", "PARTIAL", "FAILED"]}
+      }
+    },
+    "predicateResultSetBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "predicate_result_set_id", "predicate_result_set_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-assurance-predicate-result-set/1.0"},
+        "predicate_result_set_id": {"type": "string", "pattern": "^PRS-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "predicate_result_set_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "verificationBundleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "verification_bundle_id", "verification_bundle_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-assurance-verification-bundle/1.0"},
+        "verification_bundle_id": {"type": "string", "pattern": "^AVB-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "verification_bundle_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "evidenceCut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["journal_prefix", "state_sigil", "accounting_capture_event", "budget_settlement_event", "control_evidence_allocation_commit_sigil", "control_evidence_inventory_sigil", "control_evidence_set_binding", "predicate_result_set_binding", "verification_bundle_binding", "verification_started_at", "verification_completed_at"],
+      "properties": {
+        "journal_prefix": {"$ref": "#/$defs/journalPrefix"},
+        "state_sigil": {"$ref": "#/$defs/sigil"},
+        "accounting_capture_event": {"$ref": "#/$defs/eventRef"},
+        "budget_settlement_event": {"$ref": "#/$defs/eventRef"},
+        "control_evidence_allocation_commit_sigil": {"$ref": "#/$defs/sigil"},
+        "control_evidence_inventory_sigil": {"$ref": "#/$defs/sigil"},
+        "control_evidence_set_binding": {"$ref": "#/$defs/frozenControlEvidenceSetBinding"},
+        "predicate_result_set_binding": {"$ref": "#/$defs/predicateResultSetBinding"},
+        "verification_bundle_binding": {"$ref": "#/$defs/verificationBundleBinding"},
+        "verification_started_at": {"$ref": "#/$defs/timestamp"},
+        "verification_completed_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "verifierIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_id", "verifier_build_sigil", "verifier_profile_id", "verifier_profile_sigil"],
+      "properties": {
+        "verifier_id": {"$ref": "#/$defs/token"},
+        "verifier_build_sigil": {"$ref": "#/$defs/sigil"},
+        "verifier_profile_id": {"$ref": "#/$defs/token"},
+        "verifier_profile_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "registryAuthorityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "authority_policy_id", "authority_policy_sigil", "installed_head_id", "installed_head_sigil", "active_transition_id", "active_transition_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-verifier-registry-authority-binding/1.0"},
+        "authority_policy_id": {"type": "string", "pattern": "^VAP-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "authority_policy_sigil": {"$ref": "#/$defs/sigil"},
+        "installed_head_id": {"type": "string", "pattern": "^VRH-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "installed_head_sigil": {"$ref": "#/$defs/sigil"},
+        "active_transition_id": {"type": "string", "pattern": "^VAT-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "active_transition_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "registrySnapshotBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "registry_snapshot_id", "registry_snapshot_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-trusted-verifier-registry-snapshot/1.0"},
+        "registry_snapshot_id": {"type": "string", "pattern": "^VRS-[0-7][0-9A-HJKMNP-TV-Z]{25}$", "minLength": 30, "maxLength": 30},
+        "registry_snapshot_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authorizationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "authorization_record_id", "authorization_record_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-verifier-authorization/1.0"},
+        "authorization_record_id": {"type": "string", "pattern": "^VAU-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "authorization_record_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authenticationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "authentication_evidence_id", "authentication_evidence_sigil"],
+      "properties": {
+        "schema_version": {"const": "sanctum-verifier-authentication-evidence/1.0"},
+        "authentication_evidence_id": {"type": "string", "pattern": "^VAE-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+        "authentication_evidence_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "verifierBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_identity", "registry_authority_binding", "registry_snapshot_binding", "authorization_binding", "authentication_binding"],
+      "properties": {
+        "verifier_identity": {"$ref": "#/$defs/verifierIdentity"},
+        "registry_authority_binding": {"$ref": "#/$defs/registryAuthorityBinding"},
+        "registry_snapshot_binding": {"$ref": "#/$defs/registrySnapshotBinding"},
+        "authorization_binding": {"$ref": "#/$defs/authorizationBinding"},
+        "authentication_binding": {"$ref": "#/$defs/authenticationBinding"}
+      }
+    }
+  }
+}
+

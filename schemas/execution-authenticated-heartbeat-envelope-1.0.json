@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-authenticated-heartbeat-envelope/1.0",
+  "title": "Execution Authenticated Heartbeat Envelope v1",
+  "description": "Closed RFC-0012 H2 trusted-adapter output. Structural validity and its self-Sigil do not authenticate a channel, peer, Session, Lease, or received frame.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "lease_id",
+    "worker_session_id",
+    "worker_session_binding_sigil",
+    "executor_instance_id",
+    "executor_epoch",
+    "control_channel_identity_sigil",
+    "transport_sequence",
+    "received_at",
+    "received_bytes_sigil",
+    "claimed_message_sigil",
+    "peer_key_identity_sigil",
+    "authentication_evidence_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-authenticated-heartbeat-envelope/1.0"},
+    "scope": {"enum": ["WORKER", "LEASE"]},
+    "lease_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}
+      ]
+    },
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"},
+    "executor_epoch": {"$ref": "#/$defs/u64"},
+    "control_channel_identity_sigil": {"$ref": "#/$defs/sigil"},
+    "transport_sequence": {"$ref": "#/$defs/u64"},
+    "received_at": {"$ref": "#/$defs/timestamp"},
+    "received_bytes_sigil": {"$ref": "#/$defs/sigil"},
+    "claimed_message_sigil": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/sigil"}
+      ]
+    },
+    "peer_key_identity_sigil": {"$ref": "#/$defs/sigil"},
+    "authentication_evidence_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"scope": {"const": "WORKER"}}, "required": ["scope"]},
+      "then": {"properties": {"lease_id": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"scope": {"const": "LEASE"}}, "required": ["scope"]},
+      "then": {
+        "properties": {
+          "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u64": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/u64"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"}
+  }
+}
+
