@@ -3237,7 +3237,11 @@ def replay_execution_journal_supplied_facts_v1(
     validate_execution_journal_prefix_wire_v1(events, head=head)
     state = replay_execution_initial_prefix_v1([events[0]])
     for event in events[1:]:
-        if event["event_type"] == "worker.definition_registered":
+        if event["event_type"] == "executor.clock_uncertain":
+            state = _reduce_executor_clock_uncertain_after_initial_v1(state, event)
+        elif event["event_type"] == "recovery.started":
+            state = _reduce_recovery_started_after_clock_uncertain_v1(state, event)
+        elif event["event_type"] == "worker.definition_registered":
             worker = _find_supplied_v1(
                 supplied_workers,
                 event["payload"]["worker_binding_sigil"],

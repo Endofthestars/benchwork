@@ -36,6 +36,7 @@ from benchwork.execution_contracts import (
     load_execution_output_storage_observation_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_journal_supplied_facts_v1,
     replay_execution_supplied_state_suffix_v1,
     replay_execution_empty_recovery_phase_prefix_v1,
     validate_execution_journal_prefix_wire_v1,
@@ -1042,6 +1043,10 @@ def test_empty_recovery_phase_replay_projects_each_control_phase() -> None:
     assert replay_execution_journal_prefix_v1(
         [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
         recovery_action_sets=[started_set, fencing_set, reconciling_set, finalizing_set],
+    ) == state
+    assert replay_execution_journal_supplied_facts_v1(
+        [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
+        supplied_recovery_action_sets=[started_set, fencing_set, reconciling_set, finalizing_set],
     ) == state
 
     assert state["journal_binding"]["through_sequence"] == 6
