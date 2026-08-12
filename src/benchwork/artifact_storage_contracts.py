@@ -856,6 +856,7 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
         source_sigil = intent["source_event"]["event_sigil"]
         if (
             intent["source_event"]["journal_id"] != state["journal_id"]
+            or intent["source_event"]["sequence"] > state["applied_event_count"]
             or intent["intent_sigil"] != source_sigil
             or intent["last_event_sigil"] != source_sigil
         ):

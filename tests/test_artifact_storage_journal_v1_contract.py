@@ -1123,6 +1123,14 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="Open Intent disagrees"):
         validate_artifact_storage_state_v1(wrong_open_journal)
 
+    future_open_intent = deepcopy(open_ids)
+    future_open_intent["open_intents"][0]["source_event"]["sequence"] = 2
+    future_open_intent["state_sigil"] = content_sigil({
+        key: member for key, member in future_open_intent.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Open Intent disagrees"):
+        validate_artifact_storage_state_v1(future_open_intent)
+
     quarantine_state = deepcopy(state)
     quarantine = {
         "quarantine_id": "SQ-ONE", "owner_kind": "TRANSFER_ATTEMPT", "owner_id": "SA-ONE",
