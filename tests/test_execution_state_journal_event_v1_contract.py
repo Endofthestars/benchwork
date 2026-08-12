@@ -16,6 +16,7 @@ from benchwork.execution_contracts import (
     derive_execution_storage_root_manifest_id_v1,
     derive_execution_root_hold_release_authorization_id_v1,
     derive_execution_control_evidence_set_id_v1,
+    derive_execution_quarantine_binding_set_id_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
@@ -30,6 +31,7 @@ from benchwork.execution_contracts import (
     load_execution_storage_root_manifest_v1,
     load_execution_root_hold_release_authorization_v1,
     load_execution_control_evidence_set_v1,
+    load_execution_quarantine_binding_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
@@ -43,6 +45,7 @@ from benchwork.execution_contracts import (
     validate_execution_storage_root_manifest_v1,
     validate_execution_root_hold_release_authorization_v1,
     validate_execution_control_evidence_set_v1,
+    validate_execution_quarantine_binding_set_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -404,6 +407,25 @@ def _control_evidence_set() -> dict[str, Any]:
         key: member for key, member in evidence_set.items() if key != "control_evidence_set_sigil"
     })
     return evidence_set
+
+
+def _quarantine_binding_set() -> dict[str, Any]:
+    binding_set = {
+        "schema_version": "execution-quarantine-binding-set/1.0", "quarantine_binding_set_id": "",
+        "job_id": JOB_ID, "attempt_id": "AT-ONE", "attempt_binding_sigil": SIGIL,
+        "quarantine_plan_sigil": SIGIL,
+        "terminalization_storage_manifest_binding": {
+            "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
+            "storage_root_manifest_sigil": SIGIL,
+        },
+        "storage_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL},
+        "storage_state_sigil": SIGIL, "bindings": [], "quarantine_binding_set_sigil": "",
+    }
+    binding_set["quarantine_binding_set_id"] = derive_execution_quarantine_binding_set_id_v1(binding_set)
+    binding_set["quarantine_binding_set_sigil"] = content_sigil({
+        key: member for key, member in binding_set.items() if key != "quarantine_binding_set_sigil"
+    })
+    return binding_set
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1385,6 +1407,65 @@ def test_control_evidence_set_closes_owner_id_and_ten_dimension_matrix() -> None
     })
     with pytest.raises(Exception, match="evidence IDs"):
         validate_execution_control_evidence_set_v1(duplicate_id)
+
+
+def test_quarantine_binding_set_closes_frozen_owner_and_self_identity() -> None:
+    binding_set = _quarantine_binding_set()
+    validate_execution_quarantine_binding_set_v1(binding_set)
+    assert load_execution_quarantine_binding_set_v1(json.dumps(binding_set)) == binding_set
+
+    stale_id = deepcopy(binding_set)
+    stale_id["quarantine_binding_set_id"] = "QBS-" + "A" * 64
+    stale_id["quarantine_binding_set_sigil"] = content_sigil({
+        key: member for key, member in stale_id.items() if key != "quarantine_binding_set_sigil"
+    })
+    with pytest.raises(Exception, match="Binding Set ID mismatch"):
+        validate_execution_quarantine_binding_set_v1(stale_id)
+
+    populated = deepcopy(binding_set)
+    event = {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL}
+    backend_object = {
+        "backend_id": "BACKEND", "object_identity_sigil": SIGIL, "locator_sigil": SIGIL,
+        "generation": "GENERATION", "size_bytes": 1, "blob_sigil": SIGIL_B,
+    }
+    subject = {
+        "kind": "ATTEMPT_OUTPUT", "logical_name": "output", "schema_id": "result/1.0",
+        "schema_sigil": SIGIL, "staging_reference_sigil": SIGIL, "byte_size": 1, "blob_sigil": SIGIL_B,
+    }
+    binding = {
+        "storage_subject_id": SIGIL, "manifest_entry_sigil": SIGIL, "subject": subject,
+        "storage_origin": {"kind": "QUARANTINE", "transfer": {
+            "transfer_id": "ST-ONE", "transfer_attempt_id": "SA-ONE", "request_record_sigil": SIGIL,
+            "attempt_record_sigil": SIGIL, "terminal_event": event,
+        }, "provenance_id": "PROVENANCE", "provenance_sigil": SIGIL, "quarantine_id": "SQ-ONE",
+            "quarantine_origin_event": event},
+        "quarantine_ref": {"quarantine_id": "SQ-ONE", "owner_kind": "TRANSFER_ATTEMPT", "owner_id": "SA-ONE",
+                           "quarantine_record_sigil": SIGIL, "origin_event": event,
+                           "observation_event": {**event, "event_id": "SE-TWO", "sequence": 2, "event_sigil": SIGIL_B},
+                           "state": "HELD", "source_object": backend_object, "destination_object": backend_object,
+                           "source_cleanup": {"state": "NOT_REQUIRED", "staging_object": None, "evidence_sigil": None, "reason": None},
+                           "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []}},
+        "disposition": "RETAINED", "quarantine_binding_sigil": "",
+    }
+    binding["quarantine_binding_sigil"] = content_sigil({
+        key: member for key, member in binding.items() if key != "quarantine_binding_sigil"
+    })
+    populated["bindings"] = [binding]
+    populated["quarantine_binding_set_sigil"] = content_sigil({
+        key: member for key, member in populated.items() if key != "quarantine_binding_set_sigil"
+    })
+    validate_execution_quarantine_binding_set_v1(populated)
+
+    mismatched_owner = deepcopy(populated)
+    mismatched_owner["bindings"][0]["quarantine_ref"]["owner_id"] = "SA-TWO"
+    mismatched_owner["bindings"][0]["quarantine_binding_sigil"] = content_sigil({
+        key: member for key, member in mismatched_owner["bindings"][0].items() if key != "quarantine_binding_sigil"
+    })
+    mismatched_owner["quarantine_binding_set_sigil"] = content_sigil({
+        key: member for key, member in mismatched_owner.items() if key != "quarantine_binding_set_sigil"
+    })
+    with pytest.raises(Exception, match="origin disagrees with Quarantine owner"):
+        validate_execution_quarantine_binding_set_v1(mismatched_owner)
 
 
 

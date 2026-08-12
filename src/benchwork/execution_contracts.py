@@ -1043,6 +1043,56 @@ def load_execution_control_evidence_set_v1(raw: str | bytes | bytearray) -> dict
     return evidence_set
 
 
+def derive_execution_quarantine_binding_set_id_v1(binding_set: dict[str, Any]) -> str:
+    """Derive the immutable QBS-ID from frozen Attempt and storage inputs."""
+    digest = content_sigil([
+        "execution-quarantine-binding-set-id/1.0", binding_set["job_id"],
+        binding_set["attempt_id"], binding_set["attempt_binding_sigil"],
+        binding_set["quarantine_plan_sigil"],
+        binding_set["terminalization_storage_manifest_binding"],
+    ]).removeprefix("sha256:").upper()
+    return f"QBS-{digest}"
+
+
+def validate_execution_quarantine_binding_set_v1(binding_set: dict[str, Any]) -> None:
+    """Validate a frozen QBS locally without resolving the Storage projection."""
+    validate_instance("execution-quarantine-binding-set-1.0.json", binding_set)
+    _check_nfc(binding_set)
+    if binding_set["quarantine_binding_set_id"] != derive_execution_quarantine_binding_set_id_v1(binding_set):
+        _fail("Execution Quarantine Binding Set ID mismatch")
+    if binding_set["quarantine_binding_set_sigil"] != content_sigil(
+        _without(binding_set, "quarantine_binding_set_sigil")
+    ):
+        _fail("Execution Quarantine Binding Set self-Sigil mismatch")
+    bindings = binding_set["bindings"]
+    if len({binding["storage_subject_id"] for binding in bindings}) != len(bindings):
+        _fail("Execution Quarantine Binding Set storage subject IDs must be unique")
+    if len({binding["quarantine_ref"]["quarantine_id"] for binding in bindings}) != len(bindings):
+        _fail("Execution Quarantine Binding Set Quarantine IDs must be unique")
+    for binding in bindings:
+        if binding["quarantine_binding_sigil"] != content_sigil(
+            _without(binding, "quarantine_binding_sigil")
+        ):
+            _fail("Execution Quarantine Binding Set binding self-Sigil mismatch")
+        origin = binding["storage_origin"]
+        quarantine = binding["quarantine_ref"]
+        if (
+            origin["quarantine_id"] != quarantine["quarantine_id"]
+            or origin["transfer"]["transfer_attempt_id"] != quarantine["owner_id"]
+        ):
+            _fail("Execution Quarantine Binding Set origin disagrees with Quarantine owner")
+        if quarantine["origin_event"] != origin["quarantine_origin_event"]:
+            _fail("Execution Quarantine Binding Set origin Event disagrees with storage origin")
+        if quarantine["observation_event"]["sequence"] < quarantine["origin_event"]["sequence"]:
+            _fail("Execution Quarantine Binding Set observation predates origin Event")
+
+
+def load_execution_quarantine_binding_set_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    binding_set = _load_strict_object(raw, "Execution Quarantine Binding Set")
+    validate_execution_quarantine_binding_set_v1(binding_set)
+    return binding_set
+
+
 def derive_observation_evidence_subject_sigil_v1(
     owner_binding: dict[str, Any], result_observation_binding: dict[str, Any]
 ) -> str:
