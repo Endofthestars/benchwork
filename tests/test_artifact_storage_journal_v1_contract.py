@@ -249,6 +249,82 @@ def test_storage_replay_activates_the_empty_initialized_store() -> None:
         replay_artifact_storage_journal_prefix_v1([initial, wrong_revision])
 
 
+def test_storage_replay_completes_an_empty_recovery_to_its_frozen_origin() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{
+        "entity_type": "STORE", "entity_id": "STORE",
+        "previous_revision": 1, "next_revision": 2,
+    }]
+    activation["payload"] = {
+        "legacy_protection_ids": [], "activation_evidence_sigil": SIGIL,
+        "clock": initial["payload"]["clock"],
+    }
+    activation["quota_effects"] = []
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    started = _next_event(activation)
+    started.update({
+        "event_id": "SE-THREE", "sequence": 3, "event_type": "storage.recovery_started",
+        "epoch": 2, "recorded_at": "2026-08-06T00:00:02Z",
+        "observed_at": "2026-08-06T00:00:01Z",
+        "entity_revisions": [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": 2, "next_revision": 3,
+        }],
+        "quota_effects": [],
+        "payload": {
+            "recovery_id": "RECOVERY", "origin_status": "ACTIVE",
+            "previous_epoch": 1, "next_epoch": 2, "tail_recovery": None,
+            "open_intent_ids": [],
+            "clock": {**initial["payload"]["clock"], "utc": "2026-08-06T00:00:01Z"},
+        },
+    })
+    started["event_sigil"] = content_sigil({
+        key: value for key, value in started.items() if key != "event_sigil"
+    })
+    recovering = replay_artifact_storage_journal_prefix_v1([initial, activation, started])
+    assert recovering["store_status"] == "RECOVERING"
+    assert recovering["active_recovery_id"] == "RECOVERY"
+    completed = _next_event(started)
+    completed.update({
+        "event_id": "SE-FOUR", "sequence": 4, "event_type": "storage.recovery_completed",
+        "epoch": 2, "recorded_at": "2026-08-06T00:00:03Z",
+        "observed_at": "2026-08-06T00:00:02Z",
+        "entity_revisions": [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": 3, "next_revision": 4,
+        }],
+        "quota_effects": [],
+        "payload": {
+            "recovery_id": "RECOVERY", "epoch": 2, "resume_status": "ACTIVE",
+            "resolved_intent_ids": [], "evidence_sigils": [],
+            "clock": {**started["payload"]["clock"], "utc": "2026-08-06T00:00:02Z"},
+        },
+    })
+    completed["event_sigil"] = content_sigil({
+        key: value for key, value in completed.items() if key != "event_sigil"
+    })
+    state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, started, completed]
+    )
+    assert state["store_status"] == "ACTIVE"
+    assert state["active_recovery_id"] is None
+    assert state["recoveries"][0]["state"] == "COMPLETED"
+
+    wrong_origin = deepcopy(completed)
+    wrong_origin["payload"]["resume_status"] = "INITIALIZING"
+    wrong_origin["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_origin.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="recovery completion"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, started, wrong_origin]
+        )
+
+
 def test_storage_replay_applies_empty_clock_gate_round_trip() -> None:
     initial = _initial_replay_event()
     activation = _next_event(initial)

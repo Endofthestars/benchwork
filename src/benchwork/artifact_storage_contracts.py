@@ -840,6 +840,119 @@ def _reduce_artifact_storage_epoch_started_v1(
     return reduced
 
 
+def _reduce_artifact_storage_recovery_started_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Enter a new Storage Recovery without inferring any open-intent result."""
+    payload = event["payload"]
+    if state["store_status"] not in {"INITIALIZING", "ACTIVE"}:
+        _fail("Artifact Storage recovery start has an invalid source State")
+    open_intent_ids = [item["intent_id"] for item in state["open_intents"]]
+    if (
+        event["event_type"] != "storage.recovery_started"
+        or event["journal_id"] != state["journal_id"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["epoch"] != payload["next_epoch"]
+        or payload["origin_status"] != state["store_status"]
+        or payload["previous_epoch"] != state["current_epoch"]
+        or payload["next_epoch"] != state["current_epoch"] + 1
+        or payload["open_intent_ids"] != open_intent_ids
+        or event["observed_at"] != payload["clock"]["utc"]
+        or _parse_time(payload["clock"]["utc"]) < _parse_time(state["clock_anchor"]["utc"])
+        or event["entity_revisions"] != [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": event["sequence"] - 1,
+            "next_revision": event["sequence"],
+        }]
+        or event["quota_effects"]
+    ):
+        _fail("Artifact Storage recovery start Event disagrees with prior State")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "store_status": "RECOVERING",
+        "active_recovery_id": payload["recovery_id"],
+        "recovery_origin_status": state["store_status"],
+        "clock_anchor": payload["clock"],
+        "current_epoch": payload["next_epoch"],
+        "applied_event_count": event["sequence"],
+        "last_event_sigil": event["event_sigil"],
+        "recoveries": [*state["recoveries"], {
+            "recovery_id": payload["recovery_id"],
+            "origin_status": state["store_status"],
+            "state": "ACTIVE",
+            "started_event_sigil": event["event_sigil"],
+            "epoch_ids": [payload["next_epoch"]],
+            "tail_recovery_evidence_record_sigils": [],
+            "completed_event_sigil": None,
+            "resume_status": None,
+        }],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
+def _reduce_artifact_storage_recovery_completed_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Return Storage to its frozen origin after every open intent is resolved."""
+    payload = event["payload"]
+    active_id = state["active_recovery_id"]
+    if active_id is None:
+        _fail("Artifact Storage recovery completion requires an active Recovery")
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_id)
+    remaining_intents = [item["intent_id"] for item in state["open_intents"]]
+    if (
+        event["event_type"] != "storage.recovery_completed"
+        or state["store_status"] != "RECOVERING"
+        or recovery["state"] != "ACTIVE"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or payload["recovery_id"] != active_id
+        or payload["epoch"] != state["current_epoch"]
+        or payload["resume_status"] != state["recovery_origin_status"]
+        or remaining_intents
+        or payload["resolved_intent_ids"] != sorted(payload["resolved_intent_ids"])
+        or payload["evidence_sigils"] != sorted(payload["evidence_sigils"])
+        or event["observed_at"] != payload["clock"]["utc"]
+        or _parse_time(payload["clock"]["utc"]) < _parse_time(state["clock_anchor"]["utc"])
+        or event["entity_revisions"] != [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": event["sequence"] - 1,
+            "next_revision": event["sequence"],
+        }]
+        or event["quota_effects"]
+    ):
+        _fail("Artifact Storage recovery completion Event disagrees with Recovery State")
+    origin = state["recovery_origin_status"]
+    assert origin is not None
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "store_status": origin,
+        "active_recovery_id": None,
+        "recovery_origin_status": None,
+        "clock_anchor": payload["clock"],
+        "applied_event_count": event["sequence"],
+        "last_event_sigil": event["event_sigil"],
+        "recoveries": [
+            {
+                **item,
+                "state": "COMPLETED",
+                "completed_event_sigil": event["event_sigil"],
+                "resume_status": origin,
+            }
+            if item["recovery_id"] == active_id else item
+            for item in state["recoveries"]
+        ],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def _reduce_artifact_storage_message_rejected_v1(
     state: dict[str, Any], event: dict[str, Any],
 ) -> dict[str, Any]:
@@ -891,6 +1004,28 @@ def replay_artifact_storage_journal_prefix_v1(
         state = _reduce_artifact_storage_message_rejected_v1(state, events[2])
         if head is not None:
             validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
+        return state
+    if len(events) == 3 and [event["event_type"] for event in events[1:]] == [
+        "storage.activation_completed", "storage.recovery_started",
+    ]:
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(
+                head, events[2], state["state_sigil"]
+            )
+        return state
+    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
+        "storage.activation_completed", "storage.recovery_started",
+        "storage.recovery_completed",
+    ]:
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
+        state = _reduce_artifact_storage_recovery_completed_v1(state, events[3])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(
+                head, events[3], state["state_sigil"]
+            )
         return state
     if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed":
         state = _reduce_artifact_storage_activation_v1(state, events[1])
