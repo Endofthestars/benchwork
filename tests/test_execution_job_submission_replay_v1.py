@@ -853,6 +853,14 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     with pytest.raises(AthanorError, match="Lease fencing Event disagrees"):
         replay_execution_supplied_state_suffix_v1(claimed_state, [wrong_fence])
 
+    nonadvancing_fence = deepcopy(claimed_state)
+    nonadvancing_fence["jobs"][0]["fence_floor"] = 2
+    nonadvancing_fence["state_sigil"] = content_sigil(
+        {key: value for key, value in nonadvancing_fence.items() if key != "state_sigil"}
+    )
+    with pytest.raises(AthanorError, match="Lease fencing Event disagrees"):
+        replay_execution_supplied_state_suffix_v1(nonadvancing_fence, [fenced])
+
     revocation_input = deepcopy(claimed_state)
     first_stop = {"kind": "PRESENT", "event_id": claimed["event_id"], "event_type": "lease.claimed", "event_sigil": claimed["event_sigil"], "effective_sequence": claimed["sequence"]}
     revocation_input["jobs"][0].update({"revision": 3, "state": "STOPPING", "first_stop_or_fence_binding": first_stop, "last_event_id": "JE-STOPLATCHED", "last_event_sigil": SIGIL})
