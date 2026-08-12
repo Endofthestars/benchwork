@@ -1118,6 +1118,27 @@ def _reduce_job_attempt_allocated_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_preflight_started_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Reduce a CREATED Attempt after its immutable bindings have been rechecked."""
+    if event["event_type"] != "attempt.preflight_started" or len(state["attempts"]) != 1:
+        _fail("Attempt preflight reducer requires exactly one created Attempt")
+    attempt = state["attempts"][0]
+    executor = state["executor"]
+    if (
+        attempt["state"] != "CREATED"
+        or (attempt["attempt_authorization_requirement"]["kind"] == "REQUIRED" and attempt["attempt_authorization_state"]["kind"] != "BOUND")
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+    ):
+        _fail("Attempt preflight Event disagrees with created Attempt projection")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "PREFLIGHTING", "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["journal_binding"] = {"journal_id": event["journal_id"], "through_sequence": event["sequence"], "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"]}
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_executor_clock_uncertain_after_initial_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1391,7 +1412,7 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
-    if len(events) in {2, 3, 4} and events[1]["event_type"] == "job.submitted":
+    if len(events) in {2, 3, 4, 5} and events[1]["event_type"] == "job.submitted":
         if supplied_jobs is None or len(supplied_jobs) != 1:
             _fail("Job submission replay requires exactly one supplied Job")
         state = _reduce_job_submitted_v1(initial_state, events[1], supplied_jobs[0])
@@ -1406,6 +1427,12 @@ def replay_execution_journal_prefix_v1(
                 _fail("Attempt allocation replay requires one supplied Attempt after job.queued")
             state = _reduce_job_queued_v1(state, events[2])
             state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
+        if len(events) == 5:
+            if events[2]["event_type"] != "job.queued" or supplied_attempts is None or len(supplied_attempts) != 1:
+                _fail("Attempt preflight replay requires one supplied Attempt after allocation")
+            state = _reduce_job_queued_v1(state, events[2])
+            state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
+            state = _reduce_attempt_preflight_started_v1(state, events[4])
         if head is not None and (
             head["journal_id"] != state["journal_binding"]["journal_id"]
             or head["last_sequence"] != events[-1]["sequence"]

@@ -263,6 +263,22 @@ def _allocated_event(queued: dict[str, Any], attempt: dict[str, Any]) -> dict[st
     )
 
 
+def _preflight_event(allocated: dict[str, Any]) -> dict[str, Any]:
+    return build_execution_journal_event_v1(
+        {
+            "schema_version": "execution-journal-event/1.0", "journal_id": allocated["journal_id"],
+            "event_id": "JE-FIVE", "sequence": 5, "event_type": "attempt.preflight_started",
+            "executor_instance_id": allocated["executor_instance_id"], "executor_epoch": allocated["executor_epoch"],
+            "executor_build_sigil": allocated["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:03Z",
+            "observed_at": None,
+            "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 0, "next_revision": 1}],
+            "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None,
+            "payload": {"preflight_plan_sigil": SIGIL, "freshness_evidence_sigil": SIGIL},
+            "previous_event_sigil": allocated["event_sigil"],
+        }
+    )
+
+
 def test_job_submission_replay_requires_exact_supplied_job() -> None:
     job = _job()
     validate_execution_job_v1(job)
@@ -290,6 +306,12 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         "STDERR",
         "STRUCTURED",
     ]
+    preflight = _preflight_event(allocated)
+    preflight_state = replay_execution_journal_prefix_v1(
+        [INITIAL, event, queued, allocated, preflight],
+        supplied_jobs=[job], supplied_attempts=[attempt],
+    )
+    assert preflight_state["attempts"][0]["state"] == "PREFLIGHTING"
 
     wrong_attempt = deepcopy(attempt)
     wrong_attempt["retry_ordinal"] = 2
