@@ -791,6 +791,85 @@ def load_execution_result_ingress_receipt_v1(raw: str | bytes | bytearray) -> di
     return receipt
 
 
+def validate_execution_result_ingress_event_intent_v1(intent: dict[str, Any]) -> None:
+    """Validate a sealed O2 Event candidate without reserving or appending it."""
+    validate_instance("execution-result-ingress-event-intent-1.0.json", intent)
+    _check_nfc(intent)
+    candidate = intent["event_candidate"]
+    validate_execution_journal_event_v1(candidate)
+    if candidate["event_type"] != "attempt.result_ingress_received":
+        _fail("Result ingress Event intent candidate has the wrong Event type")
+    if intent["intent_sigil"] != content_sigil(_without(intent, "intent_sigil")):
+        _fail("Result ingress Event intent self-Sigil mismatch")
+
+
+def load_execution_result_ingress_event_intent_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    intent = _load_strict_object(raw, "Result ingress Event intent")
+    validate_execution_result_ingress_event_intent_v1(intent)
+    return intent
+
+
+def validate_execution_result_ingress_index_v1(index: dict[str, Any]) -> None:
+    """Validate a sealed O2 Index row, never its canonical-path visibility."""
+    validate_instance("execution-result-ingress-index-1.0.json", index)
+    _check_nfc(index)
+    receipt = index["result_ingress_receipt"]
+    intent = index["ingress_event_intent"]
+    validate_execution_result_ingress_receipt_v1(receipt)
+    validate_execution_result_ingress_event_intent_v1(intent)
+    receipt_binding = {
+        "ingress_receipt_id": receipt["ingress_receipt_id"],
+        "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+    }
+    if intent["result_ingress_receipt_binding"] != receipt_binding:
+        _fail("Result ingress Index intent binding disagrees with receipt")
+    candidate = intent["event_candidate"]
+    payload = candidate["payload"]
+    expected_payload = {
+        "ingress_receipt_id": receipt["ingress_receipt_id"],
+        "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+        "result_sigil": receipt["result_sigil"],
+        "observation_evidence_subject_sigil": receipt["result_observation_binding"]["observation_evidence_subject_sigil"],
+        "received_at": receipt["received_at"],
+    }
+    if payload != expected_payload:
+        _fail("Result ingress Index candidate payload disagrees with receipt")
+    if (
+        index["attempt_id"] != receipt["owner_binding"]["attempt_id"]
+        or index["result_sigil"] != receipt["result_sigil"]
+        or index["event_id"] != candidate["event_id"]
+        or index["idempotency_key_sigil"] != candidate["idempotency_key_sigil"]
+    ):
+        _fail("Result ingress Index top-level binding disagrees with Receipt or candidate")
+    status = index["status"]
+    if status["kind"] == "PENDING_EVENT":
+        head = status["expected_journal_head"]
+        if (
+            head["journal_id"] != candidate["journal_id"]
+            or head["last_sequence"] + 1 != candidate["sequence"]
+            or head["last_event_sigil"] != candidate["previous_event_sigil"]
+        ):
+            _fail("Result ingress pending Index Head disagrees with candidate Event")
+    elif status["kind"] == "COMMITTED":
+        event_ref = status["actual_event_ref"]
+        if event_ref != {
+            "journal_id": candidate["journal_id"], "event_id": candidate["event_id"],
+            "sequence": candidate["sequence"],
+            "event_sigil": candidate["event_sigil"],
+        }:
+            _fail("Result ingress committed Index Event reference disagrees with candidate")
+    if index["index_sigil"] != content_sigil(_without(index, "index_sigil")):
+        _fail("Result ingress Index self-Sigil mismatch")
+
+
+def load_execution_result_ingress_index_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    index = _load_strict_object(raw, "Result ingress Index")
+    validate_execution_result_ingress_index_v1(index)
+    return index
+
+
 def derive_observation_evidence_subject_sigil_v1(
     owner_binding: dict[str, Any], result_observation_binding: dict[str, Any]
 ) -> str:

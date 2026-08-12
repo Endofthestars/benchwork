@@ -21,6 +21,7 @@ from benchwork.execution_contracts import (
     load_execution_observation_evidence_v1,
     load_execution_request_v1,
     load_execution_result_ingress_receipt_v1,
+    load_execution_result_ingress_index_v1,
     load_execution_recovery_action_set_v1,
     load_execution_state_v1,
     replay_execution_initial_prefix_v1,
@@ -31,6 +32,7 @@ from benchwork.execution_contracts import (
     validate_execution_initial_state_supplied_facts_v1,
     validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
+    validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
 )
 ROOT = Path(__file__).parents[1]
@@ -251,6 +253,57 @@ def _receipt() -> dict[str, Any]:
         {key: member for key, member in value.items() if key != "ingress_receipt_sigil"}
     )
     return value
+
+
+def _result_ingress_index() -> dict[str, Any]:
+    receipt = _receipt()
+    candidate = _event_unsigned()
+    candidate.update({
+        "event_type": "attempt.result_ingress_received", "event_id": "JE-THREE",
+        "sequence": 3, "previous_event_sigil": SIGIL,
+        "entity_revisions": [{
+            "entity_kind": "ATTEMPT", "entity_id": receipt["owner_binding"]["attempt_id"],
+            "preceding_revision": 4, "next_revision": 5,
+        }],
+        "idempotency_key_sigil": SIGIL,
+        "payload": {
+            "ingress_receipt_id": receipt["ingress_receipt_id"],
+            "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+            "result_sigil": receipt["result_sigil"],
+            "observation_evidence_subject_sigil": receipt["result_observation_binding"]["observation_evidence_subject_sigil"],
+            "received_at": receipt["received_at"],
+        },
+    })
+    candidate["event_sigil"] = content_sigil(candidate)
+    intent = {
+        "schema_version": "execution-result-ingress-event-intent/1.0",
+        "ingress_event_intent_id": "OII-" + "A" * 64,
+        "result_ingress_receipt_binding": {
+            "ingress_receipt_id": receipt["ingress_receipt_id"],
+            "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+        },
+        "event_candidate": candidate, "created_at": STAMP, "intent_sigil": "",
+    }
+    intent["intent_sigil"] = content_sigil(
+        {key: member for key, member in intent.items() if key != "intent_sigil"}
+    )
+    head = {
+        "schema_version": "execution-journal-head/1.0", "limit_profile": "EXECUTION_JOURNAL_V1_FIXED_LIMITS",
+        "journal_id": candidate["journal_id"], "last_sequence": 2, "last_event_id": "JE-TWO",
+        "last_event_sigil": candidate["previous_event_sigil"], "updated_at": STAMP, "head_sigil": "",
+    }
+    head["head_sigil"] = content_sigil({key: member for key, member in head.items() if key != "head_sigil"})
+    index = {
+        "schema_version": "execution-result-ingress-index/1.0", "ingress_index_id": "OIX-" + "A" * 64,
+        "attempt_id": receipt["owner_binding"]["attempt_id"], "result_sigil": receipt["result_sigil"],
+        "idempotency_key_sigil": candidate["idempotency_key_sigil"], "event_id": candidate["event_id"],
+        "result_ingress_receipt": receipt, "ingress_event_intent": intent,
+        "status": {"kind": "PENDING_EVENT", "expected_prior_index_sigil": None,
+                   "expected_journal_head": head, "installed_at": STAMP},
+        "created_at": STAMP, "index_sigil": "",
+    }
+    index["index_sigil"] = content_sigil({key: member for key, member in index.items() if key != "index_sigil"})
+    return index
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1009,6 +1062,48 @@ def test_jew4_owners_are_resolvable_direct_refs_and_validate_complete_roots() ->
     validate_execution_observation_evidence_v1(evidence)
     assert load_execution_observation_evidence_v1(json.dumps(evidence)) == evidence
     validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
+
+
+def test_result_ingress_index_seals_receipt_candidate_and_status_bindings() -> None:
+    index = _result_ingress_index()
+    validate_execution_result_ingress_index_v1(index)
+    assert load_execution_result_ingress_index_v1(json.dumps(index)) == index
+
+    bad_payload = deepcopy(index)
+    bad_payload["ingress_event_intent"]["event_candidate"]["payload"]["result_sigil"] = SIGIL
+    bad_payload["ingress_event_intent"]["event_candidate"]["event_sigil"] = content_sigil(
+        {key: member for key, member in bad_payload["ingress_event_intent"]["event_candidate"].items() if key != "event_sigil"}
+    )
+    bad_payload["ingress_event_intent"]["intent_sigil"] = content_sigil(
+        {key: member for key, member in bad_payload["ingress_event_intent"].items() if key != "intent_sigil"}
+    )
+    bad_payload["index_sigil"] = content_sigil(
+        {key: member for key, member in bad_payload.items() if key != "index_sigil"}
+    )
+    with pytest.raises(Exception, match="candidate payload"):
+        validate_execution_result_ingress_index_v1(bad_payload)
+
+    bad_pending = deepcopy(index)
+    bad_pending["status"]["expected_journal_head"]["last_sequence"] = 1
+    bad_pending["status"]["expected_journal_head"]["head_sigil"] = content_sigil({
+        key: member for key, member in bad_pending["status"]["expected_journal_head"].items() if key != "head_sigil"
+    })
+    bad_pending["index_sigil"] = content_sigil(
+        {key: member for key, member in bad_pending.items() if key != "index_sigil"}
+    )
+    with pytest.raises(Exception, match="pending Index Head"):
+        validate_execution_result_ingress_index_v1(bad_pending)
+
+    committed = deepcopy(index)
+    candidate = committed["ingress_event_intent"]["event_candidate"]
+    committed["status"] = {"kind": "COMMITTED", "expected_prior_index_sigil": SIGIL,
+                           "actual_event_ref": {"journal_id": candidate["journal_id"], "event_id": candidate["event_id"],
+                                                "sequence": candidate["sequence"], "event_sigil": candidate["event_sigil"]},
+                           "committed_at": STAMP}
+    committed["index_sigil"] = content_sigil(
+        {key: member for key, member in committed.items() if key != "index_sigil"}
+    )
+    validate_execution_result_ingress_index_v1(committed)
 
 
 def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None:
