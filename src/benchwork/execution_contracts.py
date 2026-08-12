@@ -280,6 +280,8 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         if session["worker_binding_sigil"] != worker["worker_binding_sigil"]:
             _fail("Worker-Session binding Sigil does not match its Worker")
         capacity = session["capacity"]
+        if (capacity is None) != (session["state"] == "REGISTERED"):
+            _fail("Worker-Session capacity nullability disagrees with Session state")
         if capacity is not None and session["capacity_in_use"] > capacity:
             _fail("Worker-Session capacity_in_use exceeds capacity")
         if (session["last_heartbeat_sequence"] is None) != (

@@ -326,6 +326,16 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     with pytest.raises(Exception, match="Worker-Session terminal or unready"):
         load_execution_state_v1(json.dumps(bad_session_due))
 
+    missing_capacity = deepcopy(state)
+    missing_capacity["worker_sessions"][0].update({
+        "capacity": None, "capacity_in_use": 0,
+        "worker_session_heartbeat_policy_id": None,
+        "worker_session_heartbeat_policy_sigil": None,
+    })
+    _reseal_state(missing_capacity)
+    with pytest.raises(Exception, match="capacity nullability"):
+        load_execution_state_v1(json.dumps(missing_capacity))
+
     bad_lease = deepcopy(state)
     bad_lease["leases"][0]["last_resource_sample_sigil"] = None
     _reseal_state(bad_lease)
