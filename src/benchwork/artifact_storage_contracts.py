@@ -1259,6 +1259,36 @@ def _quota_counter_updates_for_claims_v1(
     return updated
 
 
+def _quota_counter_settlement_v1(
+    counters: list[dict[str, Any]], original: list[dict[str, Any]],
+    consumed: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Settle a reservation: release all reserve, retain consumed usage."""
+    dimensions = {
+        ("JOURNAL", "JOURNAL_BYTE"): "journal_bytes",
+        ("CONTROL_RECORD", "CONTROL_RECORD_BYTE"): "control_record_bytes",
+        ("STAGING", "BYTE"): "byte_count", ("STAGING", "OBJECT"): "object_count",
+        ("QUARANTINE", "BYTE"): "byte_count", ("QUARANTINE", "OBJECT"): "object_count",
+        ("COMMITTED", "BYTE"): "byte_count", ("COMMITTED", "OBJECT"): "object_count",
+        ("MATERIALIZATION", "BYTE"): "byte_count", ("MATERIALIZATION", "OBJECT"): "object_count",
+        ("STREAM", "STREAM"): "stream_count", ("INODE", "INODE"): "inode_count",
+    }
+    original_by_class = {claim["quota_class"]: claim for claim in original}
+    consumed_by_class = {claim["quota_class"]: claim for claim in consumed}
+    updated: list[dict[str, Any]] = []
+    for counter in counters:
+        quota_class = counter["quota_class"]
+        field = dimensions[(quota_class, counter["dimension"])]
+        reserved_amount = original_by_class.get(quota_class, {}).get(field, 0)
+        consumed_amount = consumed_by_class.get(quota_class, {}).get(field, 0)
+        next_reserved = counter["reserved"] - reserved_amount
+        next_used = counter["used"] + consumed_amount
+        if next_reserved < 0 or next_used + next_reserved > counter["limit"]:
+            _fail("Artifact Storage Reservation settlement exceeds a quota counter")
+        updated.append({**counter, "used": next_used, "reserved": next_reserved})
+    return updated
+
+
 def _canonical_reference_blob_closure_v1(
     roots: list[dict[str, Any]], reference_sets: list[dict[str, Any]],
     state: dict[str, Any],
@@ -1511,10 +1541,113 @@ def _reduce_artifact_storage_canonical_reference_intent_v1(
     return reduced
 
 
+def _reduce_artifact_storage_canonical_reference_committed_v1(
+    state: dict[str, Any], event: dict[str, Any], intent: dict[str, Any],
+    chronicle_event: dict[str, Any],
+) -> dict[str, Any]:
+    """Close one OPEN canonical-reference pin from supplied Chronicle facts.
+
+    This reducer closes the durable Storage projection and Reservation only.
+    The caller is responsible for authoritative Chronicle replay and the
+    event-family request resolver; this function never appends or authorizes a
+    Chronicle Event.
+    """
+    projection = next(
+        (item for item in state["canonical_reference_intents"]
+         if item["reference_intent_id"] == intent["reference_intent_id"]),
+        None,
+    )
+    reservation = next(
+        (item for item in state["quota_reservations"]
+         if item["owner_kind"] == "CANONICAL_REFERENCE"
+         and item["owner_id"] == intent["reference_intent_id"]),
+        None,
+    )
+    open_intent = next(
+        (item for item in state["open_intents"]
+         if item["intent_kind"] == "CANONICAL_REFERENCE"
+         and item["intent_id"] == intent["reference_intent_id"]),
+        None,
+    )
+    if (
+        projection is None or projection["state"] != "OPEN"
+        or projection["record_sigil"] != intent["record_sigil"]
+        or reservation is None or reservation["state"] != "ACTIVE"
+        or open_intent is None
+    ):
+        _fail("Canonical Reference commit requires one OPEN intent and active Reservation")
+    commit = event["payload"]["chronicle_commit"]
+    validate_canonical_reference_commit_supplied_facts_v1(intent, chronicle_event, commit)
+    expected_revisions = [
+        {"entity_type": "REFERENCE_INTENT", "entity_id": intent["reference_intent_id"],
+         "previous_revision": 1, "next_revision": 2},
+        {"entity_type": "QUOTA", "entity_id": reservation["reservation"]["reservation_id"],
+         "previous_revision": 1, "next_revision": 2},
+    ]
+    effects = event["quota_effects"]
+    if len(effects) != 1 or effects[0]["kind"] != "SETTLE":
+        _fail("Canonical Reference commit requires one Reservation settlement")
+    settlement = effects[0]
+    if (
+        event["event_type"] != "canonical_reference.committed"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["observed_at"] is not None
+        or event["causation_event_id"] != open_intent["source_event"]["event_id"]
+        or event["idempotency_key_sigil"] != intent["idempotency_key_sigil"]
+        or event["payload"]["reference_intent_id"] != intent["reference_intent_id"]
+        or settlement["reservation_id"] != reservation["reservation"]["reservation_id"]
+        or settlement["state_after"] != "SETTLED"
+        or settlement["remaining_claims"]
+        or settlement["retained_for_event_types"]
+        or settlement["usage_additions"] != settlement["consumed_claims"]
+    ):
+        _fail("Canonical Reference commit Event disagrees with OPEN pin")
+    original = reservation["reservation"]["claims"]
+    consumed_by_class = {claim["quota_class"]: claim for claim in settlement["consumed_claims"]}
+    if consumed_by_class.get("JOURNAL", {}).get("journal_bytes", 0) <= 0:
+        _fail("Canonical Reference commit must account for its Journal frame usage")
+    reduced = _without(state, "state_sigil")
+    reduced["canonical_reference_intents"] = [
+        {
+            **item, "state": "COMMITTED", "chronicle_commit": commit,
+            "release_kind": None, "release_authority_sigil": None,
+            "release_reason": None, "revision": 2,
+            "last_event_sigil": event["event_sigil"],
+        } if item["reference_intent_id"] == intent["reference_intent_id"] else item
+        for item in state["canonical_reference_intents"]
+    ]
+    reduced["quota_reservations"] = [
+        {
+            **item, "state": "SETTLED", "consumed_claims": settlement["consumed_claims"],
+            "released_claims": settlement["released_claims"], "remaining_claims": [],
+            "retained_for_event_types": [], "revision": 2,
+            "last_event_sigil": event["event_sigil"],
+        } if item["reservation"]["reservation_id"] == reservation["reservation"]["reservation_id"] else item
+        for item in state["quota_reservations"]
+    ]
+    reduced["open_intents"] = [
+        item for item in state["open_intents"]
+        if not (item["intent_kind"] == "CANONICAL_REFERENCE" and item["intent_id"] == intent["reference_intent_id"])
+    ]
+    reduced["quota_counters"] = _quota_counter_settlement_v1(
+        state["quota_counters"], original, settlement["consumed_claims"]
+    )
+    reduced["applied_event_count"] = event["sequence"]
+    reduced["last_event_sigil"] = event["event_sigil"]
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
     supplied_reference_sets: list[dict[str, Any]] | None = None,
     supplied_reference_intents: list[dict[str, Any]] | None = None,
+    supplied_chronicle_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay installed Storage Journal reducers, failing closed for all others.
 
@@ -1565,6 +1698,16 @@ def replay_artifact_storage_journal_prefix_v1(
                 _fail("Canonical Reference intent replay requires exactly one supplied record")
             state = _reduce_artifact_storage_canonical_reference_intent_v1(
                 state, event, matches[0], supplied_reference_sets
+            )
+        elif event["event_type"] == "canonical_reference.committed":
+            if supplied_reference_intents is None or supplied_chronicle_events is None:
+                _fail("Canonical Reference commit replay requires supplied control and Chronicle records")
+            intent_matches = [record for record in supplied_reference_intents if record.get("reference_intent_id") == event["payload"]["reference_intent_id"]]
+            commit_matches = [record for record in supplied_chronicle_events if record.get("event_id") == event["payload"]["chronicle_commit"]["event_id"]]
+            if len(intent_matches) != 1 or len(commit_matches) != 1:
+                _fail("Canonical Reference commit replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_canonical_reference_committed_v1(
+                state, event, intent_matches[0], commit_matches[0]
             )
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for this Event")

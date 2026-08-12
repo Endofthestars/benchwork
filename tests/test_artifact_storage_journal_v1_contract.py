@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from typing import Any
 
 import pytest
 
@@ -1391,6 +1392,69 @@ def test_storage_replay_projects_canonical_reference_write_ahead_pin() -> None:
     assert state["open_intents"][0]["intent_id"] == intent["reference_intent_id"]
     assert [counter["reserved"] for counter in state["quota_counters"] if counter["quota_class"]
             in {"JOURNAL", "CONTROL_RECORD"}] == [1, 1]
+
+    chronicle_event: dict[str, Any] = {
+        "schema_version": "chronicle-event/1.1", "event_id": "CE-ONE", "sequence": 1,
+        "type": "patch.proposed", "object_id": "PATCH-ONE", "occurred_at": "2026-08-06T00:00:04Z",
+        "previous_receipt_sigil": None,
+        "actor": {"actor_id": "ACTOR", "actor_type": "agent", "host": "codex", "authenticated_by": "MCP"},
+        "payload": {"proposal": "bound-by-supplied-family-resolver"}, "event_body_sigil": "",
+        "receipt": {"schema_version": "receipt/1.1", "receipt_id": "RC-ONE", "event_id": "CE-ONE", "event_body_sigil": "", "previous_receipt_sigil": None, "accepted_at": "2026-08-06T00:00:04Z", "receipt_sigil": ""},
+    }
+    chronicle_event["event_body_sigil"] = content_sigil({
+        key: value for key, value in chronicle_event.items() if key not in {"event_body_sigil", "receipt"}
+    })
+    chronicle_event["receipt"]["event_body_sigil"] = chronicle_event["event_body_sigil"]  # type: ignore[index]
+    chronicle_event["receipt"]["receipt_sigil"] = content_sigil({
+        key: value for key, value in chronicle_event["receipt"].items() if key != "receipt_sigil"
+    })  # type: ignore[index]
+    commit = {
+        "event_id": chronicle_event["event_id"], "event_body_sigil": chronicle_event["event_body_sigil"],
+        "receipt_id": chronicle_event["receipt"]["receipt_id"], "receipt_sigil": chronicle_event["receipt"]["receipt_sigil"],
+        "head": {"schema_version": "chronicle-head/1.1", "event_count": 1, "terminal_receipt_sigil": chronicle_event["receipt"]["receipt_sigil"]},
+    }
+    committed = _next_event(recorded)
+    committed.update({
+        "event_id": "SE-COMMIT", "sequence": 5, "event_type": "canonical_reference.committed",
+        "recorded_at": "2026-08-06T00:00:04Z", "observed_at": None,
+        "entity_revisions": [{"entity_type": "REFERENCE_INTENT", "entity_id": intent["reference_intent_id"], "previous_revision": 1, "next_revision": 2}, {"entity_type": "QUOTA", "entity_id": reservation["reservation_id"], "previous_revision": 1, "next_revision": 2}],
+        "causation_event_id": "SE-INTENT", "idempotency_key_sigil": SIGIL,
+        "quota_effects": [{"kind": "SETTLE", "reservation_id": reservation["reservation_id"], "state_after": "SETTLED", "consumed_claims": reservation["claims"], "released_claims": [], "remaining_claims": [], "usage_additions": reservation["claims"], "retained_for_event_types": []}],
+        "payload": {"reference_intent_id": intent["reference_intent_id"], "chronicle_commit": commit},
+    })
+    committed["event_sigil"] = content_sigil({key: value for key, value in committed.items() if key != "event_sigil"})
+    committed_state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered, recorded, committed],
+        supplied_reference_sets=[reference_set], supplied_reference_intents=[intent],
+        supplied_chronicle_events=[chronicle_event],
+    )
+    assert committed_state["canonical_reference_intents"][0]["state"] == "COMMITTED"
+    assert committed_state["open_intents"] == []
+    assert committed_state["quota_reservations"][0]["state"] == "SETTLED"
+    assert [counter["used"] for counter in committed_state["quota_counters"] if counter["quota_class"] in {"JOURNAL", "CONTROL_RECORD"}] == [1, 1]
+    partial = deepcopy(committed)
+    partial_claims = [deepcopy(reservation["claims"][1])]
+    partial["quota_effects"][0]["consumed_claims"] = partial_claims
+    partial["quota_effects"][0]["usage_additions"] = partial_claims
+    partial["quota_effects"][0]["released_claims"] = [deepcopy(reservation["claims"][0])]
+    partial["event_sigil"] = content_sigil({key: value for key, value in partial.items() if key != "event_sigil"})
+    partial_state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered, recorded, partial],
+        supplied_reference_sets=[reference_set], supplied_reference_intents=[intent],
+        supplied_chronicle_events=[chronicle_event],
+    )
+    assert [counter["used"] for counter in partial_state["quota_counters"] if counter["quota_class"] in {"JOURNAL", "CONTROL_RECORD"}] == [1, 0]
+    no_journal = deepcopy(committed)
+    no_journal["quota_effects"][0]["consumed_claims"] = [deepcopy(reservation["claims"][0])]
+    no_journal["quota_effects"][0]["usage_additions"] = [deepcopy(reservation["claims"][0])]
+    no_journal["quota_effects"][0]["released_claims"] = [deepcopy(reservation["claims"][1])]
+    no_journal["event_sigil"] = content_sigil({key: value for key, value in no_journal.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="Journal frame usage"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, recorded, no_journal],
+            supplied_reference_sets=[reference_set], supplied_reference_intents=[intent],
+            supplied_chronicle_events=[chronicle_event],
+        )
 
     malformed = deepcopy(recorded)
     malformed["payload"]["blob_sigils"] = [SIGIL]
