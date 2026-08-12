@@ -357,6 +357,24 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     _reseal_state(terminal_lease)
     assert load_execution_state_v1(json.dumps(terminal_lease)) == terminal_lease
 
+    missing_worker = deepcopy(state)
+    missing_worker["workers"] = []
+    _reseal_state(missing_worker)
+    with pytest.raises(Exception, match="no matching Worker"):
+        load_execution_state_v1(json.dumps(missing_worker))
+
+    missing_session = deepcopy(state)
+    missing_session["worker_sessions"] = []
+    _reseal_state(missing_session)
+    with pytest.raises(Exception, match="no matching Worker-Session"):
+        load_execution_state_v1(json.dumps(missing_session))
+
+    mismatched_lease_worker = deepcopy(state)
+    mismatched_lease_worker["leases"][0]["worker_id"] = "WK-TWO"
+    _reseal_state(mismatched_lease_worker)
+    with pytest.raises(Exception, match="Lease Worker does not match"):
+        load_execution_state_v1(json.dumps(mismatched_lease_worker))
+
 
 def test_state_locally_binds_log_stream_closure_projections() -> None:
     state = _state_with_session_and_lease()

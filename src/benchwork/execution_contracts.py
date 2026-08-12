@@ -228,16 +228,27 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             _fail("Execution State active Recovery is missing from executor projection")
     elif len(active_recoveries) != 1 or active_recoveries[0]["recovery_id"] != active_recovery_id:
         _fail("Execution State executor active Recovery does not match recovery projection")
-    worker_ids: set[str] = set()
+    workers_by_id: dict[str, dict[str, Any]] = {}
     for worker in state["workers"]:
+        worker_id = worker["worker_id"]
+        if worker_id in workers_by_id:
+            _fail("duplicate Worker projection identity")
+        workers_by_id[worker_id] = worker
         session_ids = worker["worker_session_ids"]
         if session_ids != sorted(session_ids, key=lambda value: _unsigned_ascii(value, "Worker session ID")):
             _fail("Worker worker_session_ids are not unsigned-ASCII sorted")
+    sessions_by_id: dict[str, dict[str, Any]] = {}
     for session in state["worker_sessions"]:
         session_id = session["worker_session_id"]
-        if session_id in worker_ids:
+        if session_id in sessions_by_id:
             _fail("duplicate Worker-Session projection identity")
-        worker_ids.add(session_id)
+        sessions_by_id[session_id] = session
+        try:
+            worker = workers_by_id[session["worker_id"]]
+        except KeyError:
+            _fail("Worker-Session projection has no matching Worker")
+        if session_id not in worker["worker_session_ids"]:
+            _fail("Worker-Session projection is missing from its Worker")
         capacity = session["capacity"]
         if capacity is not None and session["capacity_in_use"] > capacity:
             _fail("Worker-Session capacity_in_use exceeds capacity")
@@ -273,6 +284,14 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         tombstone_members = (lease["tombstone_generation"], lease["tombstone_event_sigil"])
         if (all(member is not None for member in tombstone_members)) != terminal:
             _fail("Lease tombstone fields disagree with terminal lease state")
+        try:
+            session = sessions_by_id[lease["worker_session_id"]]
+        except KeyError:
+            _fail("Lease projection has no matching Worker-Session")
+        if lease["worker_id"] != session["worker_id"]:
+            _fail("Lease Worker does not match its Worker-Session")
+        if lease["lease_id"] not in session["lease_ids"]:
+            _fail("Lease projection is missing from its Worker-Session")
     log_stream_ids: set[str] = set()
     for log_stream in state["log_streams"]:
         log_stream_id = log_stream["log_stream_id"]
