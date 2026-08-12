@@ -924,13 +924,43 @@ def validate_execution_attempt_v1(attempt: dict[str, Any]) -> None:
         _fail("Execution Attempt self-Sigil mismatch")
 
 
+def validate_execution_worker_v1(worker: dict[str, Any]) -> None:
+    """Validate one immutable Worker definition revision locally."""
+    validate_instance("execution-worker-1.0.json", worker)
+    _check_nfc(worker)
+    if worker["worker_binding_sigil"] != content_sigil(_without(worker, "worker_binding_sigil")):
+        _fail("Execution Worker self-Sigil mismatch")
+
+
+def validate_execution_worker_session_v1(session: dict[str, Any]) -> None:
+    """Validate one immutable Worker Session binding locally."""
+    validate_instance("execution-worker-session-1.0.json", session)
+    _check_nfc(session)
+    if session["worker_session_binding_sigil"] != content_sigil(
+        _without(session, "worker_session_binding_sigil")
+    ):
+        _fail("Execution Worker Session self-Sigil mismatch")
+
+
+def validate_execution_worker_session_supplied_worker_v1(
+    session: dict[str, Any], worker: dict[str, Any]
+) -> None:
+    """Bind a supplied Session to its exact immutable Worker definition."""
+    validate_execution_worker_session_v1(session)
+    validate_execution_worker_v1(worker)
+    if (
+        session["worker_id"] != worker["worker_id"]
+        or session["worker_binding_sigil"] != worker["worker_binding_sigil"]
+        or session["maximum_concurrency"] != worker["maximum_concurrency"]
+    ):
+        _fail("Execution Worker Session disagrees with supplied Worker")
+
+
 def _reserved_budget_ledger_v1(
     ledger: dict[str, Any], reservation: dict[str, Any]
 ) -> dict[str, Any]:
     reduced: dict[str, Any] = {
-        name: dict(value)
-        for name, value in ledger.items()
-        if name != "budget_ledger_sigil"
+        name: dict(value) for name, value in ledger.items() if name != "budget_ledger_sigil"
     }
     for dimension, value in reservation.items():
         updated = reduced[dimension]
@@ -1118,7 +1148,9 @@ def _reduce_job_attempt_allocated_v1(
     return build_execution_state_v1(reduced)
 
 
-def _reduce_attempt_preflight_started_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+def _reduce_attempt_preflight_started_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
     """Reduce a CREATED Attempt after its immutable bindings have been rechecked."""
     if event["event_type"] != "attempt.preflight_started" or len(state["attempts"]) != 1:
         _fail("Attempt preflight reducer requires exactly one created Attempt")
@@ -1126,20 +1158,47 @@ def _reduce_attempt_preflight_started_v1(state: dict[str, Any], event: dict[str,
     executor = state["executor"]
     if (
         attempt["state"] != "CREATED"
-        or (attempt["attempt_authorization_requirement"]["kind"] == "REQUIRED" and attempt["attempt_authorization_state"]["kind"] != "BOUND")
+        or (
+            attempt["attempt_authorization_requirement"]["kind"] == "REQUIRED"
+            and attempt["attempt_authorization_state"]["kind"] != "BOUND"
+        )
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
-        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "ATTEMPT",
+                "entity_id": attempt["attempt_id"],
+                "preceding_revision": attempt["revision"],
+                "next_revision": attempt["revision"] + 1,
+            }
+        ]
     ):
         _fail("Attempt preflight Event disagrees with created Attempt projection")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "PREFLIGHTING", "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["journal_binding"] = {"journal_id": event["journal_id"], "through_sequence": event["sequence"], "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"]}
+    reduced["attempts"] = [
+        {
+            **attempt,
+            "revision": attempt["revision"] + 1,
+            "state": "PREFLIGHTING",
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
     return build_execution_state_v1(reduced)
 
 
-def _reduce_attempt_preflight_passed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+def _reduce_attempt_preflight_passed_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
     """Reduce a completed preflight while retaining only its immutable root bindings."""
     if event["event_type"] != "attempt.preflight_passed" or len(state["attempts"]) != 1:
         _fail("Attempt preflight-pass reducer requires exactly one preflighting Attempt")
@@ -1150,16 +1209,44 @@ def _reduce_attempt_preflight_passed_v1(state: dict[str, Any], event: dict[str, 
         attempt["state"] != "PREFLIGHTING"
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
-        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
-        or any(root["root_kind"] != "ATTEMPT_INPUT" or root["job_id"] != attempt["job_id"] or root["attempt_id"] != attempt["attempt_id"] for root in roots)
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "ATTEMPT",
+                "entity_id": attempt["attempt_id"],
+                "preceding_revision": attempt["revision"],
+                "next_revision": attempt["revision"] + 1,
+            }
+        ]
+        or any(
+            root["root_kind"] != "ATTEMPT_INPUT"
+            or root["job_id"] != attempt["job_id"]
+            or root["attempt_id"] != attempt["attempt_id"]
+            for root in roots
+        )
     ):
         _fail("Attempt preflight-pass Event disagrees with preflighting Attempt projection")
     if len(roots) > 1:
         _fail("Attempt preflight-pass Event has too many input storage roots")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "READY", "input_storage_roots": roots, "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["journal_binding"] = {"journal_id": event["journal_id"], "through_sequence": event["sequence"], "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"]}
+    reduced["attempts"] = [
+        {
+            **attempt,
+            "revision": attempt["revision"] + 1,
+            "state": "READY",
+            "input_storage_roots": roots,
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
     return build_execution_state_v1(reduced)
 
 
@@ -1452,14 +1539,24 @@ def replay_execution_journal_prefix_v1(
             state = _reduce_job_queued_v1(state, events[2])
             state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
         if len(events) == 5:
-            if events[2]["event_type"] != "job.queued" or supplied_attempts is None or len(supplied_attempts) != 1:
+            if (
+                events[2]["event_type"] != "job.queued"
+                or supplied_attempts is None
+                or len(supplied_attempts) != 1
+            ):
                 _fail("Attempt preflight replay requires one supplied Attempt after allocation")
             state = _reduce_job_queued_v1(state, events[2])
             state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
             state = _reduce_attempt_preflight_started_v1(state, events[4])
         if len(events) == 6:
-            if events[2]["event_type"] != "job.queued" or supplied_attempts is None or len(supplied_attempts) != 1:
-                _fail("Attempt preflight-pass replay requires one supplied Attempt after allocation")
+            if (
+                events[2]["event_type"] != "job.queued"
+                or supplied_attempts is None
+                or len(supplied_attempts) != 1
+            ):
+                _fail(
+                    "Attempt preflight-pass replay requires one supplied Attempt after allocation"
+                )
             state = _reduce_job_queued_v1(state, events[2])
             state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
             state = _reduce_attempt_preflight_started_v1(state, events[4])
