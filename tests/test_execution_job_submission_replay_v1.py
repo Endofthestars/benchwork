@@ -461,6 +461,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     with pytest.raises(AthanorError, match="disagrees"):
         replay_execution_supplied_state_suffix_v1(running_state, [chunk_committed], supplied_log_chunks=[wrong_chunk])
 
+    duplicate_chunk = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LOGDUP", "sequence": 12, "event_type": "log.chunk_duplicate_observed", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LOG_STREAM", "entity_id": stdout_stream["log_stream_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": None, "idempotency_key_sigil": SIGIL, "recovery_action_binding": None, "payload": {"intake_kind": "RAW_CHUNK", "intake_id": "LCI-TWO", "intake_record_sigil": SIGIL, "disposition_intent_id": "LDI-TWO", "log_stream_id": stdout_stream["log_stream_id"], "stream": "STDOUT", "sequence": 0, "original_chunk_id": chunk["chunk_id"], "original_chunk_record_sigil": SIGIL, "original_disposition_event": {"event_id": chunk_committed["event_id"], "event_sigil": chunk_committed["event_sigil"]}}, "previous_event_sigil": chunk_committed["event_sigil"]})
+    duplicate_chunk_state = replay_execution_supplied_state_suffix_v1(chunked_state, [duplicate_chunk])
+    duplicate_stream = next(stream for stream in duplicate_chunk_state["log_streams"] if stream["stream"] == "STDOUT")
+    assert (duplicate_stream["next_sequence"], duplicate_stream["captured_bytes"]) == (1, 1)
+
+    wrong_duplicate = deepcopy(duplicate_chunk)
+    wrong_duplicate["payload"]["sequence"] = 1
+    wrong_duplicate = build_execution_journal_event_v1({key: value for key, value in wrong_duplicate.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(chunked_state, [wrong_duplicate])
+
     heartbeat = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-HEARTBEAT", "sequence": 11, "event_type": "lease.heartbeat_accepted", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"heartbeat_message_sigil": SIGIL, "sequence": 1, "prior_accepted_sequence": None, "received_at": "2026-08-06T00:00:06Z", "next_heartbeat_due_at": "2026-08-06T00:00:09Z", "resource_sample_sigil": SIGIL, "resource_counter_floors_after": {"cpu_time_seconds": 0, "storage_bytes_written": 0, "network_egress_bytes": 0}}, "previous_event_sigil": running["event_sigil"]})
     heartbeat_state = replay_execution_supplied_state_suffix_v1(running_state, [heartbeat])
     assert heartbeat_state["leases"][0]["last_heartbeat_sequence"] == 1

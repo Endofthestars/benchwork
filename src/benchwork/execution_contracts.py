@@ -1318,6 +1318,32 @@ def _reduce_log_chunk_committed_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Record a duplicate chunk observation without appending bytes twice."""
+    payload, executor = event["payload"], state["executor"]
+    matches = [stream for stream in state["log_streams"] if stream["log_stream_id"] == payload["log_stream_id"]]
+    if len(matches) != 1:
+        _fail("Log duplicate Event has no unique Log-stream projection")
+    stream = matches[0]
+    original = payload["original_disposition_event"]
+    if (
+        event["event_type"] != "log.chunk_duplicate_observed" or payload["stream"] != stream["stream"]
+        or payload["sequence"] >= stream["next_sequence"]
+        or original.get("event_id") == event["event_id"] or original.get("event_sigil") == event["event_sigil"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LOG_STREAM", "entity_id": stream["log_stream_id"], "preceding_revision": stream["revision"], "next_revision": stream["revision"] + 1}]
+    ):
+        _fail("Log duplicate Event disagrees with Log-stream projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["log_streams"] = [
+        {**candidate, "revision": candidate["revision"] + 1,
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["log_stream_id"] == stream["log_stream_id"] else candidate
+        for candidate in state["log_streams"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_closed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Freeze one open log stream using its already-recorded local counters."""
     payload, executor = event["payload"], state["executor"]
@@ -1863,6 +1889,8 @@ def replay_execution_supplied_state_suffix_v1(
         elif event["event_type"] == "log.chunk_committed":
             chunk = _find_supplied_v1(supplied_log_chunks, event["payload"]["chunk_record_sigil"], "chunk_record_sigil", "Log chunk")
             current = _reduce_log_chunk_committed_v1(current, event, chunk)
+        elif event["event_type"] == "log.chunk_duplicate_observed":
+            current = _reduce_log_chunk_duplicate_observed_v1(current, event)
         elif event["event_type"] == "log.chunk_rejected":
             current = _reduce_log_chunk_rejected_v1(current, event)
         elif event["event_type"] == "log.truncated":
