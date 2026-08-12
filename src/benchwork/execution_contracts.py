@@ -1520,6 +1520,28 @@ def _reduce_lease_revoked_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     return build_execution_state_v1(reduced)
 
 
+def _reduce_lease_tombstone_republished_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Record an additional publication of an already terminal Lease tombstone."""
+    if len(state["leases"]) != 1:
+        _fail("Lease tombstone republish reducer requires one Lease")
+    lease, payload, executor = state["leases"][0], event["payload"], state["executor"]
+    terminal = lease["terminal_event_binding"]
+    if (
+        event["event_type"] != "lease.tombstone_republished"
+        or lease["state"] not in {"RELEASED", "REVOKED", "EXPIRED", "FENCED"}
+        or terminal.get("kind") != "PRESENT"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1}]
+        or payload["tombstone_generation"] != lease["tombstone_generation"]
+        or payload["original_terminal_event_sigil"] != terminal["terminal_event_sigil"]
+    ):
+        _fail("Lease tombstone republish Event disagrees with terminal Lease")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_stop_after_lease_expiry_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1680,6 +1702,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_expired_v1(current, event)
         elif event["event_type"] == "lease.revoked":
             current = _reduce_lease_revoked_v1(current, event)
+        elif event["event_type"] == "lease.tombstone_republished":
+            current = _reduce_lease_tombstone_republished_v1(current, event)
         elif event["event_type"] == "attempt.stop_latched":
             current = _reduce_attempt_stop_after_lease_expiry_v1(current, event)
         elif event["event_type"] == "attempt.stop_progressed":

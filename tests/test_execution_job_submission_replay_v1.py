@@ -382,6 +382,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert revoked_state["attempts"][0]["lease_terminal_binding"]["lease_state"] == "REVOKED"
     assert revoked_state["worker_sessions"][0]["capacity_in_use"] == 0
 
+    republished = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-REPUBLISHED", "sequence": 10, "event_type": "lease.tombstone_republished", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 2, "next_revision": 3}], "causation_event_id": revoked["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"tombstone_generation": 2, "original_terminal_event_sigil": revoked["event_sigil"], "sink_ids": ["SINK"], "publication_evidence_sigil": SIGIL}, "previous_event_sigil": revoked["event_sigil"]})
+    republished_state = replay_execution_supplied_state_suffix_v1(revoked_state, [republished])
+    assert republished_state["leases"][0]["revision"] == 3
+    assert republished_state["leases"][0]["state"] == "REVOKED"
+
+    wrong_republish = deepcopy(republished)
+    wrong_republish["payload"]["tombstone_generation"] = 3
+    wrong_republish = build_execution_journal_event_v1({key: value for key, value in wrong_republish.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(revoked_state, [wrong_republish])
+
     unlatched = deepcopy(claimed_state)
     unlatched["state_sigil"] = content_sigil({key: value for key, value in unlatched.items() if key != "state_sigil"})
     with pytest.raises(AthanorError, match="disagrees"):
