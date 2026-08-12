@@ -1354,6 +1354,31 @@ def _reduce_worker_session_heartbeat_accepted_v1(state: dict[str, Any], event: d
     return build_execution_state_v1(reduced)
 
 
+def _reduce_worker_session_message_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Retain a rejected Session control message without altering Session state."""
+    matches = [session for session in state["worker_sessions"] if session["worker_session_id"] == event["entity_revisions"][0]["entity_id"]]
+    if len(matches) != 1:
+        _fail("Worker-Session rejection Event has no unique Session projection")
+    session, payload, executor = matches[0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "worker_session.message_rejected"
+        or payload["message_kind"] not in {"WORKER_SESSION_REGISTRATION", "WORKER_SESSION_HEARTBEAT"}
+        or not payload["reason_codes"] or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != session["executor_epoch"]
+        or event["causation_event_id"] != session["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1}]
+    ):
+        _fail("Worker-Session rejection Event disagrees with Session projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["worker_sessions"] = [
+        {**candidate, "revision": candidate["revision"] + 1,
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record a duplicate chunk observation without appending bytes twice."""
     payload, executor = event["payload"], state["executor"]
@@ -1899,6 +1924,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_offered_v1(current, event, lease)
         elif event["event_type"] == "worker_session.heartbeat_accepted":
             current = _reduce_worker_session_heartbeat_accepted_v1(current, event)
+        elif event["event_type"] == "worker_session.message_rejected":
+            current = _reduce_worker_session_message_rejected_v1(current, event)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
         elif event["event_type"] == "attempt.starting":
