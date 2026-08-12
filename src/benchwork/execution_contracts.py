@@ -876,11 +876,17 @@ def _reduce_job_queued_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[
         job["state"] != "SUBMITTED"
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
-        or event["entity_revisions"] != [{
-            "entity_kind": "JOB", "entity_id": job["job_id"],
-            "preceding_revision": job["revision"], "next_revision": job["revision"] + 1,
-        }]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "JOB",
+                "entity_id": job["job_id"],
+                "preceding_revision": job["revision"],
+                "next_revision": job["revision"] + 1,
+            }
+        ]
     ):
         _fail("Job queue Event disagrees with submitted Job projection")
     payload = event["payload"]
@@ -889,14 +895,225 @@ def _reduce_job_queued_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[
     if not isinstance(payload["admission_evidence_sigil"], str):
         _fail("Job queue Event admission evidence is invalid")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["jobs"] = [{
-        **job, "revision": job["revision"] + 1, "state": "QUEUED",
-        "queue_key": payload["queue_key"], "last_event_id": event["event_id"],
-        "last_event_sigil": event["event_sigil"],
-    }]
+    reduced["jobs"] = [
+        {
+            **job,
+            "revision": job["revision"] + 1,
+            "state": "QUEUED",
+            "queue_key": payload["queue_key"],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
     reduced["journal_binding"] = {
-        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
-        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
+def validate_execution_attempt_v1(attempt: dict[str, Any]) -> None:
+    """Validate one immutable fresh Attempt without resolving its dependencies."""
+    validate_instance("execution-attempt-1.0.json", attempt)
+    _check_nfc(attempt)
+    if attempt["attempt_binding_sigil"] != content_sigil(
+        _without(attempt, "attempt_binding_sigil")
+    ):
+        _fail("Execution Attempt self-Sigil mismatch")
+
+
+def _reserved_budget_ledger_v1(
+    ledger: dict[str, Any], reservation: dict[str, Any]
+) -> dict[str, Any]:
+    reduced: dict[str, Any] = {
+        name: dict(value)
+        for name, value in ledger.items()
+        if name != "budget_ledger_sigil"
+    }
+    for dimension, value in reservation.items():
+        updated = reduced[dimension]
+        updated["reserved"] += value
+        total = updated["reserved"] + updated["consumed"]
+        updated["exhaustion_status"] = (
+            "AVAILABLE"
+            if total < updated["limit"]
+            else "EXHAUSTED"
+            if total == updated["limit"]
+            else "EXCEEDED"
+        )
+        if total > updated["limit"]:
+            _fail("Attempt allocation exceeds the Job budget")
+    reduced["budget_ledger_sigil"] = content_sigil(reduced)
+    return reduced
+
+
+def _reduce_job_attempt_allocated_v1(
+    state: dict[str, Any], event: dict[str, Any], attempt: dict[str, Any]
+) -> dict[str, Any]:
+    """Atomically allocate one fresh Attempt, budget reservation, and log streams."""
+    validate_execution_attempt_v1(attempt)
+    if event["event_type"] != "job.attempt_allocated" or len(state["jobs"]) != 1:
+        _fail("Attempt allocation reducer requires exactly one queued Job")
+    job = state["jobs"][0]
+    executor = state["executor"]
+    if (
+        job["state"] != "QUEUED"
+        or state["attempts"]
+        or state["log_streams"]
+        or attempt["job_id"] != job["job_id"]
+        or attempt["job_binding_sigil"] != job["job_binding_sigil"]
+        or attempt["retry_ordinal"] != 1
+        or attempt["fencing_generation"] != 1
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+    ):
+        _fail("Attempt allocation disagrees with the queued Job projection")
+    payload = event["payload"]
+    if (
+        payload["attempt_binding_sigil"] != attempt["attempt_binding_sigil"]
+        or payload["retry_ordinal"] != attempt["retry_ordinal"]
+        or payload["fencing_generation"] != attempt["fencing_generation"]
+        or payload["budget_reservation"] != attempt["budget_reservation"]
+        or payload["prior_fencing_counter"] != job["fencing_counter"]
+        or payload["resulting_fence_floor"] != attempt["fencing_generation"]
+        or event["recorded_at"] != attempt["created_at"]
+    ):
+        _fail("Attempt allocation Event does not exactly copy Attempt allocation facts")
+    ledger = _reserved_budget_ledger_v1(job["budget_ledger"], attempt["budget_reservation"])
+    if payload["resulting_budget_ledger_sigil"] != ledger["budget_ledger_sigil"]:
+        _fail("Attempt allocation Event budget ledger Sigil mismatch")
+    log_ids = attempt["log_stream_ids"]
+    log_revisions = sorted(
+        (
+            {
+                "entity_kind": "LOG_STREAM",
+                "entity_id": log_ids[stream],
+                "preceding_revision": None,
+                "next_revision": 0,
+            }
+            for stream in ("STDOUT", "STDERR", "STRUCTURED")
+        ),
+        key=lambda item: _unsigned_ascii(item["entity_id"], "Log stream ID"),
+    )
+    expected_revisions = [
+        {
+            "entity_kind": "JOB",
+            "entity_id": job["job_id"],
+            "preceding_revision": job["revision"],
+            "next_revision": job["revision"] + 1,
+        },
+        {
+            "entity_kind": "ATTEMPT",
+            "entity_id": attempt["attempt_id"],
+            "preceding_revision": None,
+            "next_revision": 0,
+        },
+        *log_revisions,
+    ]
+    if event["entity_revisions"] != expected_revisions:
+        _fail("Attempt allocation Event has invalid atomic revision effects")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["jobs"] = [
+        {
+            **job,
+            "revision": job["revision"] + 1,
+            "state": "ACTIVE",
+            "attempt_ids": [attempt["attempt_id"]],
+            "current_attempt_id": attempt["attempt_id"],
+            "fencing_counter": attempt["fencing_generation"],
+            "fence_floor": attempt["fencing_generation"],
+            "budget_ledger": ledger,
+            "queue_key": None,
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["attempts"] = [
+        {
+            "attempt_id": attempt["attempt_id"],
+            "revision": 0,
+            "state": "CREATED",
+            "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+            "job_id": job["job_id"],
+            "retry_ordinal": attempt["retry_ordinal"],
+            "fencing_generation": attempt["fencing_generation"],
+            "lease_executor_epoch": None,
+            "public_fence_tuple": None,
+            "worker_session_binding": {"kind": "NONE"},
+            "lease_id": None,
+            "result_binding": {"kind": "NONE"},
+            "result_intake": {"kind": "NONE"},
+            "output_staging_preallocations": [],
+            "attempt_authorization_requirement": attempt["attempt_authorization_requirement"],
+            "attempt_authorization_state": {"kind": "NONE"}
+            if attempt["attempt_authorization_requirement"]["kind"] == "NONE"
+            else {"kind": "PENDING"},
+            "completion_anchor_binding": {"kind": "NOT_ESTABLISHED"},
+            "lease_terminal_binding": None,
+            "first_stop_or_fence_binding": {"kind": "NONE"},
+            "storage_observation_binding": None,
+            "terminal_source_binding": None,
+            "accounting_capture_binding": {"kind": "PENDING"},
+            "budget_settlement_binding": {"kind": "PENDING"},
+            "attempt_assurance_binding": {"kind": "PENDING"},
+            "input_storage_roots": [],
+            "output_storage_roots": [],
+            "control_evidence_set_binding": {"kind": "PENDING"},
+            "quarantine_binding_set_binding": {"kind": "PENDING"},
+            "terminalization_storage_manifest_binding": {"kind": "PENDING"},
+            "output_root_protection": {"kind": "PENDING"},
+            "deadline_due_at": attempt["deadline_due_at"],
+            "grace_due_at": None,
+            "terminal_event_binding": {"kind": "NONE"},
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["log_streams"] = [
+        {
+            "log_stream_id": log_ids[stream],
+            "revision": 0,
+            "state": "OPEN",
+            "attempt_id": attempt["attempt_id"],
+            "stream": stream,
+            "next_sequence": 0,
+            "captured_bytes": 0,
+            "dropped_bytes": 0,
+            "truncated": False,
+            "final_sequence": None,
+            "stream_set_sigil": None,
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+        for stream in ("STDOUT", "STDERR", "STRUCTURED")
+    ]
+    reduced["deadlines"] = [
+        *state["deadlines"],
+        {
+            "deadline_kind": "ATTEMPT_DEADLINE",
+            "due_at": attempt["deadline_due_at"],
+            "fixed_priority": _DEADLINE_PRIORITY["ATTEMPT_DEADLINE"],
+            "entity_id": attempt["attempt_id"],
+            "source_event_id": event["event_id"],
+            "source_event_sigil": event["event_sigil"],
+        },
+    ]
+    reduced["deadlines"].sort(
+        key=lambda item: (
+            _parse_time(item["due_at"]),
+            item["fixed_priority"],
+            _unsigned_ascii(item["entity_id"], "Deadline entity ID"),
+        )
+    )
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
     }
     return build_execution_state_v1(reduced)
 
@@ -1130,6 +1347,7 @@ def replay_execution_journal_prefix_v1(
     head: dict[str, Any] | None = None,
     recovery_action_sets: list[dict[str, Any]] | None = None,
     supplied_jobs: list[dict[str, Any]] | None = None,
+    supplied_attempts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
 
@@ -1144,6 +1362,10 @@ def replay_execution_journal_prefix_v1(
     if recovery_action_sets is not None:
         if supplied_jobs is not None:
             _fail("Execution Journal replay cannot combine Recovery action sets and supplied Jobs")
+        if supplied_attempts is not None:
+            _fail(
+                "Execution Journal replay cannot combine Recovery action sets and supplied Attempts"
+            )
         empty_recovery_types = [
             "executor.epoch_started",
             "executor.clock_uncertain",
@@ -1169,12 +1391,21 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
-    if len(events) in {2, 3} and events[1]["event_type"] == "job.submitted":
+    if len(events) in {2, 3, 4} and events[1]["event_type"] == "job.submitted":
         if supplied_jobs is None or len(supplied_jobs) != 1:
             _fail("Job submission replay requires exactly one supplied Job")
         state = _reduce_job_submitted_v1(initial_state, events[1], supplied_jobs[0])
         if len(events) == 3:
             state = _reduce_job_queued_v1(state, events[2])
+        if len(events) == 4:
+            if (
+                events[2]["event_type"] != "job.queued"
+                or supplied_attempts is None
+                or len(supplied_attempts) != 1
+            ):
+                _fail("Attempt allocation replay requires one supplied Attempt after job.queued")
+            state = _reduce_job_queued_v1(state, events[2])
+            state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
         if head is not None and (
             head["journal_id"] != state["journal_binding"]["journal_id"]
             or head["last_sequence"] != events[-1]["sequence"]
@@ -1185,6 +1416,8 @@ def replay_execution_journal_prefix_v1(
         return state
     if supplied_jobs is not None:
         _fail("supplied Jobs are unsupported for this Execution Journal replay prefix")
+    if supplied_attempts is not None:
+        _fail("supplied Attempts are unsupported for this Execution Journal replay prefix")
     if len(events) >= 2 and events[1]["event_type"] == "executor.clock_uncertain":
         state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
         if len(events) == 3 and events[2]["event_type"] == "recovery.started":

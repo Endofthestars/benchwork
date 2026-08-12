@@ -123,16 +123,144 @@ def _submitted_event(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _queued_event(submitted: dict[str, Any]) -> dict[str, Any]:
-    return build_execution_journal_event_v1({
-        "schema_version": "execution-journal-event/1.0", "journal_id": submitted["journal_id"],
-        "event_id": "JE-THREE", "sequence": 3, "event_type": "job.queued",
-        "executor_instance_id": submitted["executor_instance_id"], "executor_epoch": submitted["executor_epoch"],
-        "executor_build_sigil": submitted["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:01Z", "observed_at": None,
-        "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 0, "next_revision": 1}],
-        "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None,
-        "payload": {"admission_evidence_sigil": SIGIL, "queue_key": {"ready_sequence": 3, "job_id": JOB_ID}},
-        "previous_event_sigil": submitted["event_sigil"],
-    })
+    return build_execution_journal_event_v1(
+        {
+            "schema_version": "execution-journal-event/1.0",
+            "journal_id": submitted["journal_id"],
+            "event_id": "JE-THREE",
+            "sequence": 3,
+            "event_type": "job.queued",
+            "executor_instance_id": submitted["executor_instance_id"],
+            "executor_epoch": submitted["executor_epoch"],
+            "executor_build_sigil": submitted["executor_build_sigil"],
+            "recorded_at": "2026-08-06T00:00:01Z",
+            "observed_at": None,
+            "entity_revisions": [
+                {
+                    "entity_kind": "JOB",
+                    "entity_id": JOB_ID,
+                    "preceding_revision": 0,
+                    "next_revision": 1,
+                }
+            ],
+            "causation_event_id": None,
+            "idempotency_key_sigil": None,
+            "recovery_action_binding": None,
+            "payload": {
+                "admission_evidence_sigil": SIGIL,
+                "queue_key": {"ready_sequence": 3, "job_id": JOB_ID},
+            },
+            "previous_event_sigil": submitted["event_sigil"],
+        }
+    )
+
+
+def _attempt() -> dict[str, Any]:
+    attempt: dict[str, Any] = {
+        "schema_version": "execution-attempt/1.0",
+        "attempt_id": "AT-ONE",
+        "job_id": JOB_ID,
+        "job_binding_sigil": _job()["job_binding_sigil"],
+        "retry_ordinal": 1,
+        "fencing_generation": 1,
+        "assurance_requirement": {
+            "requested_level": "SANCTUM-A0",
+            "profile_version": "1.0",
+            "profile_sigil": SIGIL,
+            "conformance_suite_id": "CS-ONE",
+            "conformance_suite_sigil": SIGIL,
+        },
+        "backend_identity": "LOCAL",
+        "backend_version": "1.0",
+        "backend_implementation_sigil": SIGIL,
+        "backend_configuration_sigil": SIGIL,
+        "base_identity": None,
+        "base_sigil": None,
+        "input_identities": [],
+        "resume_mode": "FRESH",
+        "crucible_id": "CU-ONE",
+        "output_namespace_id": "ON-ONE",
+        "log_stream_ids": {"STDOUT": "LG-ONE", "STDERR": "LG-TWO", "STRUCTURED": "LG-THREE"},
+        "budget_reservation": {
+            "attempts": 1,
+            "cpu_time_seconds": 1,
+            "storage_bytes_written": 1,
+            "output_bytes": 1,
+            "log_bytes": 1,
+            "process_starts": 1,
+            "network_egress_bytes": 1,
+            "network_requests": 1,
+        },
+        "attempt_authorization_requirement": {"kind": "NONE", "effects": []},
+        "created_at": "2026-08-06T00:00:02Z",
+        "deadline_due_at": "2026-08-06T00:00:30Z",
+        "attempt_binding_sigil": "",
+    }
+    attempt["attempt_binding_sigil"] = content_sigil(
+        {key: value for key, value in attempt.items() if key != "attempt_binding_sigil"}
+    )
+    return attempt
+
+
+def _allocated_event(queued: dict[str, Any], attempt: dict[str, Any]) -> dict[str, Any]:
+    ledger = {
+        name: {"limit": value, "reserved": value, "consumed": 0, "exhaustion_status": "EXHAUSTED"}
+        for name, value in attempt["budget_reservation"].items()
+    }
+    ledger["budget_ledger_sigil"] = content_sigil(ledger)
+    return build_execution_journal_event_v1(
+        {
+            "schema_version": "execution-journal-event/1.0",
+            "journal_id": queued["journal_id"],
+            "event_id": "JE-FOUR",
+            "sequence": 4,
+            "event_type": "job.attempt_allocated",
+            "executor_instance_id": queued["executor_instance_id"],
+            "executor_epoch": queued["executor_epoch"],
+            "executor_build_sigil": queued["executor_build_sigil"],
+            "recorded_at": attempt["created_at"],
+            "observed_at": None,
+            "entity_revisions": [
+                {
+                    "entity_kind": "JOB",
+                    "entity_id": JOB_ID,
+                    "preceding_revision": 1,
+                    "next_revision": 2,
+                },
+                {
+                    "entity_kind": "ATTEMPT",
+                    "entity_id": "AT-ONE",
+                    "preceding_revision": None,
+                    "next_revision": 0,
+                },
+                *sorted(
+                    (
+                        {
+                            "entity_kind": "LOG_STREAM",
+                            "entity_id": attempt["log_stream_ids"][stream],
+                            "preceding_revision": None,
+                            "next_revision": 0,
+                        }
+                        for stream in ("STDOUT", "STDERR", "STRUCTURED")
+                    ),
+                    key=lambda item: item["entity_id"],
+                ),
+            ],
+            "causation_event_id": None,
+            "idempotency_key_sigil": None,
+            "recovery_action_binding": None,
+            "payload": {
+                "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+                "retry_ordinal": 1,
+                "fencing_generation": 1,
+                "prior_fencing_counter": 0,
+                "resulting_fence_floor": 1,
+                "budget_reservation": attempt["budget_reservation"],
+                "resulting_budget_ledger_sigil": ledger["budget_ledger_sigil"],
+            },
+            "previous_event_sigil": queued["event_sigil"],
+        }
+    )
 
 
 def test_job_submission_replay_requires_exact_supplied_job() -> None:
@@ -149,6 +277,31 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     queued_state = replay_execution_journal_prefix_v1([INITIAL, event, queued], supplied_jobs=[job])
     assert queued_state["jobs"][0]["state"] == "QUEUED"
     assert queued_state["jobs"][0]["queue_key"] == {"ready_sequence": 3, "job_id": JOB_ID}
+
+    attempt = _attempt()
+    allocated = _allocated_event(queued, attempt)
+    allocated_state = replay_execution_journal_prefix_v1(
+        [INITIAL, event, queued, allocated], supplied_jobs=[job], supplied_attempts=[attempt]
+    )
+    assert allocated_state["jobs"][0]["state"] == "ACTIVE"
+    assert allocated_state["attempts"][0]["state"] == "CREATED"
+    assert [stream["stream"] for stream in allocated_state["log_streams"]] == [
+        "STDOUT",
+        "STDERR",
+        "STRUCTURED",
+    ]
+
+    wrong_attempt = deepcopy(attempt)
+    wrong_attempt["retry_ordinal"] = 2
+    wrong_attempt["attempt_binding_sigil"] = content_sigil(
+        {key: value for key, value in wrong_attempt.items() if key != "attempt_binding_sigil"}
+    )
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_journal_prefix_v1(
+            [INITIAL, event, queued, allocated],
+            supplied_jobs=[job],
+            supplied_attempts=[wrong_attempt],
+        )
 
     altered = deepcopy(job)
     altered["deadline_due_at"] = "2026-08-06T00:02:00Z"
