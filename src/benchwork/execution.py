@@ -138,6 +138,14 @@ def _atomic_bytes(path: Path, value: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _is_unsafe_managed_directory(path: Path) -> bool:
+    return path.is_symlink() or (path.exists() and not path.is_dir())
+
+
+def _is_unsafe_managed_file(path: Path) -> bool:
+    return path.is_symlink() or (path.exists() and not path.is_file())
+
+
 class LocalBlobStore:
     """The built-in Phase 3 content-addressed backend.
 
@@ -151,17 +159,17 @@ class LocalBlobStore:
         self._lock_path = self.path / "locks" / "storage.lock"
 
     def initialize(self) -> None:
-        if self.path.exists() and not self.path.is_dir():
+        if _is_unsafe_managed_directory(self.path):
             raise AthanorError("managed storage path is not a directory")
         locks_path = self.path / "locks"
-        if locks_path.exists() and not locks_path.is_dir():
+        if _is_unsafe_managed_directory(locks_path):
             raise AthanorError("managed storage lock path is not a directory")
         with _exclusive_lock(self._lock_path):
-            if self.path.exists() and not self.path.is_dir():
+            if _is_unsafe_managed_directory(self.path):
                 raise AthanorError("managed storage path is not a directory")
             for name in ("records", "blobs", "staging", "quarantine", "locks", "recovery"):
                 directory = self.path / name
-                if directory.exists() and not directory.is_dir():
+                if _is_unsafe_managed_directory(directory):
                     raise AthanorError(f"managed storage path is not a directory: {name}")
                 try:
                     directory.mkdir(parents=True, exist_ok=True)
@@ -174,7 +182,7 @@ class LocalBlobStore:
                 "layout": "BENCHWORK_LOCAL_STORAGE_V1",
             }
             if format_path.exists():
-                if not format_path.is_file():
+                if _is_unsafe_managed_file(format_path):
                     raise AthanorError("managed storage format is invalid")
                 try:
                     actual = _load_strict_local_json_object(
@@ -233,6 +241,8 @@ class LocalBlobStore:
         blob_path = self._blob_path(sigil)
         with _exclusive_lock(self._lock_path):
             if blob_path.exists():
+                if _is_unsafe_managed_file(blob_path):
+                    raise AthanorError("Blob collision or storage integrity failure")
                 existing = blob_path.read_bytes()
                 if self._sigil_for_bytes(existing) != sigil or len(existing) != len(value):
                     raise AthanorError("Blob collision or storage integrity failure")
@@ -253,6 +263,8 @@ class LocalBlobStore:
             record["record_sigil"] = content_sigil(record)
             record_path = self._record_path(sigil)
             if record_path.exists():
+                if _is_unsafe_managed_file(record_path):
+                    raise AthanorError("Blob record is invalid")
                 try:
                     prior = _load_strict_local_json_object(
                         record_path.read_text(encoding="utf-8"), "Blob record",
@@ -270,6 +282,8 @@ class LocalBlobStore:
     def read_bytes(self, sigil: str) -> bytes:
         self.initialize()
         blob_path = self._blob_path(sigil)
+        if _is_unsafe_managed_file(blob_path):
+            raise AthanorError(f"Blob is unavailable: {sigil}")
         try:
             value = blob_path.read_bytes()
         except OSError as error:
@@ -277,6 +291,8 @@ class LocalBlobStore:
         if self._sigil_for_bytes(value) != sigil:
             raise AthanorError(f"Blob integrity failure: {sigil}")
         record_path = self._record_path(sigil)
+        if _is_unsafe_managed_file(record_path):
+            raise AthanorError(f"Blob record is unavailable or invalid: {sigil}")
         try:
             record = _load_strict_local_json_object(
                 record_path.read_text(encoding="utf-8"), "Blob record",
@@ -304,20 +320,20 @@ class ExecutionService:
         self._lock_path = self.path / "locks" / "execution.lock"
 
     def initialize(self) -> None:
-        if self.path.exists() and not self.path.is_dir():
+        if _is_unsafe_managed_directory(self.path):
             raise AthanorError("execution storage path is not a directory")
         locks_path = self.path / "locks"
-        if locks_path.exists() and not locks_path.is_dir():
+        if _is_unsafe_managed_directory(locks_path):
             raise AthanorError("execution lock path is not a directory")
         with _exclusive_lock(self._lock_path):
-            if self.path.exists() and not self.path.is_dir():
+            if _is_unsafe_managed_directory(self.path):
                 raise AthanorError("execution storage path is not a directory")
             try:
                 self.path.mkdir(parents=True, exist_ok=True)
             except OSError as error:
                 raise AthanorError("execution storage directory is unavailable") from error
             locks_path = self.path / "locks"
-            if locks_path.exists() and not locks_path.is_dir():
+            if _is_unsafe_managed_directory(locks_path):
                 raise AthanorError("execution lock path is not a directory")
             try:
                 locks_path.mkdir(parents=True, exist_ok=True)
@@ -348,7 +364,7 @@ class ExecutionService:
     def _events_unlocked(self) -> list[dict[str, Any]]:
         if not self._journal_path.exists():
             return []
-        if not self._journal_path.is_file():
+        if _is_unsafe_managed_file(self._journal_path):
             raise AthanorError("execution journal is unreadable")
         events: list[dict[str, Any]] = []
         previous: str | None = None

@@ -84,6 +84,15 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "managed storage lock path is not a directory"):
             self.store.initialize()
 
+    def test_storage_rejects_symlinked_managed_root(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        target = Path(self.directory.name) / "outside-storage"
+        target.mkdir()
+        storage.parent.mkdir(parents=True)
+        storage.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(AthanorError, "managed storage path is not a directory"):
+            self.store.initialize()
+
     def test_deduplication_rejects_resealed_or_conflicting_blob_metadata(self) -> None:
         first = self.store.import_bytes(b"phase-three", media_type="text/plain")
         record_path = (
@@ -444,6 +453,16 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_local_journal_rejects_a_symlink_at_its_file_path(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        target = Path(self.directory.name) / "outside-journal.jsonl"
+        target.write_bytes(journal.read_bytes())
+        journal.unlink()
+        journal.symlink_to(target)
+        with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
+            self.service.observe(observation["job"]["job_id"])
+
     def test_execution_initialize_rejects_malformed_managed_paths(self) -> None:
         execution = Path(self.directory.name) / ".benchwork" / "execution"
         execution.parent.mkdir(parents=True)
@@ -455,6 +474,15 @@ class ExecutionServiceTest(unittest.TestCase):
         execution.mkdir()
         (execution / "locks").write_text("not a directory", encoding="utf-8")
         with self.assertRaisesRegex(AthanorError, "execution lock path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
+    def test_execution_initialize_rejects_symlinked_managed_root(self) -> None:
+        execution = Path(self.directory.name) / ".benchwork" / "execution"
+        target = Path(self.directory.name) / "outside-execution"
+        target.mkdir()
+        execution.parent.mkdir(parents=True)
+        execution.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(AthanorError, "execution storage path is not a directory"):
             self.service.start(_specification(), "start-001")
 
     def test_local_journal_rejects_an_unterminated_tail_on_recovery(self) -> None:
