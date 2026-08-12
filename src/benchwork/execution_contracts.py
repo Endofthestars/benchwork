@@ -451,6 +451,55 @@ def validate_execution_initial_state_supplied_facts_v1(
         _fail("ISR3 State contains a noninitial projection member")
 
 
+def replay_execution_initial_prefix_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Reduce exactly the ISR3 sequence-one prefix, otherwise fail closed.
+
+    This is a deterministic cache construction primitive only.  It neither
+    authenticates storage nor grants Journal append, runtime, or resolver
+    authority.  Later Event reducers must be installed explicitly rather than
+    being inferred from their Schema shape.
+    """
+    if len(events) != 1:
+        _fail("Execution Journal replay supports only the initial one-Event prefix")
+    event = events[0]
+    validate_execution_journal_event_v1(event)
+    if event["sequence"] != 1 or event["event_type"] != "executor.epoch_started":
+        _fail("Execution Journal initial replay requires sequence-one executor epoch start")
+    if event["previous_event_sigil"] is not None:
+        _fail("Execution Journal initial replay requires a null predecessor")
+    state = build_execution_state_v1({
+        "schema_version": "execution-state/1.0",
+        "limit_profile": "EXECUTION_JOURNAL_V1_FIXED_LIMITS",
+        "journal_binding": {
+            "journal_id": event["journal_id"],
+            "through_sequence": event["sequence"],
+            "through_event_id": event["event_id"],
+            "through_event_sigil": event["event_sigil"],
+        },
+        "executor": {
+            "executor_instance_id": event["executor_instance_id"],
+            "executor_epoch": event["executor_epoch"],
+            "executor_build_binding": event["payload"]["executor_build_binding"],
+            "revision": 0,
+            "clock_state": "TRUSTED",
+            "last_trusted_utc": event["recorded_at"],
+            "clock_uncertain_event_id": None,
+            "active_recovery_id": None,
+            "authority_gates": [],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        },
+        "recoveries": [], "workers": [], "worker_sessions": [], "jobs": [],
+        "attempts": [], "leases": [], "log_streams": [], "deadlines": [],
+        "idempotency_records": [],
+    })
+    if head is not None:
+        validate_execution_initial_state_supplied_facts_v1(event, state, head)
+    return state
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([

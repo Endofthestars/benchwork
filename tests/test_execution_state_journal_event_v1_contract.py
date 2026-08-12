@@ -22,6 +22,7 @@ from benchwork.execution_contracts import (
     load_execution_request_v1,
     load_execution_result_ingress_receipt_v1,
     load_execution_state_v1,
+    replay_execution_initial_prefix_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
     validate_execution_journal_head_v1,
@@ -479,6 +480,17 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     validate_execution_journal_head_v1(head)
     assert load_execution_journal_head_v1(json.dumps(head)) == head
     validate_execution_initial_state_supplied_facts_v1(event, state, head)
+    assert replay_execution_initial_prefix_v1([event], head=head) == state
+    with pytest.raises(Exception, match="only the initial one-Event prefix"):
+        replay_execution_initial_prefix_v1([event, event])
+
+    wrong_initial_event = deepcopy(event)
+    wrong_initial_event["event_type"] = "executor.clock_uncertain"
+    wrong_initial_event["event_sigil"] = content_sigil(
+        {key: member for key, member in wrong_initial_event.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="execution-journal-event"):
+        replay_execution_initial_prefix_v1([wrong_initial_event])
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )
