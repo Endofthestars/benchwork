@@ -15,6 +15,7 @@ from typing import Any, NoReturn
 from urllib.parse import urldefrag
 
 from .athanor import AthanorError, canonical_json, content_sigil
+from .execution_contracts import validate_execution_budget_ledger_v1
 from .schema_validation import validate_instance
 
 
@@ -730,6 +731,7 @@ def validate_execution_job_outcome_v1(outcome: dict[str, Any]) -> None:
     if set(outcome) != _ROOT_MEMBERS:
         _fail("Execution Job Outcome is not the exact closed 40-member object")
     _check_nfc_and_numbers(outcome, "Execution Job Outcome")
+    validate_execution_budget_ledger_v1(outcome["budget_binding"]["job_budget_ledger"])
     expected_id = derive_execution_job_outcome_id_v1(
         outcome["job_id"], outcome["job_terminal"]["event_sigil"]
     )

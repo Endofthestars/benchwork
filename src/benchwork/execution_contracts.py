@@ -199,6 +199,25 @@ def _unsigned_ascii(value: str, label: str) -> bytes:
         _fail(f"{label} must be unsigned ASCII")
 
 
+def validate_execution_budget_ledger_v1(ledger: dict[str, Any]) -> None:
+    """Validate RFC-0012 budget arithmetic and its local self-Sigil."""
+    if ledger["budget_ledger_sigil"] != content_sigil(
+        _without(ledger, "budget_ledger_sigil")
+    ):
+        _fail("Execution budget ledger self-Sigil mismatch")
+    for name, dimension in ledger.items():
+        if name == "budget_ledger_sigil":
+            continue
+        total = dimension["consumed"] + dimension["reserved"]
+        expected_status = (
+            "AVAILABLE" if total < dimension["limit"]
+            else "EXHAUSTED" if total == dimension["limit"]
+            else "EXCEEDED"
+        )
+        if dimension["exhaustion_status"] != expected_status:
+            _fail(f"Execution budget dimension {name} has incorrect exhaustion status")
+
+
 def validate_execution_state_v1(state: dict[str, Any]) -> None:
     """Validate a State cache as bytes/projections, never as replay authority."""
     validate_instance("execution-state-1.0.json", state)
@@ -237,6 +256,8 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         session_ids = worker["worker_session_ids"]
         if session_ids != sorted(session_ids, key=lambda value: _unsigned_ascii(value, "Worker session ID")):
             _fail("Worker worker_session_ids are not unsigned-ASCII sorted")
+    for job in state["jobs"]:
+        validate_execution_budget_ledger_v1(job["budget_ledger"])
     sessions_by_id: dict[str, dict[str, Any]] = {}
     for session in state["worker_sessions"]:
         session_id = session["worker_session_id"]

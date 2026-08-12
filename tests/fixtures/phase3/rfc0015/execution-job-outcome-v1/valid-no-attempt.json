@@ -169,15 +169,15 @@
         "limit": 0,
         "reserved": 0,
         "consumed": 0,
-        "exhaustion_status": "AVAILABLE"
+        "exhaustion_status": "EXHAUSTED"
       },
       "network_requests": {
         "limit": 0,
         "reserved": 0,
         "consumed": 0,
-        "exhaustion_status": "AVAILABLE"
+        "exhaustion_status": "EXHAUSTED"
       },
-      "budget_ledger_sigil": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+      "budget_ledger_sigil": "sha256:fc667a4191a312220c9c7c5bdc483df4fcb08e09d7a453ddde6c5bcd4e032dab"
     },
     "selected_attempt_settlement": {
       "kind": "NONE"
@@ -202,5 +202,5 @@
     "imported_schema_set_sigil": "sha256:325bbbd309d989058dc78c50bb6d787be64fab8d9db1956f87e41a88f87e0b0e"
   },
   "terminal_recorded_at": "2026-08-06T00:00:03Z",
-  "outcome_sigil": "sha256:cae9fe2ab2be6e0a8f9d7ec4d0c6bc903959b639ba5d4edb23155215770fa4e5"
+  "outcome_sigil": "sha256:e04fc50c0eedc0c00b268b0cf9a11ec510387fa2668da3b1e766aa6c2d4deb56"
 }

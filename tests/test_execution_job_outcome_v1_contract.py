@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from benchwork.athanor import AthanorError
+from benchwork.athanor import AthanorError, content_sigil
 from benchwork.execution_job_outcome import (
     derive_execution_job_outcome_derivation_profile_v1,
     derive_execution_job_outcome_id_v1,
@@ -75,6 +75,30 @@ def test_valid_no_attempt_fixture_and_strict_loader() -> None:
     validate_execution_job_outcome_v1(outcome)
     assert load_execution_job_outcome_v1(FIXTURE.read_bytes()) == outcome
     validate_instance("execution-job-outcome-1.0.json", outcome)
+
+
+def test_budget_ledger_requires_exact_arithmetic_status_and_self_sigil() -> None:
+    outcome = _load()
+    ledger = outcome["budget_binding"]["job_budget_ledger"]
+    assert ledger["budget_ledger_sigil"] == content_sigil(
+        {key: value for key, value in ledger.items() if key != "budget_ledger_sigil"}
+    )
+
+    wrong_status = deepcopy(outcome)
+    wrong_status["budget_binding"]["job_budget_ledger"]["attempts"]["exhaustion_status"] = "EXHAUSTED"
+    _seal(wrong_status)
+    with pytest.raises(Exception, match="budget ledger self-Sigil"):
+        validate_execution_job_outcome_v1(wrong_status)
+
+    arithmetic_mismatch = deepcopy(outcome)
+    arithmetic_mismatch["budget_binding"]["job_budget_ledger"]["attempts"]["exhaustion_status"] = "EXHAUSTED"
+    ledger = arithmetic_mismatch["budget_binding"]["job_budget_ledger"]
+    ledger["budget_ledger_sigil"] = content_sigil(
+        {key: value for key, value in ledger.items() if key != "budget_ledger_sigil"}
+    )
+    _seal(arithmetic_mismatch)
+    with pytest.raises(Exception, match="incorrect exhaustion status"):
+        validate_execution_job_outcome_v1(arithmetic_mismatch)
 
 
 def test_schema_has_exact_closed_root_and_public_rfc0014_defs() -> None:
