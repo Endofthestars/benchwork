@@ -159,9 +159,13 @@ class LocalBlobStore:
             record["record_sigil"] = content_sigil(record)
             record_path = self.path / "records" / f"blob-{sigil.removeprefix('sha256:')}.json"
             if record_path.exists():
-                prior = json.loads(record_path.read_text(encoding="utf-8"))
-                if prior["blob_sigil"] != sigil or prior["size_bytes"] != len(value):
-                    raise AthanorError("Blob record conflict")
+                try:
+                    prior = json.loads(record_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as error:
+                    raise AthanorError("Blob record is invalid") from error
+                if not isinstance(prior, dict) or prior != record:
+                    raise AthanorError("Blob record conflict or integrity failure")
+                return prior
             else:
                 _atomic_json(record_path, record)
             return record

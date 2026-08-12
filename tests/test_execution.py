@@ -64,6 +64,22 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "format is incompatible"):
             self.store.initialize()
 
+    def test_deduplication_rejects_resealed_or_conflicting_blob_metadata(self) -> None:
+        first = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "records"
+            / f"blob-{first['blob_sigil'].removeprefix('sha256:')}.json"
+        )
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["media_type"] = "application/json"
+        record["record_sigil"] = content_sigil({
+            key: value for key, value in record.items() if key != "record_sigil"
+        })
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        with self.assertRaisesRegex(AthanorError, "record conflict or integrity failure"):
+            self.store.import_bytes(b"phase-three", media_type="text/plain")
+
 
 class ExecutionServiceTest(unittest.TestCase):
     def setUp(self) -> None:
