@@ -378,6 +378,25 @@ def test_event_round_trip_unknown_duplicate_and_jew_matrix_helpers() -> None:
     with pytest.raises(Exception, match="non-Unicode-scalar"):
         load_execution_journal_event_v1(json.dumps(non_scalar, ensure_ascii=True))
 
+    non_ascii_identity = _event_unsigned()
+    non_ascii_identity["entity_revisions"][0]["entity_id"] = "LG-\u00e9"
+    non_ascii_identity["event_sigil"] = content_sigil(
+        {key: value for key, value in non_ascii_identity.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="unsigned ASCII"):
+        load_execution_journal_event_v1(json.dumps(non_ascii_identity), context=context)
+
+    reversed_kinds = _event_unsigned()
+    reversed_kinds["entity_revisions"] = [
+        {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 0, "next_revision": 1},
+        {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 0, "next_revision": 1},
+    ]
+    reversed_kinds["event_sigil"] = content_sigil(
+        {key: value for key, value in reversed_kinds.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="strictly sorted"):
+        load_execution_journal_event_v1(json.dumps(reversed_kinds), context=context)
+
     output = {
         "event_type": "attempt.output_staging_preallocated",
         "payload": {"job_id": JOB_ID, "attempt_id": "AT-ONE", "output_handle_id": "OUT"},

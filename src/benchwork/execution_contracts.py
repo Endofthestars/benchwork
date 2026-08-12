@@ -54,6 +54,10 @@ IDEMPOTENCY_OPERATION_KINDS_V1 = (
     "RECEIVE_RESULT_INGRESS", "SUBMIT_RESULT", "APPEND_LOG_CHUNK",
     "CLOSE_LOG_STREAM",
 )
+_ENTITY_KIND_ORDER = (
+    "EXECUTOR", "RECOVERY", "WORKER", "WORKER_SESSION", "JOB", "ATTEMPT", "LEASE", "LOG_STREAM",
+)
+_ENTITY_KIND_RANK = {value: rank for rank, value in enumerate(_ENTITY_KIND_ORDER)}
 _EXECUTION_REQUEST_SCHEMAS_V1 = {
     "start": "execution-start-request-1.0.json",
     "observe": "execution-observe-request-1.0.json",
@@ -175,6 +179,13 @@ def _idempotency_projection(record: dict[str, Any]) -> tuple[int, str, str]:
     except KeyError:
         _fail(f"unknown idempotency operation: {operation}")
     return rank, owner["scope_id"], owner["idempotency_key_sigil"]
+
+
+def _unsigned_ascii(value: str, label: str) -> bytes:
+    try:
+        return value.encode("ascii", errors="strict")
+    except UnicodeEncodeError:
+        _fail(f"{label} must be unsigned ASCII")
 
 
 def validate_execution_state_v1(state: dict[str, Any]) -> None:
@@ -443,7 +454,10 @@ def validate_execution_journal_event_v1(event: dict[str, Any], *, context: dict[
     """Validate a closed Event and, when supplied, the JEW2/JEW3 dependency matrix."""
     validate_instance("execution-journal-event-1.0.json", event)
     _check_nfc(event)
-    revisions = [(item["entity_kind"], item["entity_id"]) for item in event["entity_revisions"]]
+    revisions = [
+        (_ENTITY_KIND_RANK[item["entity_kind"]], _unsigned_ascii(item["entity_id"], "entity revision ID"))
+        for item in event["entity_revisions"]
+    ]
     if revisions != sorted(revisions) or len(revisions) != len(set(revisions)):
         _fail("entity_revisions are not strictly sorted and unique")
     for revision in event["entity_revisions"]:
