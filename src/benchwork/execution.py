@@ -31,6 +31,16 @@ JOB_ID = re.compile(r"^JB-[A-F0-9]{64}$")
 SPECIFICATION_ID = re.compile(r"^ES-[A-Z0-9][A-Z0-9._-]*$")
 MAX_PAGE_SIZE = 256
 LOCAL_EXECUTION_JOURNAL_ID = "EJ-LOCAL-V1"
+LOCAL_EXECUTION_EVENT_TYPES = frozenset(
+    {
+        "executor.epoch-started",
+        "job.submitted",
+        "job.queued",
+        "job.cancellation_requested",
+        "job.cancellation_observed",
+        "job.terminal",
+    }
+)
 TERMINAL_STATES = frozenset(
     {
         "SUCCEEDED",
@@ -226,6 +236,7 @@ class ExecutionService:
             return []
         events: list[dict[str, Any]] = []
         previous: str | None = None
+        event_ids: set[str] = set()
         for line_number, line in enumerate(self._journal_path.read_text(encoding="utf-8").splitlines(), 1):
             try:
                 event = json.loads(line)
@@ -247,6 +258,10 @@ class ExecutionService:
                 raise AthanorError("execution journal Event version is invalid")
             if event["journal_id"] != LOCAL_EXECUTION_JOURNAL_ID:
                 raise AthanorError("execution journal identity is invalid")
+            if event["event_type"] not in LOCAL_EXECUTION_EVENT_TYPES:
+                raise AthanorError("execution journal Event type is invalid")
+            if event["event_id"] in event_ids:
+                raise AthanorError("execution journal has a duplicate Event identity")
             if event["sequence"] != len(events) + 1 or event["previous_event_sigil"] != previous:
                 raise AthanorError("execution journal chain is broken")
             if not events and event["event_type"] != "executor.epoch-started":
@@ -257,6 +272,7 @@ class ExecutionService:
             if event["event_sigil"] != expected:
                 raise AthanorError("execution journal Event Sigil is invalid")
             events.append(event)
+            event_ids.add(event["event_id"])
             previous = event["event_sigil"]
         return events
 
@@ -276,14 +292,7 @@ class ExecutionService:
 
     def _append_unlocked(self, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         events = self._events_unlocked()
-        if event_type not in {
-            "executor.epoch-started",
-            "job.submitted",
-            "job.queued",
-            "job.cancellation_requested",
-            "job.cancellation_observed",
-            "job.terminal",
-        }:
+        if event_type not in LOCAL_EXECUTION_EVENT_TYPES:
             raise AthanorError(f"unsupported execution Event type: {event_type}")
         sequence = len(events) + 1
         event = {
