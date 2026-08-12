@@ -64,6 +64,7 @@ English is the canonical source for all Benchwork documentation.
 - [Release process](RELEASE_PROCESS.md)
 - [M10 acceptance matrix](M10_ACCEPTANCE.md)
 - [Phase 2 acceptance matrix](PHASE2_ACCEPTANCE.md)
+- [Phase 3 contract gate](PHASE3_ACCEPTANCE.md)
 - [Benchwork Codex plugin](plugins/benchwork.md)
 - [Acceptance Exception Policy](plugins/acceptance-exception-policy.md)
 - [0.3.0rc1 migration guide](migrations/0.3.0rc1.md)

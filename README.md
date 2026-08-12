@@ -424,6 +424,7 @@ changes should preserve locale paths and follow
 - [Compatibility policy](docs/en/COMPATIBILITY.md)
 - [Release process](docs/en/RELEASE_PROCESS.md)
 - [M10 acceptance matrix](docs/en/M10_ACCEPTANCE.md)
+- [Phase 3 contract gate](docs/en/PHASE3_ACCEPTANCE.md)
 
 ## License
 
