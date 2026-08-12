@@ -367,6 +367,20 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert expired_state["jobs"][0]["fence_floor"] == 2
     assert expired_state["worker_sessions"][0]["capacity_in_use"] == 0
 
+    stop = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-STOP", "sequence": 10, "event_type": "attempt.stop_latched", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 3, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 5, "next_revision": 6}], "causation_event_id": expired["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"transition_cause": {"code": "LEASE_ACTIVE_EXPIRED", "trigger_kind": "PRIOR_EVENT", "trigger_event_id": expired["event_id"], "effective_sequence": expired["sequence"], "evidence_sigil": SIGIL}, "grace_due_at": "2026-08-06T00:00:08Z"}, "previous_event_sigil": expired["event_sigil"]})
+    stopped_state = replay_execution_supplied_state_suffix_v1(expired_state, [stop])
+    assert stopped_state["attempts"][0]["state"] == "STOPPING"
+    assert stopped_state["jobs"][0]["state"] == "ACTIVE"
+    assert stopped_state["jobs"][0]["revision"] == expired_state["jobs"][0]["revision"]
+    assert stopped_state["attempts"][0]["first_stop_or_fence_binding"]["event_type"] == "lease.expired"
+    assert any(item["deadline_kind"] == "CANCELLATION_GRACE" for item in stopped_state["deadlines"])
+
+    wrong_stop = deepcopy(stop)
+    wrong_stop["payload"]["transition_cause"]["code"] = "CANCEL_REQUESTED"
+    wrong_stop = build_execution_journal_event_v1({key: value for key, value in wrong_stop.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(expired_state, [wrong_stop])
+
     wrong_expiry = deepcopy(expired)
     wrong_expiry["payload"]["due_at"] = "2026-08-06T00:00:08Z"
     wrong_expiry = build_execution_journal_event_v1({key: value for key, value in wrong_expiry.items() if key != "event_sigil"})

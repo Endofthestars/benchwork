@@ -1440,6 +1440,54 @@ def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_stop_after_lease_expiry_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Latch the mandatory stop after an active Lease expiry tombstone.
+
+    The expiry is the authoritative trigger; this reducer deliberately does
+    not infer cancellation, policy, or deadline causes from a local State.
+    """
+    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1:
+        _fail("Lease-expiry stop reducer requires one Job, Attempt, and Lease")
+    job, attempt, lease = state["jobs"][0], state["attempts"][0], state["leases"][0]
+    executor, payload, cause = state["executor"], event["payload"], event["payload"]["transition_cause"]
+    terminal = lease["terminal_event_binding"]
+    # ``lease.expired`` already advances the Job in this effective-sequence
+    # due chain, so RFC-0012 requires EQUAL(JOB), not a second advance.
+    expected_revisions = [
+        {"entity_kind": "JOB", "entity_id": job["job_id"], "preceding_revision": job["revision"], "next_revision": job["revision"]},
+        {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
+    ]
+    first_stop = {"kind": "PRESENT", "event_id": terminal.get("terminal_event_id"),
+        "event_type": "lease.expired", "event_sigil": terminal.get("terminal_event_sigil"),
+        "effective_sequence": terminal.get("terminal_sequence")}
+    if (
+        event["event_type"] != "attempt.stop_latched" or lease["state"] != "EXPIRED"
+        or attempt["state"] not in {"LEASED", "STARTING", "RUNNING", "DRAINING"}
+        or job["state"] != "ACTIVE" or attempt["lease_id"] != lease["lease_id"]
+        or attempt["lease_terminal_binding"] is None or terminal.get("kind") != "PRESENT"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["causation_event_id"] != terminal["terminal_event_id"] or event["entity_revisions"] != expected_revisions
+        or cause != {"code": "LEASE_ACTIVE_EXPIRED", "trigger_kind": "PRIOR_EVENT",
+            "trigger_event_id": terminal["terminal_event_id"], "effective_sequence": terminal["terminal_sequence"],
+            "evidence_sigil": lease["tombstone_event_sigil"]}
+        or _parse_time(payload["grace_due_at"]) < _parse_time(event["recorded_at"])
+        or attempt["first_stop_or_fence_binding"] != {"kind": "NONE"}
+    ):
+        _fail("Attempt stop Event disagrees with expired Lease tombstone")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "STOPPING",
+        "grace_due_at": payload["grace_due_at"], "first_stop_or_fence_binding": first_stop,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["deadlines"] = sorted([*state["deadlines"], {
+        "deadline_kind": "CANCELLATION_GRACE", "due_at": payload["grace_due_at"],
+        "fixed_priority": _DEADLINE_PRIORITY["CANCELLATION_GRACE"], "entity_id": attempt["attempt_id"],
+        "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"],
+    }], key=lambda item: (_parse_time(item["due_at"]), item["fixed_priority"], _unsigned_ascii(item["entity_id"], "Deadline entity ID")))
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_lease_heartbeat_accepted_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Advance one active Lease's monotonic supervisor-observed heartbeat."""
     if len(state["leases"]) != 1:
@@ -1548,6 +1596,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_released_v1(current, event)
         elif event["event_type"] == "lease.expired":
             current = _reduce_lease_expired_v1(current, event)
+        elif event["event_type"] == "attempt.stop_latched":
+            current = _reduce_attempt_stop_after_lease_expiry_v1(current, event)
         elif event["event_type"] == "lease.heartbeat_accepted":
             current = _reduce_lease_heartbeat_accepted_v1(current, event)
         elif event["event_type"] == "lease.renewed":
