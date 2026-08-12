@@ -1086,6 +1086,20 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     validate_artifact_storage_state_v1(recovering)
 
+    duplicate_active_recovery = deepcopy(recovering)
+    duplicate_active_recovery["recoveries"].append({  # type: ignore[index]
+        "recovery_id": "RECOVERY-TWO", "origin_status": "INITIALIZING", "state": "ACTIVE",
+        "started_event_sigil": SIGIL, "epoch_ids": [1, 2],
+        "tail_recovery_evidence_record_sigils": [], "completed_event_sigil": None,
+        "resume_status": None,
+    })
+    duplicate_active_recovery["state_sigil"] = content_sigil({
+        key: member for key, member in duplicate_active_recovery.items()
+        if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="active Recovery disagrees"):
+        validate_artifact_storage_state_v1(duplicate_active_recovery)
+
     stale_recovery = deepcopy(recovering)
     stale_recovery["recoveries"][0]["epoch_ids"] = [1]  # type: ignore[index]
     stale_recovery["state_sigil"] = content_sigil({

@@ -754,16 +754,20 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             _fail("Artifact Storage State Recovery epochs are not strictly increasing")
         if recovery["state"] == "COMPLETED" and recovery["resume_status"] != recovery["origin_status"]:
             _fail("Artifact Storage State completed Recovery resume status disagrees with origin")
+    active_recoveries = [
+        recovery for recovery in recoveries.values() if recovery["state"] == "ACTIVE"
+    ]
     active_recovery = recoveries.get(state["active_recovery_id"])
     if state["store_status"] == "RECOVERING" and (
         active_recovery is None
         or active_recovery["state"] != "ACTIVE"
+        or len(active_recoveries) != 1
         or active_recovery["origin_status"] != state["recovery_origin_status"]
         or active_recovery["epoch_ids"][-1] != state["current_epoch"]
     ):
         _fail("Artifact Storage State active Recovery disagrees with Store projection")
     if state["store_status"] != "RECOVERING" and any(
-        recovery["state"] == "ACTIVE" for recovery in recoveries.values()
+        active_recoveries
     ):
         _fail("Artifact Storage State nonrecovering Store retains an active Recovery")
     for collection, schema_name in _STATE_WRAPPER_SCHEMAS.items():
