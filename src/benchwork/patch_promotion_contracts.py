@@ -177,6 +177,38 @@ def load_patch_promotion_checkpoint_v1(raw: str | bytes | bytearray) -> dict[str
     return checkpoint
 
 
+def validate_patch_promotion_mutation_intent_v1(intent: dict[str, Any]) -> None:
+    """Validate local write-ahead Intent consistency without a target mutation."""
+    validate_instance("patch-promotion-mutation-intent-1.0.json", intent)
+    _check_nfc(intent)
+    if intent["intent_sigil"] != content_sigil(_without(intent, "intent_sigil")):
+        _fail("Patch Promotion Mutation Intent self-Sigil mismatch")
+    plan = intent["topology_plan"]
+    if plan["root_identity"] != intent["root_identity"]:
+        _fail("Patch Promotion Mutation Intent topology root disagrees with root identity")
+    if plan["target_wide_generation"] != intent["target_content_generation"]:
+        _fail("Patch Promotion Mutation Intent topology generation disagrees with target")
+    operation_order = [path.encode("utf-8") for path in plan["operation_order"]]
+    if len(operation_order) != len(set(operation_order)):
+        _fail("Patch Promotion Mutation Intent topology operation order has duplicates")
+    ancestors = intent["ancestor_identities"]
+    ancestor_paths = [ancestor["path_bytes"].encode("utf-8") for ancestor in ancestors]
+    if ancestor_paths != sorted(ancestor_paths) or len(ancestor_paths) != len(set(ancestor_paths)):
+        _fail("Patch Promotion Mutation Intent ancestors must be sorted and unique")
+    method = intent["verification_method"]
+    if (
+        method["identity_profile"] != intent["postimage"]["identity_profile"]
+        or method["expected_tree"] != intent["postimage"]["tree"]
+    ):
+        _fail("Patch Promotion Mutation Intent verification method disagrees with postimage")
+
+
+def load_patch_promotion_mutation_intent_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    intent = _load_strict_object(raw, "Patch Promotion Mutation Intent")
+    validate_patch_promotion_mutation_intent_v1(intent)
+    return intent
+
+
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate one closed self-authenticating Promotion Journal Event."""
     validate_instance("patch-promotion-journal-event-1.0.json", event)
