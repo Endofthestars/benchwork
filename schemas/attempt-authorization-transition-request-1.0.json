@@ -24,6 +24,7 @@
     "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
     "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
     "transitionRequestId": {"type": "string", "pattern": "^AAT-[A-F0-9]{64}$", "not": {"pattern": "[\\r\\n]"}, "minLength": 68, "maxLength": 68},
+    "requestId": {"$ref": "#/$defs/transitionRequestId"},
     "authorityEvidence": {
       "type": "object",
       "additionalProperties": false,
@@ -38,4 +39,3 @@
     }
   }
 }
-

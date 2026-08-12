@@ -45,9 +45,15 @@
     "specification_sigil": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
   },
   "attempt_summaries": [],
-  "selected_attempt_binding": {"kind": "NONE"},
-  "result_binding": {"kind": "NONE"},
-  "completion_anchor_binding": {"kind": "NOT_ESTABLISHED"},
+  "selected_attempt_binding": {
+    "kind": "NONE"
+  },
+  "result_binding": {
+    "kind": "NONE"
+  },
+  "completion_anchor_binding": {
+    "kind": "NOT_ESTABLISHED"
+  },
   "first_stop_or_fence_binding": {
     "kind": "PRESENT",
     "event_id": "JE-PREFLIGHTREJECTED",
@@ -55,9 +61,16 @@
     "event_sigil": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
     "effective_sequence": 1
   },
-  "lease_terminal_binding": {"kind": "NONE"},
-  "authority_binding": {"kind": "NO_ATTEMPT"},
-  "final_fence_binding": {"kind": "NO_ATTEMPT", "final_fence_floor": 0},
+  "lease_terminal_binding": {
+    "kind": "NONE"
+  },
+  "authority_binding": {
+    "kind": "NO_ATTEMPT"
+  },
+  "final_fence_binding": {
+    "kind": "NO_ATTEMPT",
+    "final_fence_floor": 0
+  },
   "runtime_outcome": {
     "kind": "NO_ATTEMPT",
     "computation_status": "NOT_STARTED",
@@ -77,8 +90,12 @@
     "accounting_capture_event_id": null,
     "accounting_capture_event_sigil": null
   },
-  "terminal_source_binding": {"kind": "NOT_APPLICABLE"},
-  "terminal_source_observation": {"kind": "NO_ATTEMPT"},
+  "terminal_source_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "terminal_source_observation": {
+    "kind": "NO_ATTEMPT"
+  },
   "assurance_context_binding": {
     "kind": "NO_ATTEMPT",
     "requested_level": "SANCTUM-A1",
@@ -87,7 +104,9 @@
     "conformance_suite_id": "CS-DEFAULT",
     "conformance_suite_sigil": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
   },
-  "attempt_assurance_binding": {"kind": "NONE"},
+  "attempt_assurance_binding": {
+    "kind": "NONE"
+  },
   "job_assurance_binding": {
     "kind": "NOT_APPLICABLE",
     "evaluation_event_id": "JE-JOBASSURANCE",
@@ -96,37 +115,92 @@
     "reason": "NO_ATTEMPT_ALLOCATED",
     "evidence_set_sigil": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
   },
-  "control_evidence_set_binding": {"kind": "NOT_APPLICABLE"},
-  "quarantine_binding_set_binding": {"kind": "NOT_APPLICABLE"},
-  "terminalization_storage_manifest_binding": {"kind": "NOT_APPLICABLE"},
-  "output_root_protection": {"kind": "NOT_APPLICABLE"},
+  "control_evidence_set_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "quarantine_binding_set_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "terminalization_storage_manifest_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "output_root_protection": {
+    "kind": "NOT_APPLICABLE"
+  },
   "budget_binding": {
     "job_budget_ledger": {
-      "attempts": {"limit": 1, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "cpu_time_seconds": {"limit": 60, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "storage_bytes_written": {"limit": 1024, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "output_bytes": {"limit": 1024, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "log_bytes": {"limit": 1024, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "process_starts": {"limit": 1, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "network_egress_bytes": {"limit": 0, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
-      "network_requests": {"limit": 0, "reserved": 0, "consumed": 0, "exhaustion_status": "AVAILABLE"},
+      "attempts": {
+        "limit": 1,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "cpu_time_seconds": {
+        "limit": 60,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "storage_bytes_written": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "output_bytes": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "log_bytes": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "process_starts": {
+        "limit": 1,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "network_egress_bytes": {
+        "limit": 0,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "network_requests": {
+        "limit": 0,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
       "budget_ledger_sigil": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
     },
-    "selected_attempt_settlement": {"kind": "NONE"}
+    "selected_attempt_settlement": {
+      "kind": "NONE"
+    }
   },
   "outputs": [],
-  "storage_observation_binding": {"kind": "NOT_APPLICABLE"},
+  "storage_observation_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
   "logs": [],
   "resource_evidence": [],
   "acceptance_eligible": false,
-  "ineligibility_reasons": ["JOB_NOT_SUCCEEDED", "ATTEMPT_ABSENT"],
+  "ineligibility_reasons": [
+    "JOB_NOT_SUCCEEDED",
+    "ATTEMPT_ABSENT"
+  ],
   "derivation_profile": {
     "profile_id": "execution-job-outcome-v1",
     "profile_version": "1.0",
     "algorithm_sigil": "sha256:2bec4db5be71e36d9b5019b30e1d58a4990d2cc3ae6a8f0c124311195aca964f",
     "outcome_schema_sigil": "sha256:6dd9b5ca722395466355680484d763d6a2451f222d9d944235ef227bd93d41e0",
-    "imported_schema_set_sigil": "sha256:38a7aa7d542e7144923ae24e30664673608877dfd1c303d639a868a39ba70e9d"
+    "imported_schema_set_sigil": "sha256:2c93b97b69e92ebe1a5e5b7e515f4e12d3d23f56ef1faa871df22cfe17f8c449"
   },
   "terminal_recorded_at": "2026-08-06T00:00:03Z",
-  "outcome_sigil": "sha256:2208223db5d0bccdee5549ad4c4f4e33abf4ee65ca7893c50194cfcb5b298244"
+  "outcome_sigil": "sha256:ca217461fd5ff6ab12fdf9c13043c7fe903eab73e54c638c9c7e5dba986e9bc6"
 }
