@@ -792,6 +792,8 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
         expected_known = sorted(replica_ids_by_blob.get(blob["blob_sigil"], []))
         if blob["known_replica_ids"] != expected_known:
             _fail("Artifact Storage Blob known Replicas disagree with State Replica projections")
+        if not set(blob["eligible_replica_ids"]).issubset(expected_known):
+            _fail("Artifact Storage Blob eligible Replicas are not known Replica projections")
     for wrapper in state["transfer_attempts"]:
         attempt = wrapper["record"]
         if attempt["state"] != "COMMITTED":

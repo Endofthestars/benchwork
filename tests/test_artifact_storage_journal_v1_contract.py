@@ -1284,6 +1284,18 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="known Replicas disagree"):
         validate_artifact_storage_state_v1(missing_known)
 
+    unknown_eligible = deepcopy(linked_blob_state)
+    unknown_eligible["blobs"][0]["record"]["eligible_replica_ids"] = ["SR-UNKNOWN"]
+    unknown_eligible["blobs"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in unknown_eligible["blobs"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    unknown_eligible["state_sigil"] = content_sigil({
+        key: member for key, member in unknown_eligible.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="eligible Replicas are not known"):
+        validate_artifact_storage_state_v1(unknown_eligible)
+
     orphan_replica = deepcopy(replica_state)
     with pytest.raises(AthanorError, match="has no matching Blob projection"):
         validate_artifact_storage_state_v1(orphan_replica)
