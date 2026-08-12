@@ -1214,6 +1214,47 @@ def _reduce_result_accepted_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_result_rejected_v1(
+    state: dict[str, Any], event: dict[str, Any], evidence: dict[str, Any], receipt: dict[str, Any]
+) -> dict[str, Any]:
+    """Freeze the first non-matching Result disposition before draining."""
+    validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
+    if len(state["attempts"]) != 1:
+        _fail("Result rejection reducer requires one running Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    intake = attempt["result_intake"]
+    disposition = {"result_ingress_receipt_binding": intake["result_ingress_receipt_binding"],
+        "observation_evidence_subject_sigil": intake["observation_evidence_subject_sigil"],
+        "observation_evidence_id": evidence["observation_evidence_id"],
+        "observation_evidence_sigil": evidence["observation_evidence_sigil"]}
+    if (
+        event["event_type"] != "attempt.result_rejected" or attempt["state"] != "RUNNING"
+        or intake["kind"] != "RECEIVED" or attempt["result_binding"] != {"kind": "NONE"}
+        or evidence["assessment"]["kind"] == "MATCHED"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != intake["ingress_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or payload.get("disposition_kind") != "FIRST_DISPOSITION_REJECTION"
+        or payload.get("claimed_result_sigil") != intake["result_sigil"]
+        or payload.get("received_at") != intake["received_at"]
+        or payload.get("historical_disposition_event_id") is not None
+        or payload.get("observation_evidence_disposition_binding") != disposition
+        or not payload.get("reason_codes")
+    ):
+        _fail("Result rejection Event disagrees with received Result or Observation Evidence")
+    reduced = _advance_journal_binding_v1(state, event)
+    result = {"kind": "REJECTED", "message_sigil": payload["message_sigil"],
+        "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"],
+        "disposition_sequence": event["sequence"], "reason_codes": payload["reason_codes"]}
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
+        "result_intake": {**intake, "kind": "DISPOSED", "observation_evidence_id": evidence["observation_evidence_id"],
+            "observation_evidence_sigil": evidence["observation_evidence_sigil"], "outcome": "REJECTED",
+            "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"]},
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close a running Attempt after its immutable result disposition."""
     if len(state["attempts"]) != 1:
@@ -1228,8 +1269,10 @@ def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) ->
     elif result["kind"] == "NONE":
         anchor = {"kind": "NO_RESULT", "event_id": event["event_id"], "event_sigil": event["event_sigil"],
             "sequence": event["sequence"], "process_exit_observation_sigil": payload["process_exit_observation_sigil"]}
+    elif result["kind"] == "REJECTED":
+        anchor = {"kind": "NOT_ESTABLISHED"}
     else:
-        _fail("Attempt draining reducer does not yet replay rejected Result dispositions")
+        _fail("Attempt draining Event has an unknown Result disposition")
     if (
         event["event_type"] != "attempt.draining" or attempt["state"] != "RUNNING"
         or event["executor_instance_id"] != executor["executor_instance_id"]
@@ -1340,6 +1383,11 @@ def replay_execution_supplied_state_suffix_v1(
             intake = current["attempts"][0]["result_intake"]
             receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result acceptance")
             current = _reduce_result_accepted_v1(current, event, evidence, receipt)
+        elif event["event_type"] == "attempt.result_rejected":
+            evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"].get("observation_evidence_disposition_binding", {}).get("observation_evidence_id", ""), "observation_evidence_id", "Result rejection")
+            intake = current["attempts"][0]["result_intake"]
+            receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result rejection")
+            current = _reduce_result_rejected_v1(current, event, evidence, receipt)
         elif event["event_type"] == "attempt.draining":
             current = _reduce_attempt_draining_v1(current, event)
         elif event["event_type"] == "attempt.cleaning":
