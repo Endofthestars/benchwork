@@ -956,6 +956,247 @@ def validate_execution_worker_session_supplied_worker_v1(
         _fail("Execution Worker Session disagrees with supplied Worker")
 
 
+def _find_supplied_v1(
+    records: list[dict[str, Any]] | None, identifier: str, member: str, label: str
+) -> dict[str, Any]:
+    if records is None:
+        _fail(f"{label} replay requires supplied immutable records")
+    matches = [record for record in records if record.get(member) == identifier]
+    if len(matches) != 1:
+        _fail(f"{label} replay requires exactly one supplied immutable record")
+    return matches[0]
+
+
+def _reduce_worker_registered_v1(
+    state: dict[str, Any], event: dict[str, Any], worker: dict[str, Any]
+) -> dict[str, Any]:
+    validate_execution_worker_v1(worker)
+    executor = state["executor"]
+    if (
+        event["event_type"] != "worker.definition_registered"
+        or any(item["worker_id"] == worker["worker_id"] for item in state["workers"])
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or worker["definition_revision"] != 0
+        or event["payload"]["worker_binding_sigil"] != worker["worker_binding_sigil"]
+        or event["payload"]["definition_revision"] != 0
+        or not isinstance(event["payload"]["supersedes_worker_binding_sigil"], str)
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "WORKER",
+                "entity_id": worker["worker_id"],
+                "preceding_revision": None,
+                "next_revision": 0,
+            }
+        ]
+    ):
+        _fail("Worker registration Event disagrees with supplied Worker")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["workers"] = [
+        *state["workers"],
+        {
+            "worker_id": worker["worker_id"],
+            "revision": 0,
+            "state": "REGISTERED",
+            "worker_binding_sigil": worker["worker_binding_sigil"],
+            "definition_revision": 0,
+            "worker_session_ids": [],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        },
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_worker_enabled_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    if event["event_type"] != "worker.enabled" or len(state["workers"]) != 1:
+        _fail("Worker enable reducer requires one registered Worker")
+    worker = state["workers"][0]
+    executor = state["executor"]
+    if (
+        worker["state"] != "REGISTERED"
+        or event["payload"]["worker_binding_sigil"] != worker["worker_binding_sigil"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "WORKER",
+                "entity_id": worker["worker_id"],
+                "preceding_revision": worker["revision"],
+                "next_revision": worker["revision"] + 1,
+            }
+        ]
+    ):
+        _fail("Worker enable Event disagrees with registered Worker")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["workers"] = [
+        {
+            **worker,
+            "revision": worker["revision"] + 1,
+            "state": "ENABLED",
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_worker_session_registered_v1(
+    state: dict[str, Any], event: dict[str, Any], session: dict[str, Any]
+) -> dict[str, Any]:
+    worker = next(
+        (item for item in state["workers"] if item["worker_id"] == session["worker_id"]), None
+    )
+    executor = state["executor"]
+    if (
+        event["event_type"] != "worker_session.registered"
+        or worker is None
+        or worker["state"] != "ENABLED"
+        or any(
+            item["worker_session_id"] == session["worker_session_id"]
+            for item in state["worker_sessions"]
+        )
+        or session["worker_binding_sigil"] != worker["worker_binding_sigil"]
+        or session["executor_instance_id"] != executor["executor_instance_id"]
+        or session["executor_epoch"] != executor["executor_epoch"]
+        or event["payload"]["worker_session_binding_sigil"]
+        != session["worker_session_binding_sigil"]
+        or event["payload"]["worker_binding_sigil"] != session["worker_binding_sigil"]
+        or event["payload"]["backend_session_identity"] != session["backend_session_identity"]
+        or event["payload"]["control_channel_identity_sigil"]
+        != session["control_channel_identity_sigil"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "WORKER_SESSION",
+                "entity_id": session["worker_session_id"],
+                "preceding_revision": None,
+                "next_revision": 0,
+            }
+        ]
+    ):
+        _fail("Worker Session registration Event disagrees with supplied Session")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["workers"] = [
+        {
+            **worker,
+            "worker_session_ids": sorted(
+                [*worker["worker_session_ids"], session["worker_session_id"]],
+                key=lambda value: _unsigned_ascii(value, "Worker session ID"),
+            ),
+        }
+    ]
+    reduced["worker_sessions"] = [
+        {
+            "worker_session_id": session["worker_session_id"],
+            "revision": 0,
+            "state": "REGISTERED",
+            "worker_id": session["worker_id"],
+            "worker_binding_sigil": session["worker_binding_sigil"],
+            "worker_session_binding_sigil": session["worker_session_binding_sigil"],
+            "executor_epoch": session["executor_epoch"],
+            "worker_session_heartbeat_policy_id": None,
+            "worker_session_heartbeat_policy_sigil": None,
+            "capacity": None,
+            "capacity_in_use": 0,
+            "last_heartbeat_sequence": None,
+            "last_heartbeat_message_sigil": None,
+            "last_resource_sample_sigil": None,
+            "resource_counter_floors": {
+                "cpu_time_seconds": None,
+                "storage_bytes_written": None,
+                "network_egress_bytes": None,
+            },
+            "next_heartbeat_due_at": None,
+            "lease_ids": [],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_worker_session_ready_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    if event["event_type"] != "worker_session.ready" or len(state["worker_sessions"]) != 1:
+        _fail("Worker Session ready reducer requires one registered Session")
+    session = state["worker_sessions"][0]
+    executor = state["executor"]
+    payload = event["payload"]
+    if (
+        session["state"] != "REGISTERED"
+        or payload["capacity"] < 1
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["entity_revisions"]
+        != [
+            {
+                "entity_kind": "WORKER_SESSION",
+                "entity_id": session["worker_session_id"],
+                "preceding_revision": session["revision"],
+                "next_revision": session["revision"] + 1,
+            }
+        ]
+    ):
+        _fail("Worker Session ready Event disagrees with registered Session")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["worker_sessions"] = [
+        {
+            **session,
+            "revision": session["revision"] + 1,
+            "state": "READY",
+            "capacity": payload["capacity"],
+            "worker_session_heartbeat_policy_id": payload["worker_session_heartbeat_policy_id"],
+            "worker_session_heartbeat_policy_sigil": payload[
+                "worker_session_heartbeat_policy_sigil"
+            ],
+            "next_heartbeat_due_at": payload["initial_heartbeat_due_at"],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["deadlines"] = [
+        {
+            "deadline_kind": "HEARTBEAT_TIMEOUT",
+            "due_at": payload["initial_heartbeat_due_at"],
+            "fixed_priority": _DEADLINE_PRIORITY["HEARTBEAT_TIMEOUT"],
+            "entity_id": session["worker_session_id"],
+            "source_event_id": event["event_id"],
+            "source_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
 def _reserved_budget_ledger_v1(
     ledger: dict[str, Any], reservation: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1480,6 +1721,8 @@ def replay_execution_journal_prefix_v1(
     recovery_action_sets: list[dict[str, Any]] | None = None,
     supplied_jobs: list[dict[str, Any]] | None = None,
     supplied_attempts: list[dict[str, Any]] | None = None,
+    supplied_workers: list[dict[str, Any]] | None = None,
+    supplied_worker_sessions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
 
@@ -1497,6 +1740,10 @@ def replay_execution_journal_prefix_v1(
         if supplied_attempts is not None:
             _fail(
                 "Execution Journal replay cannot combine Recovery action sets and supplied Attempts"
+            )
+        if supplied_workers is not None or supplied_worker_sessions is not None:
+            _fail(
+                "Execution Journal replay cannot combine Recovery action sets and supplied Worker records"
             )
         empty_recovery_types = [
             "executor.epoch_started",
@@ -1523,6 +1770,35 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
+    worker_prefix = [event["event_type"] for event in events[1:]]
+    if worker_prefix and worker_prefix[0] == "worker.definition_registered":
+        if len(events) > 5:
+            _fail("Worker/Session replay supports only the installed registration prefix")
+        worker_id = events[1]["entity_revisions"][0]["entity_id"]
+        worker = _find_supplied_v1(supplied_workers, worker_id, "worker_id", "Worker registration")
+        state = _reduce_worker_registered_v1(initial_state, events[1], worker)
+        if len(events) >= 3:
+            state = _reduce_worker_enabled_v1(state, events[2])
+        if len(events) >= 4:
+            session_id = events[3]["entity_revisions"][0]["entity_id"]
+            session = _find_supplied_v1(
+                supplied_worker_sessions,
+                session_id,
+                "worker_session_id",
+                "Worker Session registration",
+            )
+            validate_execution_worker_session_supplied_worker_v1(session, worker)
+            state = _reduce_worker_session_registered_v1(state, events[3], session)
+        if len(events) == 5:
+            state = _reduce_worker_session_ready_v1(state, events[4])
+        if head is not None and (
+            head["journal_id"] != state["journal_binding"]["journal_id"]
+            or head["last_sequence"] != events[-1]["sequence"]
+            or head["last_event_id"] != events[-1]["event_id"]
+            or head["last_event_sigil"] != events[-1]["event_sigil"]
+        ):
+            _fail("Execution Journal Head disagrees with replay prefix")
+        return state
     if len(events) in {2, 3, 4, 5, 6} and events[1]["event_type"] == "job.submitted":
         if supplied_jobs is None or len(supplied_jobs) != 1:
             _fail("Job submission replay requires exactly one supplied Job")
@@ -1573,6 +1849,8 @@ def replay_execution_journal_prefix_v1(
         _fail("supplied Jobs are unsupported for this Execution Journal replay prefix")
     if supplied_attempts is not None:
         _fail("supplied Attempts are unsupported for this Execution Journal replay prefix")
+    if supplied_workers is not None or supplied_worker_sessions is not None:
+        _fail("supplied Worker records are unsupported for this Execution Journal replay prefix")
     if len(events) >= 2 and events[1]["event_type"] == "executor.clock_uncertain":
         state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
         if len(events) == 3 and events[2]["event_type"] == "recovery.started":
