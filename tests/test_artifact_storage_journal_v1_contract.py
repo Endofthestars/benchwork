@@ -39,6 +39,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_doctor_report_v1,
     validate_artifact_transfer_v1,
     validate_artifact_storage_state_supplied_transfers_v1,
+    validate_artifact_storage_state_supplied_transfer_attempts_v1,
     validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
@@ -445,6 +446,34 @@ def _transfer() -> dict[str, object]:
     return transfer
 
 
+def _transfer_attempt() -> dict[str, object]:
+    clock = {"utc": STAMP, "monotonic_anchor_id": "CLOCK", "monotonic_ticks": 0,
+             "monotonic_frequency_hz": 1, "uncertainty_micros": 0,
+             "observation_sigil": SIGIL}
+    attempt: dict[str, object] = {
+        "schema_version": "artifact-transfer-attempt/1.0", "transfer_attempt_id": "SA-ONE",
+        "transfer_id": "ST-ONE", "attempt_number": 1, "state": "PREPARED",
+        "staging_state": "NOT_CREATED",
+        "reservation": {"reservation_id": "RESERVATION", "claims": [],
+                        "capacity_plan": {"allowed_event_types": [], "max_event_frame_count": 1,
+                                          "max_control_record_count": 0,
+                                          "max_recovery_evidence_count": 0, "max_event_frame_bytes": 1,
+                                          "max_control_record_bytes": 1, "max_recovery_evidence_bytes": 1},
+                        "expires_at": None, "created_clock": clock,
+                        "remaining_micros_at_creation": None},
+        "staging_object": None, "commit_intent": None,
+        "residual_staging_cleanup": {"state": "NOT_REQUIRED", "staging_object": None,
+                                     "evidence_sigil": None, "reason": None},
+        "computed_blob_sigil": None, "computed_size_bytes": None, "selected_replica_id": None,
+        "quarantine_id": None, "terminal_reason": None, "started_at": STAMP, "terminal_at": None,
+        "revision": 1, "record_sigil": "",
+    }
+    attempt["record_sigil"] = content_sigil({
+        key: member for key, member in attempt.items() if key != "record_sigil"
+    })
+    return attempt
+
+
 def _recovery_marker() -> dict[str, object]:
     marker: dict[str, object] = {
         "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
@@ -807,6 +836,30 @@ def test_attempt_output_transfer_is_self_signed_and_matches_state_projection() -
     })
     with pytest.raises(AthanorError, match="ATTEMPT_OUTPUT local bindings"):
         validate_artifact_transfer_v1(invalid)
+
+
+def test_transfer_attempt_state_record_matches_its_supplied_request() -> None:
+    transfer = _transfer()
+    attempt = _transfer_attempt()
+    state = _state()
+    state["transfer_requests"] = [{
+        "transfer_id": transfer["transfer_id"], "request_record_sigil": transfer["record_sigil"],
+        "state": "ACTIVE", "attempt_ids": [attempt["transfer_attempt_id"]],
+        "selected_attempt_id": None, "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["transfer_attempts"] = [{"record": attempt, "last_event_sigil": SIGIL}]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_transfer_attempts_v1(state, transfers=[transfer])
+
+    unlisted = deepcopy(state)
+    unlisted["transfer_requests"][0]["attempt_ids"] = []  # type: ignore[index]
+    unlisted["state_sigil"] = content_sigil({
+        key: member for key, member in unlisted.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="absent from its State request"):
+        validate_artifact_storage_state_supplied_transfer_attempts_v1(unlisted, transfers=[transfer])
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

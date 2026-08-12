@@ -437,6 +437,30 @@ def validate_artifact_storage_state_supplied_transfers_v1(
         _fail("Artifact Storage supplied Transfers do not exactly match State projections")
 
 
+def validate_artifact_storage_state_supplied_transfer_attempts_v1(
+    state: dict[str, Any], *, transfers: list[dict[str, Any]],
+) -> None:
+    """Check supplied Transfer ownership for the Attempt records embedded in State.
+
+    This does not replay attempt transitions, reservations, or backend effects.
+    """
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, str] = {}
+    for transfer in transfers:
+        validate_artifact_transfer_v1(transfer)
+        if transfer["transfer_id"] in supplied:
+            _fail("Artifact Storage supplied Transfers have duplicate IDs")
+        supplied[transfer["transfer_id"]] = transfer["record_sigil"]
+    requests = {request["transfer_id"]: request for request in state["transfer_requests"]}
+    for wrapper in state["transfer_attempts"]:
+        attempt = wrapper["record"]
+        request = requests.get(attempt["transfer_id"])
+        if request is None or supplied.get(attempt["transfer_id"]) != request["request_record_sigil"]:
+            _fail("Artifact Storage Transfer Attempt lacks matching supplied Transfer request")
+        if attempt["transfer_attempt_id"] not in request["attempt_ids"]:
+            _fail("Artifact Storage Transfer Attempt is absent from its State request projection")
+
+
 def validate_artifact_storage_state_supplied_provenance_policies_v1(
     state: dict[str, Any], *, policies: list[dict[str, Any]],
 ) -> None:
