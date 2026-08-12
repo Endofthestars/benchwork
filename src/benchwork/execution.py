@@ -420,6 +420,11 @@ class ExecutionService:
             "payload": payload,
         }
         event["event_sigil"] = content_sigil(event)
+        # Validate the complete candidate prefix before publishing any bytes.
+        # This remains a local pre-conformance projection, not RFC replay
+        # authority, but it prevents an internal caller from durably writing a
+        # transition that the same runtime can never recover.
+        self._project([*events, event])
         with self._journal_path.open("a", encoding="utf-8") as handle:
             handle.write(canonical_json(event))
             handle.write("\n")

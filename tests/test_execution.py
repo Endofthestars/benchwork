@@ -438,6 +438,15 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "invalid JSON"):
             self.service.observe(job["job_id"])
 
+    def test_invalid_internal_transition_is_rejected_before_journal_publication(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        before = journal.read_bytes()
+        with self.assertRaisesRegex(AthanorError, "queue transition"):
+            self.service._append_unlocked("job.queued", {"job_id": "JB-" + "A" * 64})
+        self.assertEqual(journal.read_bytes(), before)
+        self.assertEqual(self.service.observe(job["job_id"])["job"], job)
+
     def test_host_neutral_runtime_returns_stable_execution_errors(self) -> None:
         Athanor(Path(self.directory.name)).initialize()
         tools = BenchworkTools(Path(self.directory.name))
