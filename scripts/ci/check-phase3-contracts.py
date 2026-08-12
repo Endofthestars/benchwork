@@ -26,6 +26,7 @@ TESTS = (
     "tests/test_patch_promotion_target_guard_v1_contract.py",
     "tests/test_patch_promotion_attempt_v1_contract.py",
     "tests/test_patch_promotion_outcome_v1_contract.py",
+    "tests/test_patch_promotion_recovery_record_v1_contract.py",
     "tests/mcp/test_runtime.py",
     "tests/mcp/test_tool_registry.py",
 )

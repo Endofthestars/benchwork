@@ -374,6 +374,76 @@ def validate_patch_promotion_outcome_supplied_attempt_v1(
         _fail("Patch Promotion Outcome disagrees with supplied Attempt")
 
 
+def derive_patch_promotion_recovery_record_id_v1(
+    recovery_attempt_id: str,
+    terminal_event_id: str,
+    terminal_event_sigil: str,
+) -> str:
+    """Derive immutable Recovery Record identity from its terminal Event."""
+    preimage = "benchwork:patch-promotion-recovery-record:v1\0" + canonical_json(
+        [recovery_attempt_id, terminal_event_id, terminal_event_sigil]
+    )
+    return "PRR-" + hashlib.sha256(preimage.encode("utf-8")).hexdigest()[:32]
+
+
+def validate_patch_promotion_recovery_attempt_v1(attempt: dict[str, Any]) -> None:
+    """Validate one immutable Recovery Attempt without replaying transitions."""
+    validate_instance("patch-promotion-recovery-attempt-1.0.json", attempt)
+    _check_nfc(attempt)
+    if attempt["recovery_attempt_sigil"] != content_sigil(
+        _without(attempt, "recovery_attempt_sigil")
+    ):
+        _fail("Patch Promotion Recovery Attempt self-Sigil mismatch")
+
+
+def validate_patch_promotion_recovery_record_v1(record: dict[str, Any]) -> None:
+    """Validate local terminal Recovery Record closure without Journal replay."""
+    validate_instance("patch-promotion-recovery-record-1.0.json", record)
+    _check_nfc(record)
+    if record["recovery_record_sigil"] != content_sigil(_without(record, "recovery_record_sigil")):
+        _fail("Patch Promotion Recovery Record self-Sigil mismatch")
+    expected_id = derive_patch_promotion_recovery_record_id_v1(
+        record["recovery_attempt_id"],
+        record["terminal_journal_event_id"],
+        record["terminal_journal_event_sigil"],
+    )
+    if record["recovery_record_id"] != expected_id:
+        _fail("Patch Promotion Recovery Record ID does not match its terminal Event")
+    sigils = [item["sigil"].encode("ascii") for item in record["verifier_evidence"]]
+    if sigils != sorted(sigils) or len(sigils) != len(set(sigils)):
+        _fail("Patch Promotion Recovery Record verifier evidence must be sorted and unique")
+
+
+def validate_patch_promotion_recovery_record_supplied_attempt_v1(
+    record: dict[str, Any],
+    attempt: dict[str, Any],
+) -> None:
+    """Bind Recovery Record fields to its exact supplied terminal Attempt."""
+    validate_patch_promotion_recovery_record_v1(record)
+    validate_patch_promotion_recovery_attempt_v1(attempt)
+    terminal_states = {
+        "BASE_RESTORED",
+        "POSTIMAGE_ACCEPTED",
+        "ABANDONED",
+        "STALE",
+        "FAILED",
+        "PARTIAL",
+        "CANCELLED",
+    }
+    if attempt["state"] not in terminal_states:
+        _fail("Patch Promotion Recovery Record requires a terminal supplied Attempt")
+    if (
+        record["recovery_attempt_id"] != attempt["recovery_attempt_id"]
+        or record["parent_attempt_id"] != attempt["parent_attempt_id"]
+        or record["parent_outcome_receipt"] != attempt["parent_outcome_receipt"]
+        or record["action"] != attempt["action"]
+        or record["checkpoint"] != attempt["checkpoint"]
+        or record["lineage"] != attempt["lineage"]
+        or record["status"] != attempt["state"]
+    ):
+        _fail("Patch Promotion Recovery Record disagrees with supplied Attempt")
+
+
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate one closed self-authenticating Promotion Journal Event."""
     validate_instance("patch-promotion-journal-event-1.0.json", event)
