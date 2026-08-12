@@ -1188,6 +1188,53 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="lacks its selected Replica"):
         validate_artifact_storage_state_v1(missing_selected)
 
+    committing_state = deepcopy(state)
+    committing_attempt = _transfer_attempt()
+    committing_object = {
+        "backend_id": "BACKEND", "object_identity_sigil": SIGIL,
+        "locator_sigil": SIGIL, "generation": "GENERATION", "size_bytes": 0,
+        "blob_sigil": None,
+    }
+    committing_attempt.update({
+        "state": "COMMITTING", "staging_state": "PRESENT", "staging_object": committing_object,
+        "commit_intent": {
+            "intent_id": "INTENT", "provisional_replica_id": "SR-ONE",
+            "staging_object": committing_object, "target_object": committing_object,
+            "computed_blob": {"blob_sigil": SIGIL, "size_bytes": 0},
+            "execution_fence": None, "reservation": committing_attempt["reservation"],
+            "recorded_clock": committing_attempt["reservation"]["created_clock"],
+        },
+    })
+    committing_attempt["record_sigil"] = content_sigil({
+        key: member for key, member in committing_attempt.items() if key != "record_sigil"
+    })
+    committing_state["transfer_attempts"] = [{"record": committing_attempt, "last_event_sigil": SIGIL}]
+    committing_state["transfer_requests"] = [{
+        "transfer_id": committing_attempt["transfer_id"], "request_record_sigil": SIGIL,
+        "state": "ACTIVE", "attempt_ids": [committing_attempt["transfer_attempt_id"]],
+        "selected_attempt_id": None, "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    committing_state["open_intents"] = [{
+        "intent_kind": "TRANSFER_COMMIT", "intent_id": "INTENT",
+        "owner_id": committing_attempt["transfer_attempt_id"],
+        "source_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                         "event_sigil": SIGIL}, "intent_sigil": SIGIL, "revision": 1,
+        "last_event_sigil": SIGIL, "authorization_expires_at": None,
+        "staging_object": committing_object, "target_object": committing_object,
+    }]
+    committing_state["state_sigil"] = content_sigil({
+        key: member for key, member in committing_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(committing_state)
+
+    missing_intent = deepcopy(committing_state)
+    missing_intent["open_intents"] = []
+    missing_intent["state_sigil"] = content_sigil({
+        key: member for key, member in missing_intent.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="commit Intent disagrees with record state"):
+        validate_artifact_storage_state_v1(missing_intent)
+
     mismatched_selected = deepcopy(committed_state)
     mismatched_selected["replicas"][0]["record"]["object"]["generation"] = "OTHER"
     mismatched_selected["replicas"][0]["record"]["record_sigil"] = content_sigil({

@@ -841,6 +841,32 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
     if len(set(open_intent_ids)) != len(open_intent_ids):
         _fail("Artifact Storage State open-intent IDs must be globally unique")
+    intents_by_owner: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for intent in state["open_intents"]:
+        intents_by_owner.setdefault((intent["intent_kind"], intent["owner_id"]), []).append(intent)
+    for collection, intent_kind, id_member, staging_member in (
+        ("transfer_attempts", "TRANSFER_COMMIT", "transfer_attempt_id", "staging_object"),
+        ("materializations", "MATERIALIZATION_COMMIT", "materialization_id", "destination_staging_object"),
+    ):
+        for wrapper in state[collection]:
+            record = wrapper["record"]
+            intents = intents_by_owner.get((intent_kind, record[id_member]), [])
+            committing = record["state"] == "COMMITTING"
+            if (committing and len(intents) != 1) or (not committing and intents):
+                _fail(f"Artifact Storage State {collection} commit Intent disagrees with record state")
+            if not committing:
+                continue
+            intent = intents[0]
+            commit_intent = record["commit_intent"]
+            if commit_intent is None:
+                _fail(f"Artifact Storage State {collection} committing record lacks a commit Intent")
+            if (
+                intent["intent_id"] != commit_intent["intent_id"]
+                or intent["staging_object"] != record[staging_member]
+                or intent["staging_object"] != commit_intent["staging_object"]
+                or intent["target_object"] != commit_intent["target_object"]
+            ):
+                _fail(f"Artifact Storage State {collection} commit Intent disagrees with record")
     availability_counts = {
         "AVAILABLE": 0, "DEGRADED": 0, "UNAVAILABLE": 0, "INCIDENT": 0,
     }
