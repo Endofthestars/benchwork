@@ -512,6 +512,14 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
         replay_execution_journal_prefix_v1([])
     with pytest.raises(Exception, match="nonobject Event"):
         replay_execution_journal_prefix_v1([event, None])  # type: ignore[list-item]
+
+    wrong_first_kind = deepcopy(event)
+    wrong_first_kind["event_type"] = "executor.clock_uncertain"
+    wrong_first_kind["event_sigil"] = content_sigil(
+        {key: member for key, member in wrong_first_kind.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="must begin with executor epoch start"):
+        replay_execution_journal_prefix_v1([wrong_first_kind])
     with pytest.raises(Exception, match="only the initial one-Event prefix"):
         replay_execution_initial_prefix_v1([event, event])
     with pytest.raises(Exception, match="sequence gap"):
