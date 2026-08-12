@@ -1228,6 +1228,74 @@ def _reduce_artifact_storage_reference_set_registered_v1(
     return reduced
 
 
+def _reduce_artifact_storage_provenance_policy_registered_v1(
+    state: dict[str, Any], event: dict[str, Any], policy: dict[str, Any],
+) -> dict[str, Any]:
+    """Project one immutable Provenance Policy after exact registration.
+
+    This closes only the Event-to-record and State-projection relations.  In
+    particular, it does not resolve the policy's authorization or use the
+    policy to admit a Transfer.
+    """
+    validate_artifact_provenance_policy_v1(policy)
+    payload = event["payload"]
+    if state["store_status"] != "ACTIVE":
+        _fail("Artifact Storage Provenance Policy registration requires an active Store")
+    if policy["scope"]["project_id"] != state["project_id"]:
+        _fail("Artifact Storage Provenance Policy scope disagrees with State project")
+    if any(
+        item["provenance_policy_id"] == policy["provenance_policy_id"]
+        for item in state["provenance_policies"]
+    ):
+        _fail("Artifact Storage Provenance Policy registration duplicates a State projection")
+    expected_revisions = [{
+        "entity_type": "PROVENANCE_POLICY",
+        "entity_id": policy["provenance_policy_id"],
+        "previous_revision": None,
+        "next_revision": 1,
+    }]
+    expected_ref = {
+        "schema_version": "artifact-provenance-policy/1.0",
+        "record_id": policy["provenance_policy_id"],
+        "record_sigil": policy["record_sigil"],
+    }
+    if (
+        event["event_type"] != "provenance.policy_registered"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["quota_effects"]
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] is not None
+        or event["recorded_at"] != policy["registered_at"]
+        or payload["provenance_policy"] != expected_ref
+    ):
+        _fail("Artifact Storage Provenance Policy registration Event disagrees with record")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "provenance_policies": sorted(
+            [
+                *state["provenance_policies"],
+                {
+                    "provenance_policy_id": policy["provenance_policy_id"],
+                    "record_sigil": policy["record_sigil"],
+                    "revision": 1,
+                    "last_event_sigil": event["event_sigil"],
+                },
+            ],
+            key=lambda item: item["provenance_policy_id"].encode("ascii"),
+        ),
+        "applied_event_count": event["sequence"],
+        "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def _quota_counter_updates_for_claims_v1(
     counters: list[dict[str, Any]], claims: list[dict[str, Any]], *, reserve: bool,
 ) -> list[dict[str, Any]]:
@@ -1666,6 +1734,7 @@ def replay_artifact_storage_journal_prefix_v1(
     supplied_reference_sets: list[dict[str, Any]] | None = None,
     supplied_reference_intents: list[dict[str, Any]] | None = None,
     supplied_chronicle_events: list[dict[str, Any]] | None = None,
+    supplied_provenance_policies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay installed Storage Journal reducers, failing closed for all others.
 
@@ -1692,6 +1761,20 @@ def replay_artifact_storage_journal_prefix_v1(
             state = _reduce_artifact_storage_message_rejected_v1(state, event)
         elif event["event_type"] == "legacy_v1.protection_failed":
             state = _reduce_artifact_storage_legacy_protection_failed_v1(state, event)
+        elif event["event_type"] == "provenance.policy_registered":
+            if supplied_provenance_policies is None:
+                _fail("Provenance Policy registration replay requires its supplied record")
+            matches = [
+                record
+                for record in supplied_provenance_policies
+                if record.get("provenance_policy_id")
+                == event["payload"]["provenance_policy"]["record_id"]
+            ]
+            if len(matches) != 1:
+                _fail("Provenance Policy registration replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_provenance_policy_registered_v1(
+                state, event, matches[0]
+            )
         elif event["event_type"] == "reference_set.registered":
             if supplied_reference_sets is None:
                 _fail("Reference Set registration replay requires its supplied record")
@@ -1739,6 +1822,10 @@ def replay_artifact_storage_journal_prefix_v1(
     if head is not None:
         validate_artifact_storage_journal_head_supplied_event_v1(
             head, events[-1], state["state_sigil"]
+        )
+    if supplied_provenance_policies is not None:
+        validate_artifact_storage_state_supplied_provenance_policies_v1(
+            state, policies=supplied_provenance_policies
         )
     return state
 
