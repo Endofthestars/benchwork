@@ -1067,7 +1067,8 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     replica_state["state_sigil"] = content_sigil({
         key: member for key, member in replica_state.items() if key != "state_sigil"
     })
-    validate_artifact_storage_state_v1(replica_state)
+    with pytest.raises(AthanorError, match="has no matching Blob projection"):
+        validate_artifact_storage_state_v1(replica_state)
 
     wrong_replica = deepcopy(replica_state)
     wrong_replica["replicas"][0]["record"]["object"]["size_bytes"] = 1
@@ -1116,6 +1117,21 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
         key: member for key, member in selected_replica.items() if key != "record_sigil"
     })
     committed_state["replicas"] = [{"record": selected_replica, "last_event_sigil": SIGIL}]
+    committed_blob = {
+        "schema_version": "artifact-blob/1.0", "blob_sigil": SIGIL, "size_bytes": 0,
+        "first_verified_at": None, "availability": "AVAILABLE",
+        "availability_as_of": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                              "event_sigil": SIGIL}, "availability_basis_sigil": SIGIL,
+        "effective_policy_set_sigil": SIGIL, "next_verification_due_at": None,
+        "known_replica_ids": ["SR-ONE"], "eligible_replica_ids": [],
+        "integrity_event_sigils": [], "media_type_observations": [],
+        "filename_observations": [], "revision": 1, "record_sigil": "",
+    }
+    committed_blob["record_sigil"] = content_sigil({
+        key: member for key, member in committed_blob.items() if key != "record_sigil"
+    })
+    committed_state["blobs"] = [{"record": committed_blob, "last_event_sigil": SIGIL}]
+    committed_state["availability_counters"]["available_blobs"] = 1
     committed_state["transfer_attempts"] = [{
         "record": committed_attempt, "last_event_sigil": SIGIL,
     }]
@@ -1126,6 +1142,11 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
 
     missing_selected = deepcopy(committed_state)
     missing_selected["replicas"] = []
+    missing_selected["blobs"][0]["record"]["known_replica_ids"] = []
+    missing_selected["blobs"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in missing_selected["blobs"][0]["record"].items()
+        if key != "record_sigil"
+    })
     missing_selected["state_sigil"] = content_sigil({
         key: member for key, member in missing_selected.items() if key != "state_sigil"
     })
@@ -1145,6 +1166,21 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
         validate_artifact_storage_state_v1(mismatched_selected)
 
     materialization_state = deepcopy(replica_state)
+    source_blob = {
+        "schema_version": "artifact-blob/1.0", "blob_sigil": SIGIL, "size_bytes": 0,
+        "first_verified_at": None, "availability": "AVAILABLE",
+        "availability_as_of": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                              "event_sigil": SIGIL}, "availability_basis_sigil": SIGIL,
+        "effective_policy_set_sigil": SIGIL, "next_verification_due_at": None,
+        "known_replica_ids": ["SR-ONE"], "eligible_replica_ids": [],
+        "integrity_event_sigils": [], "media_type_observations": [],
+        "filename_observations": [], "revision": 1, "record_sigil": "",
+    }
+    source_blob["record_sigil"] = content_sigil({
+        key: member for key, member in source_blob.items() if key != "record_sigil"
+    })
+    materialization_state["blobs"] = [{"record": source_blob, "last_event_sigil": SIGIL}]
+    materialization_state["availability_counters"]["available_blobs"] = 1
     materialization_state["materializations"] = [{
         "record": _materialization(), "last_event_sigil": SIGIL,
     }]
@@ -1155,6 +1191,11 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
 
     missing_source = deepcopy(materialization_state)
     missing_source["replicas"] = []
+    missing_source["blobs"][0]["record"]["known_replica_ids"] = []
+    missing_source["blobs"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in missing_source["blobs"][0]["record"].items()
+        if key != "record_sigil"
+    })
     missing_source["state_sigil"] = content_sigil({
         key: member for key, member in missing_source.items() if key != "state_sigil"
     })
@@ -1226,6 +1267,10 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="known Replicas disagree"):
         validate_artifact_storage_state_v1(missing_known)
+
+    orphan_replica = deepcopy(replica_state)
+    with pytest.raises(AthanorError, match="has no matching Blob projection"):
+        validate_artifact_storage_state_v1(orphan_replica)
 
     bad_counters = deepcopy(blob_state)
     bad_counters["availability_counters"]["available_blobs"] = 0

@@ -778,6 +778,9 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     replica_ids_by_blob: dict[str, list[str]] = {}
     for replica in replicas.values():
         replica_ids_by_blob.setdefault(replica["blob_sigil"], []).append(replica["replica_id"])
+    blob_sigils = {wrapper["record"]["blob_sigil"] for wrapper in state["blobs"]}
+    if any(blob_sigil not in blob_sigils for blob_sigil in replica_ids_by_blob):
+        _fail("Artifact Storage State Replica has no matching Blob projection")
     for wrapper in state["blobs"]:
         blob = wrapper["record"]
         expected_known = sorted(replica_ids_by_blob.get(blob["blob_sigil"], []))
