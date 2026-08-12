@@ -320,6 +320,112 @@ def test_storage_replay_projects_exact_provenance_policy_record() -> None:
         )
 
 
+def test_storage_replay_projects_only_exact_active_project_retention_policy() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{
+        "entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1,
+        "next_revision": 2,
+    }]
+    activation["payload"] = {
+        "legacy_protection_ids": [], "activation_evidence_sigil": SIGIL,
+        "clock": initial["payload"]["clock"],
+    }
+    activation["quota_effects"] = []
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    policy = _retention_policy()
+    registered = _next_event(activation)
+    registered["event_id"] = "SE-THREE"
+    registered["sequence"] = 3
+    policy["registered_at"] = registered["recorded_at"]
+    policy["record_sigil"] = content_sigil({
+        key: value for key, value in policy.items() if key != "record_sigil"
+    })
+    registered["event_type"] = "retention.policy_registered"
+    registered["entity_revisions"] = [{
+        "entity_type": "RETENTION_POLICY", "entity_id": policy["policy_id"],
+        "previous_revision": None, "next_revision": 1,
+    }]
+    registered["payload"] = {"policy": {
+        "schema_version": policy["schema_version"],
+        "record_id": policy["policy_id"],
+        "record_sigil": policy["record_sigil"],
+    }}
+    registered["quota_effects"] = []
+    registered["event_sigil"] = content_sigil({
+        key: value for key, value in registered.items() if key != "event_sigil"
+    })
+    state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered], supplied_retention_policies=[policy]
+    )
+    assert state["retention_policies"] == [{
+        "policy_id": policy["policy_id"], "record_sigil": policy["record_sigil"],
+        "revision": 1, "last_event_sigil": registered["event_sigil"],
+    }]
+
+    for scope in (
+        {"kind": "PROJECT", "project_id": "OTHER_PROJECT"},
+        {"kind": "PROGRAM", "program_id": "PROGRAM"},
+        {"kind": "BLOB", "blob_sigil": SIGIL},
+        {"kind": "REFERENCE_SET", "reference_set_id": "RS-ONE", "reference_set_sigil": SIGIL},
+    ):
+        wrong_scope = deepcopy(policy)
+        wrong_scope["scope"] = scope
+        wrong_scope["record_sigil"] = content_sigil({
+            key: value for key, value in wrong_scope.items() if key != "record_sigil"
+        })
+        wrong_event = deepcopy(registered)
+        wrong_event["payload"]["policy"]["record_sigil"] = wrong_scope["record_sigil"]
+        wrong_event["event_sigil"] = content_sigil({
+            key: value for key, value in wrong_event.items() if key != "event_sigil"
+        })
+        with pytest.raises(AthanorError, match="scope is not locally closed"):
+            replay_artifact_storage_journal_prefix_v1(
+                [initial, activation, wrong_event], supplied_retention_policies=[wrong_scope]
+            )
+
+    initializing_registration = deepcopy(registered)
+    initializing_registration["event_id"] = "SE-TWO"
+    initializing_registration["sequence"] = 2
+    initializing_registration["previous_event_sigil"] = initial["event_sigil"]
+    policy_in_initializing = deepcopy(policy)
+    policy_in_initializing["registered_at"] = initializing_registration["recorded_at"]
+    policy_in_initializing["record_sigil"] = content_sigil({
+        key: value for key, value in policy_in_initializing.items() if key != "record_sigil"
+    })
+    initializing_registration["payload"]["policy"]["record_sigil"] = policy_in_initializing["record_sigil"]
+    initializing_registration["event_sigil"] = content_sigil({
+        key: value for key, value in initializing_registration.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="requires an active Store"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, initializing_registration], supplied_retention_policies=[policy_in_initializing]
+        )
+
+    wrong_ref = deepcopy(registered)
+    wrong_ref["payload"]["policy"]["record_id"] = "SP-OTHER"
+    wrong_ref["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_ref.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="requires exactly one supplied record"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, wrong_ref], supplied_retention_policies=[policy]
+        )
+
+    extra = deepcopy(policy)
+    extra["policy_id"] = "SP-EXTRA"
+    extra["record_sigil"] = content_sigil({
+        key: value for key, value in extra.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="do not exactly match State projections"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered], supplied_retention_policies=[policy, extra]
+        )
+
+
 def test_storage_replay_retains_failed_legacy_protection_and_blocks_activation() -> None:
     initial = _initial_replay_event()
     failed = _next_event(initial)

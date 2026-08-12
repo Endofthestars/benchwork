@@ -1296,6 +1296,77 @@ def _reduce_artifact_storage_provenance_policy_registered_v1(
     return reduced
 
 
+def _reduce_artifact_storage_retention_policy_registered_v1(
+    state: dict[str, Any], event: dict[str, Any], policy: dict[str, Any],
+) -> dict[str, Any]:
+    """Project an exact active-Store PROJECT retention-policy registration.
+
+    This is deliberately narrower than policy applicability: it accepts only a
+    PROJECT scope which is locally closed against this Storage State.  BLOB and
+    Reference Set scopes need their exact projected objects, PROGRAM needs an
+    external Program-to-Project resolver, and INITIALIZING requires the two
+    RFC-fixed policies.  Those branches remain unavailable rather than
+    treating a self-Sigiled policy as authorization.
+    """
+    validate_artifact_retention_policy_v1(policy)
+    payload = event["payload"]
+    if state["store_status"] != "ACTIVE":
+        _fail("Artifact Storage Retention Policy registration requires an active Store")
+    if (
+        policy["scope"].get("kind") != "PROJECT"
+        or policy["scope"].get("project_id") != state["project_id"]
+    ):
+        _fail("Artifact Storage Retention Policy scope is not locally closed to State project")
+    if any(item["policy_id"] == policy["policy_id"] for item in state["retention_policies"]):
+        _fail("Artifact Storage Retention Policy registration duplicates a State projection")
+    expected_revisions = [{
+        "entity_type": "RETENTION_POLICY",
+        "entity_id": policy["policy_id"],
+        "previous_revision": None,
+        "next_revision": 1,
+    }]
+    expected_ref = {
+        "schema_version": "artifact-retention-policy/1.0",
+        "record_id": policy["policy_id"],
+        "record_sigil": policy["record_sigil"],
+    }
+    if (
+        event["event_type"] != "retention.policy_registered"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["quota_effects"]
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] is not None
+        or event["recorded_at"] != policy["registered_at"]
+        or payload["policy"] != expected_ref
+    ):
+        _fail("Artifact Storage Retention Policy registration Event disagrees with record")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "retention_policies": sorted(
+            [
+                *state["retention_policies"],
+                {
+                    "policy_id": policy["policy_id"],
+                    "record_sigil": policy["record_sigil"],
+                    "revision": 1,
+                    "last_event_sigil": event["event_sigil"],
+                },
+            ],
+            key=lambda item: item["policy_id"].encode("ascii"),
+        ),
+        "applied_event_count": event["sequence"],
+        "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def _quota_counter_updates_for_claims_v1(
     counters: list[dict[str, Any]], claims: list[dict[str, Any]], *, reserve: bool,
 ) -> list[dict[str, Any]]:
@@ -1735,6 +1806,7 @@ def replay_artifact_storage_journal_prefix_v1(
     supplied_reference_intents: list[dict[str, Any]] | None = None,
     supplied_chronicle_events: list[dict[str, Any]] | None = None,
     supplied_provenance_policies: list[dict[str, Any]] | None = None,
+    supplied_retention_policies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay installed Storage Journal reducers, failing closed for all others.
 
@@ -1773,6 +1845,19 @@ def replay_artifact_storage_journal_prefix_v1(
             if len(matches) != 1:
                 _fail("Provenance Policy registration replay requires exactly one supplied record")
             state = _reduce_artifact_storage_provenance_policy_registered_v1(
+                state, event, matches[0]
+            )
+        elif event["event_type"] == "retention.policy_registered":
+            if supplied_retention_policies is None:
+                _fail("Retention Policy registration replay requires its supplied record")
+            matches = [
+                record
+                for record in supplied_retention_policies
+                if record.get("policy_id") == event["payload"]["policy"]["record_id"]
+            ]
+            if len(matches) != 1:
+                _fail("Retention Policy registration replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_retention_policy_registered_v1(
                 state, event, matches[0]
             )
         elif event["event_type"] == "reference_set.registered":
@@ -1826,6 +1911,10 @@ def replay_artifact_storage_journal_prefix_v1(
     if supplied_provenance_policies is not None:
         validate_artifact_storage_state_supplied_provenance_policies_v1(
             state, policies=supplied_provenance_policies
+        )
+    if supplied_retention_policies is not None:
+        validate_artifact_storage_state_supplied_retention_policies_v1(
+            state, policies=supplied_retention_policies
         )
     return state
 
