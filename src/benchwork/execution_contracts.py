@@ -2089,6 +2089,30 @@ def _reduce_executor_clock_restored_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_recovery_action_set_rebased_v1(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    prior_action_set: dict[str, Any],
+    replacement_action_set: dict[str, Any],
+) -> dict[str, Any]:
+    """Project a supplied Recovery rebase without deriving replacement work."""
+    validate_execution_recovery_rebase_supplied_action_sets_v1(
+        state, event, prior_action_set, replacement_action_set
+    )
+    recovery_id = state["executor"]["active_recovery_id"]
+    assert recovery_id is not None
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == recovery_id)
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["recoveries"] = [{
+        **recovery,
+        "revision": recovery["revision"] + 1,
+        "current_action_set_sigil": replacement_action_set["action_set_sigil"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -2202,6 +2226,22 @@ def replay_execution_supplied_state_suffix_v1(
                 "Clock restoration",
             )
             current = _reduce_executor_clock_restored_v1(current, event, action_set)
+        elif event["event_type"] == "recovery.action_set_rebased":
+            prior_action_set = _find_supplied_v1(
+                supplied_recovery_action_sets,
+                event["payload"]["prior_action_set_sigil"],
+                "action_set_sigil",
+                "Recovery rebase prior action set",
+            )
+            replacement_action_set = _find_supplied_v1(
+                supplied_recovery_action_sets,
+                event["payload"]["replacement_action_set_sigil"],
+                "action_set_sigil",
+                "Recovery rebase replacement action set",
+            )
+            current = _reduce_recovery_action_set_rebased_v1(
+                current, event, prior_action_set, replacement_action_set
+            )
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

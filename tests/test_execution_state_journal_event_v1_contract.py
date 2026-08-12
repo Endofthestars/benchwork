@@ -1120,6 +1120,18 @@ def test_recovery_rebase_binds_state_and_sealed_action_sets() -> None:
             state, event, prior_set, wrong_replacement,
         )
 
+    reduced = replay_execution_supplied_state_suffix_v1(
+        state, [event], supplied_recovery_action_sets=[prior_set, replacement_set],
+    )
+    assert reduced["recoveries"][0]["revision"] == 1
+    assert reduced["recoveries"][0]["current_action_set_sigil"] == replacement_set["action_set_sigil"]
+    assert reduced["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
+
+    with pytest.raises(Exception, match="requires exactly one"):
+        replay_execution_supplied_state_suffix_v1(
+            state, [event], supplied_recovery_action_sets=[prior_set],
+        )
+
 
 def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
     action_set = _recovery_action_set()
