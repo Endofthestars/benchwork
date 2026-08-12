@@ -1379,6 +1379,29 @@ def _reduce_worker_session_message_rejected_v1(state: dict[str, Any], event: dic
     return build_execution_state_v1(reduced)
 
 
+def _reduce_job_message_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Retain a rejected cancellation message without changing Job lifecycle."""
+    matches = [job for job in state["jobs"] if job["job_id"] == event["entity_revisions"][0]["entity_id"]]
+    if len(matches) != 1:
+        _fail("Job message rejection Event has no unique Job projection")
+    job, payload, executor = matches[0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "job.message_rejected" or payload["message_kind"] != "CANCEL_REQUEST"
+        or not payload["reason_codes"] or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"] or event["causation_event_id"] != job["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "JOB", "entity_id": job["job_id"], "preceding_revision": job["revision"], "next_revision": job["revision"] + 1}]
+    ):
+        _fail("Job message rejection Event disagrees with Job projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["jobs"] = [
+        {**candidate, "revision": candidate["revision"] + 1,
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["job_id"] == job["job_id"] else candidate
+        for candidate in state["jobs"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record a duplicate chunk observation without appending bytes twice."""
     payload, executor = event["payload"], state["executor"]
@@ -1926,6 +1949,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_worker_session_heartbeat_accepted_v1(current, event)
         elif event["event_type"] == "worker_session.message_rejected":
             current = _reduce_worker_session_message_rejected_v1(current, event)
+        elif event["event_type"] == "job.message_rejected":
+            current = _reduce_job_message_rejected_v1(current, event)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
         elif event["event_type"] == "attempt.starting":

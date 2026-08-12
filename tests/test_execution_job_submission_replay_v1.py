@@ -340,6 +340,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     )
     assert ready_state["attempts"][0]["state"] == "READY"
 
+    rejected_cancel = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-JOBREJECT", "sequence": 7, "event_type": "job.message_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:05Z", "observed_at": None, "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}], "causation_event_id": allocated["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"message_kind": "CANCEL_REQUEST", "message_sigil": SIGIL, "reason_codes": ["CONTROL_CHANNEL_LOST"], "historical_disposition_event_id": None}, "previous_event_sigil": preflight_passed["event_sigil"]})
+    rejected_cancel_state = replay_execution_supplied_state_suffix_v1(ready_state, [rejected_cancel])
+    assert rejected_cancel_state["jobs"][0]["state"] == "ACTIVE"
+    assert rejected_cancel_state["jobs"][0]["revision"] == 3
+
+    wrong_cancel = deepcopy(rejected_cancel)
+    wrong_cancel["payload"]["message_kind"] = "LEASE_RELEASE"
+    wrong_cancel = build_execution_journal_event_v1({key: value for key, value in wrong_cancel.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(ready_state, [wrong_cancel])
+
     combined = deepcopy(ready_state)
     session_id = "WS-00000000000000000000000000"
     combined["workers"] = [{"worker_id": "WK-ONE", "revision": 1, "state": "ENABLED", "worker_binding_sigil": SIGIL, "definition_revision": 0, "worker_session_ids": [session_id], "last_event_id": "JE-SIX", "last_event_sigil": preflight_passed["event_sigil"]}]
