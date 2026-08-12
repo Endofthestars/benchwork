@@ -272,14 +272,14 @@ def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
 
 
 def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -> None:
-    cursor = {
+    cursor: dict[str, Any] = {
         "job_id": JOB_ID,
         "last_returned_sequence": 2,
         "through_journal_sequence": 3,
         "through_event_sigil": SIGIL,
     }
     cursor["cursor_sigil"] = derive_execution_observation_cursor_sigil_v1(cursor)
-    observe = {
+    observe: dict[str, Any] = {
         "schema_version": "execution-observe-request/1.0",
         "job_id": JOB_ID,
         "limit": 2,
@@ -317,6 +317,50 @@ def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -
     get_result["job_id"] = "JB-" + "Z" * 64
     with pytest.raises(Exception):
         validate_execution_request_v1("get_result", get_result)
+
+
+def test_rfc0015_cancel_and_accept_requests_close_nested_and_scalar_fields() -> None:
+    cancel: dict[str, Any] = {
+        "schema_version": "execution-cancel-request/1.0",
+        "cancellation_request_id": "cancel-001",
+        "idempotency_key": "cancel-key",
+        "job_id": JOB_ID,
+        "job_binding_sigil": SIGIL,
+        "expected_job_revision": 1,
+        "reason": "operator-requested",
+        "actor": {
+            "kind": "USER",
+            "actor_id": "user-001",
+            "authentication_context_sigil": SIGIL,
+            "actor_sigil": SIGIL,
+        },
+        "host_invocation": {
+            "host_identity_sigil": SIGIL,
+            "invocation_id": "invoke-001",
+            "authentication_context_sigil": SIGIL,
+            "invocation_sigil": SIGIL,
+        },
+        "caller_observed_at": STAMP,
+    }
+    validate_execution_request_v1("cancel", cancel)
+    assert load_execution_request_v1("cancel", json.dumps(cancel)) == cancel
+    nested_extra = deepcopy(cancel)
+    nested_extra["actor"]["authority"] = "ambient"
+    with pytest.raises(Exception):
+        validate_execution_request_v1("cancel", nested_extra)
+    with pytest.raises(Exception):
+        validate_execution_request_v1("cancel", {**cancel, "expected_job_revision": True})
+
+    accept: dict[str, Any] = {
+        "schema_version": "execution-accept-result-request/1.0",
+        "job_id": JOB_ID,
+        "execution_job_outcome_sigil": SIGIL,
+        "idempotency_key": "accept-key",
+    }
+    validate_execution_request_v1("accept_result", accept)
+    assert load_execution_request_v1("accept_result", json.dumps(accept)) == accept
+    with pytest.raises(Exception):
+        validate_execution_request_v1("accept_result", {**accept, "idempotency_key": "\x00"})
 
 
 def test_state_rejects_split_policy_legacy_shapes_unknowns_and_duplicate_bytes() -> None:
