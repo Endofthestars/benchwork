@@ -489,7 +489,7 @@ class ExecutionService:
         executor = dict(executor)
         jobs: dict[str, dict[str, Any]] = {}
         starts: dict[tuple[str, str], tuple[str, str]] = {}
-        cancellations: dict[tuple[str, str], str] = {}
+        cancellations: dict[tuple[str, str], dict[str, Any]] = {}
         for event in events[1:]:
             payload = event["payload"]
             event_type = event["event_type"]
@@ -577,7 +577,7 @@ class ExecutionService:
                 scope = (job["job_id"], key)
                 if scope in cancellations:
                     raise AthanorError("duplicate execution cancellation binding")
-                cancellations[scope] = event["event_sigil"]
+                cancellations[scope] = dict(payload)
                 if job["state"] in TERMINAL_STATES:
                     raise AthanorError("terminal Job cannot receive cancellation request")
                 job["state"] = "CANCEL_REQUESTED"
@@ -605,7 +605,7 @@ class ExecutionService:
                 scope = (job["job_id"], key)
                 if scope in cancellations:
                     raise AthanorError("duplicate execution cancellation binding")
-                cancellations[scope] = event["event_sigil"]
+                cancellations[scope] = dict(payload)
             elif event_type == "job.terminal":
                 if set(payload) != {"job_id", "state", "reason"}:
                     raise AthanorError("execution Job terminal payload is invalid")
@@ -784,7 +784,13 @@ class ExecutionService:
             job = state["jobs"].get(job_id)
             if job is None or job["job_binding_sigil"] != job_binding_sigil:
                 raise AthanorError("execution Job binding is invalid")
-            if (job_id, key_sigil) in state["cancellations"]:
+            prior_cancellation = state["cancellations"].get((job_id, key_sigil))
+            if prior_cancellation is not None:
+                if (
+                    prior_cancellation["job_binding_sigil"] != job_binding_sigil
+                    or prior_cancellation["reason"] != reason
+                ):
+                    raise AthanorError("execution cancellation idempotency conflict")
                 return self._observation_unlocked(events, job_id, MAX_PAGE_SIZE, None)
             if expected_job_revision != job["revision"]:
                 raise AthanorError("execution cancellation revision conflict")

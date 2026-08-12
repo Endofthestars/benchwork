@@ -194,6 +194,19 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "not terminalizable|cancelled"):
             self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
 
+    def test_changed_cancellation_under_same_key_is_a_conflict(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        terminal = self.service.observe(job["job_id"])["job"]
+        with self.assertRaisesRegex(AthanorError, "cancellation idempotency conflict"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], terminal["revision"],
+                "cancel-001", "different cancellation reason",
+            )
+
     def test_expired_local_job_retains_negative_outcome_and_rejects_late_delivery(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
         expired = self.service.record_terminal(
