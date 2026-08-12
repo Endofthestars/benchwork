@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import unicodedata
+from datetime import datetime
 from typing import Any, NoReturn
 
 from .athanor import AthanorError, content_sigil
@@ -81,6 +82,10 @@ def _without(value: dict[str, Any], member: str) -> dict[str, Any]:
     return {key: item for key, item in value.items() if key != member}
 
 
+def _parse_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def validate_artifact_storage_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate a closed, self-authenticating Storage Journal Event locally."""
     validate_instance("artifact-storage-journal-event-1.0.json", event)
@@ -99,6 +104,29 @@ def load_artifact_storage_journal_event_v1(
     event = _load_strict_object(raw, "Artifact Storage Journal Event")
     validate_artifact_storage_journal_event_v1(event)
     return event
+
+
+def validate_artifact_storage_journal_prefix_v1(events: list[dict[str, Any]]) -> None:
+    """Validate a supplied contiguous Storage Event prefix without replaying it."""
+    if not events:
+        _fail("Artifact Storage Journal prefix must contain an initial Event")
+    previous: dict[str, Any] | None = None
+    for expected_sequence, event in enumerate(events, start=1):
+        validate_artifact_storage_journal_event_v1(event)
+        if expected_sequence == 1 and event["event_type"] != "storage.initialized":
+            _fail("Artifact Storage Journal prefix does not start with storage.initialized")
+        if event["sequence"] != expected_sequence:
+            _fail("Artifact Storage Journal prefix sequence is not contiguous")
+        if previous is not None:
+            if event["journal_id"] != previous["journal_id"]:
+                _fail("Artifact Storage Journal prefix changes Journal ID")
+            if event["previous_event_sigil"] != previous["event_sigil"]:
+                _fail("Artifact Storage Journal prefix chain Sigil mismatch")
+            if _parse_time(event["recorded_at"]) < _parse_time(previous["recorded_at"]):
+                _fail("Artifact Storage Journal prefix recorded time regresses")
+            if event["epoch"] < previous["epoch"]:
+                _fail("Artifact Storage Journal prefix epoch regresses")
+        previous = event
 
 
 def validate_artifact_storage_journal_head_v1(head: dict[str, Any]) -> None:
@@ -148,6 +176,14 @@ def validate_artifact_storage_journal_head_supplied_event_v1(
         or head["state_sigil"] != state_sigil
     ):
         _fail("Artifact Storage Journal Head contradicts supplied final Event or State")
+
+
+def validate_artifact_storage_journal_head_supplied_prefix_v1(
+    head: dict[str, Any], events: list[dict[str, Any]], state_sigil: str,
+) -> None:
+    """Compare a Head with a complete caller-supplied contiguous Event prefix."""
+    validate_artifact_storage_journal_prefix_v1(events)
+    validate_artifact_storage_journal_head_supplied_event_v1(head, events[-1], state_sigil)
 
 
 def require_artifact_storage_journal_replay_authority_v1() -> NoReturn:

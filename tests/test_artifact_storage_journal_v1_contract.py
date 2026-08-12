@@ -11,7 +11,9 @@ from benchwork.artifact_storage_contracts import (
     require_artifact_storage_runtime_authority_v1,
     validate_artifact_storage_journal_event_v1,
     validate_artifact_storage_journal_head_supplied_event_v1,
+    validate_artifact_storage_journal_head_supplied_prefix_v1,
     validate_artifact_storage_journal_head_v1,
+    validate_artifact_storage_journal_prefix_v1,
 )
 
 
@@ -48,6 +50,40 @@ def _head(event: dict[str, object]) -> dict[str, object]:
         "last_event_sigil": event["event_sigil"], "committed_byte_length": 1,
         "current_epoch": 1, "state_sigil": SIGIL, "updated_at": STAMP,
     }
+
+
+def _next_event(previous: dict[str, object]) -> dict[str, object]:
+    event = _event()
+    event.update({
+        "event_id": "SE-TWO", "sequence": 2, "recorded_at": "2026-08-06T00:00:01Z",
+        "previous_event_sigil": previous["event_sigil"],
+    })
+    event["event_sigil"] = content_sigil({
+        key: member for key, member in event.items() if key != "event_sigil"
+    })
+    return event
+
+
+def _initial_event() -> dict[str, object]:
+    event = _event()
+    event.update({
+        "event_type": "storage.initialized",
+        "payload": {
+            "project_id": "PROJECT", "storage_format_version": "1.0",
+            "backend": {"schema_version": "backend/1.0", "record_id": "BACKEND", "record_sigil": SIGIL},
+            "conformance_profile_id": "PROFILE", "conformance_suite_sigil": SIGIL,
+            "quota_snapshots": [], "tail_recovery": None,
+            "clock": {
+                "utc": STAMP, "monotonic_anchor_id": "CLOCK", "monotonic_ticks": 0,
+                "monotonic_frequency_hz": 1, "uncertainty_micros": 0,
+                "observation_sigil": SIGIL,
+            },
+        },
+    })
+    event["event_sigil"] = content_sigil({
+        key: member for key, member in event.items() if key != "event_sigil"
+    })
+    return event
 
 
 def test_storage_journal_event_checks_self_sigil_order_and_strict_loading() -> None:
@@ -95,3 +131,40 @@ def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
         require_artifact_storage_journal_replay_authority_v1()
     with pytest.raises(AthanorError, match="runtime authority"):
         require_artifact_storage_runtime_authority_v1()
+
+
+def test_storage_journal_prefix_checks_chain_sequence_and_fixed_head() -> None:
+    first = _initial_event()
+    second = _next_event(first)
+    head = _head(second)
+    head.update({"event_count": 2, "last_sequence": 2})
+    validate_artifact_storage_journal_prefix_v1([first, second])
+    validate_artifact_storage_journal_head_supplied_prefix_v1(head, [first, second], SIGIL)
+
+    broken_chain = deepcopy(second)
+    broken_chain["previous_event_sigil"] = SIGIL_B
+    broken_chain["event_sigil"] = content_sigil({
+        key: member for key, member in broken_chain.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="chain Sigil"):
+        validate_artifact_storage_journal_prefix_v1([first, broken_chain])
+
+    gap = deepcopy(second)
+    gap["sequence"] = 3
+    gap["event_sigil"] = content_sigil({
+        key: member for key, member in gap.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="not contiguous"):
+        validate_artifact_storage_journal_prefix_v1([first, gap])
+
+    not_initialized = _event()
+    with pytest.raises(AthanorError, match="does not start"):
+        validate_artifact_storage_journal_prefix_v1([not_initialized])
+
+    old_epoch = deepcopy(second)
+    old_epoch["epoch"] = 0
+    old_epoch["event_sigil"] = content_sigil({
+        key: member for key, member in old_epoch.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError):
+        validate_artifact_storage_journal_prefix_v1([first, old_epoch])
