@@ -1006,6 +1006,47 @@ def validate_execution_recovery_rebase_supplied_action_sets_v1(
         _fail("Execution Recovery rebase disagrees with supplied State or action sets")
 
 
+def validate_execution_recovery_completion_supplied_action_set_v1(
+    state: dict[str, Any], event: dict[str, Any], finalizing_action_set: dict[str, Any],
+) -> None:
+    """Check a Recovery completion Event against supplied pre-completion facts.
+
+    The payload's recovered State Sigil is only an asserted postcondition here;
+    recomputing it requires the complete installed reducer and remains outside
+    this contract-only helper.
+    """
+    validate_execution_state_v1(state)
+    validate_execution_journal_event_v1(event)
+    validate_execution_recovery_action_set_v1(finalizing_action_set)
+    active_recovery_id = state["executor"]["active_recovery_id"]
+    if active_recovery_id is None:
+        _fail("Execution Recovery completion requires an active Recovery")
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    executor = state["executor"]
+    payload = event["payload"]
+    expected_revisions = [
+        {"entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
+         "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1},
+        {"entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
+         "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1},
+    ]
+    if (
+        event["event_type"] != "recovery.completed"
+        or event["recovery_action_binding"] is not None
+        or event["journal_id"] != state["journal_binding"]["journal_id"]
+        or event["sequence"] != state["journal_binding"]["through_sequence"] + 1
+        or event["previous_event_sigil"] != state["journal_binding"]["through_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or recovery["state"] != "FINALIZING"
+        or payload["recovery_id"] != recovery["recovery_id"]
+        or payload["completed_action_set_sigil"] != recovery["current_action_set_sigil"]
+        or payload["completed_action_set_sigil"] != finalizing_action_set["action_set_sigil"]
+        or finalizing_action_set["recovery_id"] != recovery["recovery_id"]
+        or finalizing_action_set["phase"] != "FINALIZING"
+    ):
+        _fail("Execution Recovery completion disagrees with supplied State or action set")
+
+
 def validate_execution_state_supplied_recovery_action_set_v1(
     state: dict[str, Any], action_set: dict[str, Any],
 ) -> None:

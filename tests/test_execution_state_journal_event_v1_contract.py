@@ -49,6 +49,7 @@ from benchwork.execution_contracts import (
     validate_execution_recovery_start_supplied_action_set_v1,
     validate_execution_recovery_phase_advance_supplied_action_sets_v1,
     validate_execution_recovery_rebase_supplied_action_sets_v1,
+    validate_execution_recovery_completion_supplied_action_set_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
@@ -1006,6 +1007,48 @@ def test_recovery_rebase_binds_state_and_sealed_action_sets() -> None:
         validate_execution_recovery_rebase_supplied_action_sets_v1(
             state, event, prior_set, wrong_replacement,
         )
+
+
+def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
+    action_set = _recovery_action_set()
+    action_set.update({"phase": "FINALIZING", "actions": []})
+    action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in action_set.items() if key != "action_set_sigil"
+    })
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["journal_binding"] = {"journal_id": "EJ-ONE", "through_sequence": 3,
+                                "through_event_id": "JE-THREE", "through_event_sigil": SIGIL_B}
+    state["executor"].update({"revision": 2, "clock_state": "UNCERTAIN",
+        "clock_uncertain_event_id": "JE-TWO", "active_recovery_id": "RY-ONE",
+        "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B})
+    state["recoveries"] = [{"recovery_id": "RY-ONE", "revision": 3, "state": "FINALIZING",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": action_set["action_set_sigil"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B}]
+    _reseal_state(state)
+    event = {"schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
+        "event_id": "JE-FOUR", "sequence": 4, "event_type": "recovery.completed",
+        "executor_instance_id": "XI-ONE", "executor_epoch": 1, "executor_build_sigil": SIGIL,
+        "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
+        "entity_revisions": [
+            {"entity_kind": "EXECUTOR", "entity_id": "XI-ONE", "preceding_revision": 2, "next_revision": 3},
+            {"entity_kind": "RECOVERY", "entity_id": "RY-ONE", "preceding_revision": 3, "next_revision": 4},
+        ], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None,
+        "payload": {"recovery_id": "RY-ONE", "completed_action_set_sigil": action_set["action_set_sigil"],
+                    "recovered_state_sigil": SIGIL, "fence_tombstone_event_ids": [],
+                    "quarantined_entity_ids": [], "resumable_job_ids": []},
+        "previous_event_sigil": SIGIL_B}
+    event["event_sigil"] = content_sigil({key: member for key, member in event.items() if key != "event_sigil"})
+    validate_execution_recovery_completion_supplied_action_set_v1(state, event, action_set)
+
+    wrong_set = deepcopy(action_set)
+    wrong_set["phase"] = "RECONCILING"
+    wrong_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_set.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="completion disagrees"):
+        validate_execution_recovery_completion_supplied_action_set_v1(state, event, wrong_set)
 
 
 def test_recovery_action_event_matches_its_supplied_frozen_envelope() -> None:
