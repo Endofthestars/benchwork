@@ -249,6 +249,58 @@ def test_storage_replay_activates_the_empty_initialized_store() -> None:
         replay_artifact_storage_journal_prefix_v1([initial, wrong_revision])
 
 
+def test_storage_replay_applies_empty_clock_gate_round_trip() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{
+        "entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1, "next_revision": 2,
+    }]
+    activation["payload"] = {"legacy_protection_ids": [], "activation_evidence_sigil": SIGIL, "clock": initial["payload"]["clock"]}
+    activation["quota_effects"] = []
+    activation["event_sigil"] = content_sigil({key: value for key, value in activation.items() if key != "event_sigil"})
+    uncertain = _next_event(activation)
+    uncertain["event_type"] = "storage.clock_uncertain"
+    uncertain["event_id"] = "SE-THREE"
+    uncertain["sequence"] = 3
+    uncertain["recorded_at"] = "2026-08-06T00:00:02Z"
+    detected_clock = {**initial["payload"]["clock"], "utc": "2026-08-06T00:00:01Z"}
+    uncertain.update({
+        "observed_at": detected_clock["utc"],
+        "entity_revisions": [{"entity_type": "STORE", "entity_id": "STORE", "previous_revision": 2, "next_revision": 3}],
+        "quota_effects": [],
+        "payload": {"previous_clock": initial["payload"]["clock"], "detected_clock": detected_clock,
+                    "divergence_micros": 1, "affected_reservation_ids": [],
+                    "reason": {"code": "CLOCK_UNCERTAIN", "evidence_sigils": []}},
+    })
+    uncertain["event_sigil"] = content_sigil({key: value for key, value in uncertain.items() if key != "event_sigil"})
+    restored = _next_event(uncertain)
+    restored["event_type"] = "storage.clock_restored"
+    restored["event_id"] = "SE-FOUR"
+    restored["sequence"] = 4
+    restored["recorded_at"] = "2026-08-06T00:00:03Z"
+    restored.update({
+        "observed_at": "2026-08-06T00:00:02Z",
+        "entity_revisions": [{"entity_type": "STORE", "entity_id": "STORE", "previous_revision": 3, "next_revision": 4}],
+        "quota_effects": [],
+        "payload": {"previous_observation_sigil": detected_clock["observation_sigil"],
+                    "new_clock": {**detected_clock, "utc": "2026-08-06T00:00:02Z"},
+                    "expired_entity_ids": [], "evidence_sigils": []},
+    })
+    restored["event_sigil"] = content_sigil({key: value for key, value in restored.items() if key != "event_sigil"})
+    uncertain_state = replay_artifact_storage_journal_prefix_v1([initial, activation, uncertain])
+    assert uncertain_state["clock_status"] == "UNCERTAIN"
+    state = replay_artifact_storage_journal_prefix_v1([initial, activation, uncertain, restored])
+    assert state["clock_status"] == "TRUSTED"
+    assert state["clock_anchor"] == restored["payload"]["new_clock"]
+
+    wrong_anchor = deepcopy(uncertain)
+    wrong_anchor["payload"]["previous_clock"]["utc"] = "2026-08-06T00:00:01Z"
+    wrong_anchor["event_sigil"] = content_sigil({key: value for key, value in wrong_anchor.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="clock uncertainty"):
+        replay_artifact_storage_journal_prefix_v1([initial, activation, wrong_anchor])
+
+
 def _reference_set() -> dict[str, object]:
     reference_set: dict[str, object] = {
         "schema_version": "artifact-storage-reference-set/1.0", "reference_set_id": "",

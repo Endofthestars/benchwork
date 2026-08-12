@@ -759,6 +759,51 @@ def _reduce_artifact_storage_activation_v1(
     return reduced
 
 
+def _reduce_artifact_storage_clock_gate_v1(
+    state: dict[str, Any], event: dict[str, Any], *, restoring: bool,
+) -> dict[str, Any]:
+    """Apply the action-free Storage clock gate for an otherwise empty State."""
+    required_type = "storage.clock_restored" if restoring else "storage.clock_uncertain"
+    if event["event_type"] != required_type or state["store_status"] != "ACTIVE":
+        _fail("Artifact Storage clock reducer has an invalid source state or Event")
+    if (
+        event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": event["sequence"] - 1, "next_revision": event["sequence"],
+        }]
+    ):
+        _fail("Artifact Storage clock Event disagrees with prior State")
+    payload = event["payload"]
+    if state["quota_reservations"] or state["open_intents"]:
+        _fail("Artifact Storage clock reducer requires no outstanding timed authority")
+    if restoring:
+        if state["clock_status"] != "UNCERTAIN" or payload["previous_observation_sigil"] != state["clock_anchor"]["observation_sigil"]:
+            _fail("Artifact Storage clock restoration disagrees with uncertain State")
+        clock = payload["new_clock"]
+        if event["observed_at"] != clock["utc"]:
+            _fail("Artifact Storage clock restoration observed_at disagrees with new clock")
+    else:
+        if state["clock_status"] != "TRUSTED" or payload["previous_clock"] != state["clock_anchor"]:
+            _fail("Artifact Storage clock uncertainty disagrees with trusted State")
+        if event["observed_at"] != payload["detected_clock"]["utc"]:
+            _fail("Artifact Storage clock uncertainty observed_at disagrees with detected clock")
+        clock = payload["detected_clock"]
+    if _parse_time(clock["utc"]) < _parse_time(state["clock_anchor"]["utc"]):
+        _fail("Artifact Storage clock Event regresses trusted time")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "clock_status": "TRUSTED" if restoring else "UNCERTAIN", "clock_anchor": clock,
+        "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -773,6 +818,20 @@ def replay_artifact_storage_journal_prefix_v1(
         state = _reduce_artifact_storage_activation_v1(state, events[1])
         if head is not None:
             validate_artifact_storage_journal_head_supplied_event_v1(head, events[1], state["state_sigil"])
+        return state
+    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed":
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        if events[2]["event_type"] == "storage.clock_uncertain":
+            state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
+        else:
+            _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
+        return state
+    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
+        "storage.activation_completed", "storage.clock_uncertain", "storage.clock_restored",
+    ]:
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
+        state = _reduce_artifact_storage_clock_gate_v1(state, events[3], restoring=True)
         return state
     _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
 
