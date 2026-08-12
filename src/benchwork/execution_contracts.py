@@ -845,6 +845,28 @@ def load_execution_recovery_action_set_v1(raw: str | bytes | bytearray) -> dict[
     return action_set
 
 
+def validate_execution_recovery_action_set_supplied_prefix_v1(
+    action_set: dict[str, Any], events: list[dict[str, Any]],
+) -> None:
+    """Anchor one sealed action set to a caller-supplied verified prefix.
+
+    The supplied sequence is checked only for its closed wire chain and the
+    explicitly installed bounded reducer path.  It does not establish that the
+    prefix is complete, current, durable, or authoritative for derivation.
+    """
+    validate_execution_recovery_action_set_v1(action_set)
+    if not events:
+        _fail("Execution Recovery action set requires a nonempty supplied prefix")
+    replay_execution_journal_prefix_v1(events)
+    last = events[-1]
+    if (
+        action_set["derived_from_journal_id"] != last["journal_id"]
+        or action_set["derived_through_sequence"] != last["sequence"]
+        or action_set["derived_through_event_sigil"] != last["event_sigil"]
+    ):
+        _fail("Execution Recovery action set disagrees with supplied prefix")
+
+
 def validate_execution_state_supplied_recovery_action_set_v1(
     state: dict[str, Any], action_set: dict[str, Any],
 ) -> None:

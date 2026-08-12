@@ -44,6 +44,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_receipt_v1,
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
+    validate_execution_recovery_action_set_supplied_prefix_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
@@ -779,6 +780,42 @@ def test_active_recovery_projection_matches_one_supplied_action_set() -> None:
     })
     with pytest.raises(Exception, match="disagrees with supplied"):
         validate_execution_state_supplied_recovery_action_set_v1(state, wrong_set)
+
+
+def test_recovery_action_set_anchors_to_its_supplied_prefix() -> None:
+    initial = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    clock_uncertain = _clock_uncertain_event(initial)
+    action_set = _recovery_action_set()
+    action_set["derived_through_event_sigil"] = clock_uncertain["event_sigil"]
+    action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in action_set.items() if key != "action_set_sigil"
+    })
+    validate_execution_recovery_action_set_supplied_prefix_v1(
+        action_set, [initial, clock_uncertain],
+    )
+
+    stale_anchor = deepcopy(action_set)
+    stale_anchor["derived_through_sequence"] = 1
+    stale_anchor["actions"][0]["target_sequence"] = 3
+    stale_anchor["action_set_sigil"] = content_sigil({
+        key: member for key, member in stale_anchor.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="disagrees with supplied prefix"):
+        validate_execution_recovery_action_set_supplied_prefix_v1(
+            stale_anchor, [initial, clock_uncertain],
+        )
+
+    broken_prefix = deepcopy(clock_uncertain)
+    broken_prefix["previous_event_sigil"] = None
+    broken_prefix["event_sigil"] = content_sigil({
+        key: member for key, member in broken_prefix.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="previous_event_sigil"):
+        validate_execution_recovery_action_set_supplied_prefix_v1(
+            action_set, [initial, broken_prefix],
+        )
 
 
 def test_recovery_action_event_matches_its_supplied_frozen_envelope() -> None:
