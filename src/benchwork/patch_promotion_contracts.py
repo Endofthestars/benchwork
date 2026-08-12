@@ -11,7 +11,7 @@ from datetime import datetime
 import hashlib
 from typing import Any, NoReturn
 
-from .athanor import AthanorError, content_sigil
+from .athanor import AthanorError, canonical_json, content_sigil
 from .execution_contracts import _check_nfc, _load_strict_object
 from .schema_validation import validate_instance
 
@@ -289,12 +289,31 @@ def validate_patch_promotion_attempt_supplied_authorization_v1(
         _fail("Patch Promotion Attempt disagrees with supplied Authorization")
 
 
+def derive_patch_promotion_outcome_id_v1(
+    attempt_id: str,
+    terminal_event_id: str,
+    terminal_event_sigil: str,
+) -> str:
+    """Derive the immutable Outcome identity from its terminal attempt Event."""
+    preimage = "benchwork:patch-promotion-outcome:v1\0" + canonical_json(
+        [attempt_id, terminal_event_id, terminal_event_sigil]
+    )
+    return "PO-" + hashlib.sha256(preimage.encode("utf-8")).hexdigest()[:32]
+
+
 def validate_patch_promotion_outcome_v1(outcome: dict[str, Any]) -> None:
     """Validate local terminal Outcome closure without resolving its Journal Event."""
     validate_instance("patch-promotion-outcome-1.0.json", outcome)
     _check_nfc(outcome)
     if outcome["outcome_sigil"] != content_sigil(_without(outcome, "outcome_sigil")):
         _fail("Patch Promotion Outcome self-Sigil mismatch")
+    expected_id = derive_patch_promotion_outcome_id_v1(
+        outcome["attempt_id"],
+        outcome["terminal_journal_event_id"],
+        outcome["terminal_journal_event_sigil"],
+    )
+    if outcome["outcome_id"] != expected_id:
+        _fail("Patch Promotion Outcome ID does not match its terminal Event")
     times = outcome["timestamps"]
     ordered_times = [times["created_at"]]
     ordered_times.extend(
@@ -324,6 +343,35 @@ def validate_patch_promotion_outcome_v1(outcome: dict[str, Any]) -> None:
             observations
         ):
             _fail("Patch Promotion Outcome per-entry evidence must cover every path observation")
+
+
+def validate_patch_promotion_outcome_supplied_attempt_v1(
+    outcome: dict[str, Any],
+    attempt: dict[str, Any],
+) -> None:
+    """Bind a terminal Outcome to its exact caller-supplied Promotion Attempt."""
+    validate_patch_promotion_outcome_v1(outcome)
+    validate_patch_promotion_attempt_v1(attempt)
+    terminal_states = {
+        "APPLIED",
+        "RECOVERED_POSTIMAGE_OBSERVED",
+        "ALREADY_APPLIED",
+        "STALE",
+        "CONFLICT",
+        "FAILED",
+        "PARTIAL",
+        "CANCELLED",
+    }
+    if attempt["state"] not in terminal_states:
+        _fail("Patch Promotion Outcome requires a terminal supplied Attempt")
+    if (
+        outcome["attempt_id"] != attempt["attempt_id"]
+        or outcome["operation_sigil"] != attempt["operation_sigil"]
+        or outcome["adapter"] != attempt["adapter"]
+        or outcome["timestamps"]["created_at"] != attempt["created_at"]
+        or outcome["status"] != attempt["state"]
+    ):
+        _fail("Patch Promotion Outcome disagrees with supplied Attempt")
 
 
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:

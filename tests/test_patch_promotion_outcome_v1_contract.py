@@ -5,13 +5,22 @@ from copy import deepcopy
 import pytest
 
 from benchwork.athanor import AthanorError, content_sigil
-from benchwork.patch_promotion_contracts import validate_patch_promotion_outcome_v1
+from benchwork.patch_promotion_contracts import (
+    derive_patch_promotion_outcome_id_v1,
+    validate_patch_promotion_outcome_supplied_attempt_v1,
+    validate_patch_promotion_outcome_v1,
+)
 
 
 SIGIL = "sha256:" + "a" * 64
 
 
 def _seal(outcome: dict[str, object]) -> dict[str, object]:
+    outcome["outcome_id"] = derive_patch_promotion_outcome_id_v1(
+        str(outcome["attempt_id"]),
+        str(outcome["terminal_journal_event_id"]),
+        str(outcome["terminal_journal_event_sigil"]),
+    )
     outcome["outcome_sigil"] = content_sigil(
         {key: value for key, value in outcome.items() if key != "outcome_sigil"}
     )
@@ -24,7 +33,7 @@ def _outcome() -> dict[str, object]:
     return _seal(
         {
             "schema_version": "patch-promotion-outcome/1.0",
-            "outcome_id": "PO-ONE",
+            "outcome_id": "",
             "authorization_receipt": {
                 "receipt_id": "RC-ONE",
                 "receipt_sigil": SIGIL,
@@ -109,3 +118,48 @@ def test_promotion_outcome_requires_per_entry_evidence_for_each_path() -> None:
     _seal(extra_path)
     with pytest.raises(AthanorError, match="per-entry evidence"):
         validate_patch_promotion_outcome_v1(extra_path)
+
+
+def _attempt_for(outcome: dict[str, object]) -> dict[str, object]:
+    attempt = {
+        "schema_version": "patch-promotion-attempt/1.0",
+        "attempt_id": outcome["attempt_id"],
+        "authorization": {"id": "PAU-ONE", "sigil": SIGIL},
+        "operation_sigil": outcome["operation_sigil"],
+        "target": {
+            "target_id": "PT-ONE",
+            "target_class": "DIRECTORY",
+            "identity_profile": {"id": "PBIP-ONE", "sigil": SIGIL},
+            "root_identity": {
+                "root_object_sigil": SIGIL,
+                "root_generation": "generation",
+                "topology_sigil": SIGIL,
+            },
+            "selection_authorization_sigil": SIGIL,
+        },
+        "target_content_generation": "generation",
+        "adapter": outcome["adapter"],
+        "mode": "FULL_TREE_ATOMIC_CAS",
+        "created_at": outcome["timestamps"]["created_at"],
+        "state": outcome["status"],
+        "revision": 1,
+        "attempt_sigil": "",
+    }
+    attempt["attempt_sigil"] = content_sigil(
+        {key: value for key, value in attempt.items() if key != "attempt_sigil"}
+    )
+    return attempt
+
+
+def test_promotion_outcome_binds_to_a_terminal_supplied_attempt() -> None:
+    outcome = _outcome()
+    attempt = _attempt_for(outcome)
+    validate_patch_promotion_outcome_supplied_attempt_v1(outcome, attempt)
+
+    nonterminal = deepcopy(attempt)
+    nonterminal["state"] = "READY"
+    nonterminal["attempt_sigil"] = content_sigil(
+        {key: value for key, value in nonterminal.items() if key != "attempt_sigil"}
+    )
+    with pytest.raises(AthanorError, match="terminal supplied Attempt"):
+        validate_patch_promotion_outcome_supplied_attempt_v1(outcome, nonterminal)
