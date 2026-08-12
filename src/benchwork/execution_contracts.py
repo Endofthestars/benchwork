@@ -4796,6 +4796,117 @@ def load_execution_result_ingress_index_v1(raw: str | bytes | bytearray) -> dict
     return index
 
 
+def validate_agent_result_acceptance_policy_v1(policy: dict[str, Any]) -> None:
+    """Validate the immutable RFC-0015 acceptance-policy preimage locally.
+
+    This is deliberately not a Ward evaluation: the predicate inventory is
+    sealed here, while evaluating its predicates requires the authoritative
+    Chronicle, Task, Storage, and authentication facts.
+    """
+    validate_instance("agent-result-acceptance-policy-1.0.json", policy)
+    _check_nfc(policy)
+    if policy["policy_sigil"] != content_sigil(_without(policy, "policy_sigil")):
+        _fail("Agent Result acceptance policy self-Sigil mismatch")
+
+
+def validate_agent_result_acceptance_authorization_v1(
+    authorization: dict[str, Any],
+) -> None:
+    """Validate the local closure of an Agent Result acceptance authorization.
+
+    It never authenticates an invocation, evaluates Ward, resolves approval or
+    Storage records, or grants acceptance authority.  Those are supplied-facts
+    and live-authority responsibilities outside this closed-document check.
+    """
+    validate_instance("agent-result-acceptance-authorization-1.0.json", authorization)
+    _check_nfc(authorization)
+    validate_agent_result_acceptance_policy_v1(authorization["acceptance_policy"])
+    if authorization["authorization_sigil"] != content_sigil(
+        _without(authorization, "authorization_sigil")
+    ):
+        _fail("Agent Result acceptance authorization self-Sigil mismatch")
+
+    managed = authorization["managed_blob_sigils"]
+    if managed != sorted(managed, key=lambda value: value.encode("ascii")):
+        _fail("Agent Result acceptance managed Blob Sigils must be ASCII-sorted")
+    if len(managed) != len(set(managed)):
+        _fail("Agent Result acceptance managed Blob Sigils must be unique")
+
+    expected_request_id = "ATR-" + (
+        content_sigil(
+            [
+                "agent-result-acceptance-transition-id/1.0",
+                authorization["authority_subject"]["task_binding"]["task_id"],
+                authorization["idempotency_key_sigil"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
+    if authorization["transition_request_id"] != expected_request_id:
+        _fail("Agent Result acceptance transition request ID mismatch")
+
+    ward_pass = authorization["ward_pass"]
+    if (
+        ward_pass["evaluated_chronicle_head"] != authorization["expected_chronicle_head"]
+        or ward_pass["evaluated_at"] != authorization["requested_at"]
+    ):
+        _fail("Agent Result acceptance Ward pass disagrees with request Head or time")
+    approval = authorization["approval"]
+    if (
+        approval["ward_decision_id"] != ward_pass["ward_decision_id"]
+        or approval["ward_decision_sigil"] != ward_pass["ward_decision_sigil"]
+    ):
+        _fail("Agent Result acceptance approval disagrees with Ward pass")
+    actor = authorization["actor"]
+    host = authorization["host_invocation"]
+    if actor["actor_sigil"] != content_sigil(_without(actor, "actor_sigil")):
+        _fail("Agent Result acceptance Actor self-Sigil mismatch")
+    if host["invocation_sigil"] != content_sigil(_without(host, "invocation_sigil")):
+        _fail("Agent Result acceptance Host invocation self-Sigil mismatch")
+    if actor["authentication_context_sigil"] != host["authentication_context_sigil"]:
+        _fail("Agent Result acceptance Actor and Host authentication contexts disagree")
+    if authorization["chronicle_actor"]["actor_id"] != actor["actor_id"]:
+        _fail("Agent Result acceptance Chronicle Actor disagrees with Actor binding")
+    allowed_actor_types = {
+        "USER": {"human"},
+        "AGENT": {"agent"},
+        "SYSTEM": {"policy", "tool"},
+    }
+    if authorization["chronicle_actor"]["actor_type"] not in allowed_actor_types[actor["kind"]]:
+        _fail("Agent Result acceptance Chronicle Actor type disagrees with Actor kind")
+
+    storage = authorization["acceptance_storage_binding"]
+    if storage["validated_blob_sigils"] != managed:
+        _fail("Agent Result acceptance Storage Blob set disagrees with managed Blob set")
+    evidence = storage["validation_evidence"]
+    evidence_sigils = [item["blob_sigil"] for item in evidence]
+    if evidence_sigils != managed:
+        _fail("Agent Result acceptance Storage evidence Blob set disagrees with managed Blob set")
+    if evidence_sigils != sorted(evidence_sigils, key=lambda value: value.encode("ascii")):
+        _fail("Agent Result acceptance Storage evidence must be ASCII-sorted by Blob Sigil")
+    if len(evidence_sigils) != len(set(evidence_sigils)):
+        _fail("Agent Result acceptance Storage evidence Blob Sigils must be unique")
+    if storage["validation_evidence_set_sigil"] != content_sigil(evidence):
+        _fail("Agent Result acceptance Storage evidence-set Sigil mismatch")
+    storage_event = storage["storage_event"]
+    for item in evidence:
+        availability = item["availability_event"]
+        if (
+            availability["journal_id"] != storage_event["journal_id"]
+            or availability["sequence"] > storage_event["sequence"]
+        ):
+            _fail("Agent Result acceptance Storage evidence exceeds frozen Storage prefix")
+
+
+def load_agent_result_acceptance_authorization_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    authorization = _load_strict_object(raw, "Agent Result acceptance authorization")
+    validate_agent_result_acceptance_authorization_v1(authorization)
+    return authorization
+
+
 def derive_execution_storage_root_manifest_id_v1(manifest: dict[str, Any]) -> str:
     """Derive an ESM-ID from its immutable owner tuple."""
     digest = (

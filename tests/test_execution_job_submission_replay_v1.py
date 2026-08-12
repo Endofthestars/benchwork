@@ -17,7 +17,9 @@ from benchwork.execution_contracts import (
     replay_execution_journal_prefix_v1,
     replay_execution_journal_supplied_facts_v1,
     replay_execution_supplied_state_suffix_v1,
+    load_agent_result_acceptance_authorization_v1,
     load_sanctum_assurance_claim_v1,
+    validate_agent_result_acceptance_authorization_v1,
     validate_sanctum_assurance_claim_v1,
     validate_execution_job_v1,
 )
@@ -285,6 +287,135 @@ def test_assurance_claim_loader_checks_local_integrity_only() -> None:
     })
     with pytest.raises(AthanorError, match="below its request"):
         validate_sanctum_assurance_claim_v1(impossible)
+
+
+def _acceptance_authorization() -> dict[str, Any]:
+    blobs = ["sha256:" + "a" * 64, "sha256:" + "b" * 64]
+    policy: dict[str, Any] = {
+        "schema_version": "agent-result-acceptance-policy/1.0",
+        "policy_id": "agent-result-acceptance", "policy_version": "1.0",
+        "canonical_event_type": "agent-result.accepted",
+        "transition_request_schema": "agent-result-acceptance-transition-request/1.0",
+        "authorization_schema": "agent-result-acceptance-authorization/1.0",
+        "agent_result_schema": "agent-result/2.0", "job_outcome_schema": "execution-job-outcome/1.0",
+        "reference_intent_schema": "artifact-storage-reference-intent/1.0",
+        "chronicle_event_schema": "chronicle-event/1.1", "receipt_schema": "receipt/1.1",
+        "ward_evaluator_profile": "sanctum-authority-intersection/1.0",
+        "actor_authentication_profile": "mcp-authenticated-invocation/1.0",
+        "predicate_profile": "agent-result-acceptance-predicates/1.0",
+        "predicates": [
+            "EXPECTED_HEAD_ADMISSIBLE", "AUTHENTICATED_INVOCATION_MATCH",
+            "TASK_AUTHORITY_CHAIN_VALID", "CURRENT_WARD_PASS", "APPROVAL_CHAIN_VALID",
+            "OUTCOME_REDERIVATION_MATCH", "TERMINAL_SUCCESS_ELIGIBLE",
+            "EXECUTION_EVIDENCE_VALID", "BUDGET_SETTLED", "ASSURANCE_EVIDENCE_VALID",
+            "STORAGE_OBSERVATION_VALID", "TERMINAL_SOURCE_VALID", "EVIDENCE_SELECTION_FINAL",
+            "AGENT_RESULT_DERIVATION_MATCH", "REFERENCE_SET_CLOSURE_VALID",
+            "ACCEPTANCE_STORAGE_PREFIX_VALID",
+        ],
+        "policy_sigil": "",
+    }
+    policy["policy_sigil"] = content_sigil({key: value for key, value in policy.items() if key != "policy_sigil"})
+    head = {"schema_version": "chronicle-head/1.1", "event_count": 1, "terminal_receipt_sigil": SIGIL}
+    evidence = [
+        {"blob_sigil": blob, "size_bytes": 1, "replica_id": f"SR-{index}", "backend_id": "BACKEND",
+         "backend_generation": "1", "availability_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL},
+         "integrity_evidence_sigil": SIGIL, "quarantine_status": "CLEAR"}
+        for index, blob in enumerate(blobs)
+    ]
+    authorization: dict[str, Any] = {
+        "schema_version": "agent-result-acceptance-authorization/1.0",
+        "transition_request_id": "", "event_type": "agent-result.accepted",
+        "expected_chronicle_head": head,
+        "authority_subject": {
+            "registry_binding": {"registry_id": "CR-ONE", "registry_revision": 1, "registry_sigil": SIGIL},
+            "task_binding": {"task_id": "TK-ONE", "task_capsule_sigil": SIGIL}, "program_id": "RP-ONE",
+            "capability_binding": {"capability_id": "bench.work.exec", "contract_version": "2.0", "capability_contract_sigil": SIGIL},
+            "snapshot_binding": {"snapshot_id": "SS-ONE", "snapshot_sigil": SIGIL},
+            "circle_binding": {"circle_id": "CI-ONE", "circle_sigil": SIGIL},
+            "execution_specification_binding": {"specification_id": "ES-" + "0" * 26, "specification_sigil": SIGIL},
+            "job_binding": {"job_id": JOB_ID, "job_binding_sigil": SIGIL},
+            "job_outcome_binding": {"outcome_id": "OJ-" + "A" * 64, "outcome_sigil": SIGIL},
+            "agent_result_sigil": SIGIL,
+        },
+        "ward_pass": {"status": "PASS", "ward_decision_id": "WD-ONE", "ward_decision_sigil": SIGIL,
+                      "resolved_permission_set_sigil": SIGIL, "evaluated_chronicle_head": head,
+                      "evaluated_at": "2026-08-06T00:00:00Z"},
+        "approval": {"kind": "NOT_REQUIRED", "ward_decision_id": "WD-ONE", "ward_decision_sigil": SIGIL},
+        "acceptance_policy": policy, "acceptance_request_sigil": SIGIL, "idempotency_key_sigil": SIGIL,
+        "reference_sets": [{"reference_set_id": "RS-ONE", "reference_set_sigil": SIGIL}],
+        "managed_blob_sigils": blobs,
+        "acceptance_storage_binding": {"storage_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL},
+                                       "storage_state_sigil": SIGIL, "validated_blob_sigils": blobs,
+                                       "validation_evidence": evidence, "validation_evidence_set_sigil": content_sigil(evidence)},
+        "actor": {"kind": "AGENT", "actor_id": "ACTOR", "authentication_context_sigil": SIGIL, "actor_sigil": ""},
+        "host_invocation": {"host_identity_sigil": SIGIL, "invocation_id": "INVOCATION", "authentication_context_sigil": SIGIL, "invocation_sigil": ""},
+        "chronicle_actor": {"actor_id": "ACTOR", "actor_type": "agent", "host": "codex", "authenticated_by": "MCP"},
+        "requested_at": "2026-08-06T00:00:00Z", "authorization_sigil": "",
+    }
+    authorization["transition_request_id"] = "ATR-" + content_sigil([
+        "agent-result-acceptance-transition-id/1.0", "TK-ONE", SIGIL,
+    ]).removeprefix("sha256:").upper()
+    authorization["actor"]["actor_sigil"] = content_sigil({
+        key: value for key, value in authorization["actor"].items() if key != "actor_sigil"
+    })
+    authorization["host_invocation"]["invocation_sigil"] = content_sigil({
+        key: value for key, value in authorization["host_invocation"].items()
+        if key != "invocation_sigil"
+    })
+    authorization["authorization_sigil"] = content_sigil({key: value for key, value in authorization.items() if key != "authorization_sigil"})
+    return authorization
+
+
+def test_agent_result_acceptance_authorization_checks_local_closure_only() -> None:
+    authorization = _acceptance_authorization()
+    validate_agent_result_acceptance_authorization_v1(authorization)
+    assert load_agent_result_acceptance_authorization_v1(json.dumps(authorization)) == authorization
+    unsorted = deepcopy(authorization)
+    unsorted["managed_blob_sigils"] = list(reversed(unsorted["managed_blob_sigils"]))
+    unsorted["acceptance_storage_binding"]["validated_blob_sigils"] = list(
+        reversed(unsorted["acceptance_storage_binding"]["validated_blob_sigils"])
+    )
+    unsorted["acceptance_storage_binding"]["validation_evidence"] = list(
+        reversed(unsorted["acceptance_storage_binding"]["validation_evidence"])
+    )
+    unsorted["acceptance_storage_binding"]["validation_evidence_set_sigil"] = content_sigil(unsorted["acceptance_storage_binding"]["validation_evidence"])
+    unsorted["authorization_sigil"] = content_sigil({key: value for key, value in unsorted.items() if key != "authorization_sigil"})
+    with pytest.raises(AthanorError, match="ASCII-sorted"):
+        validate_agent_result_acceptance_authorization_v1(unsorted)
+    mismatched = deepcopy(authorization)
+    mismatched["acceptance_storage_binding"]["validation_evidence_set_sigil"] = SIGIL
+    mismatched["authorization_sigil"] = content_sigil({key: value for key, value in mismatched.items() if key != "authorization_sigil"})
+    with pytest.raises(AthanorError, match="evidence-set Sigil"):
+        validate_agent_result_acceptance_authorization_v1(mismatched)
+    wrong_id = deepcopy(authorization)
+    wrong_id["transition_request_id"] = "ATR-" + "A" * 64
+    wrong_id["authorization_sigil"] = content_sigil({key: value for key, value in wrong_id.items() if key != "authorization_sigil"})
+    with pytest.raises(AthanorError, match="request ID"):
+        validate_agent_result_acceptance_authorization_v1(wrong_id)
+    wrong_actor = deepcopy(authorization)
+    wrong_actor["chronicle_actor"]["actor_type"] = "human"
+    wrong_actor["authorization_sigil"] = content_sigil({key: value for key, value in wrong_actor.items() if key != "authorization_sigil"})
+    with pytest.raises(AthanorError, match="Actor type"):
+        validate_agent_result_acceptance_authorization_v1(wrong_actor)
+    wrong_context = deepcopy(authorization)
+    wrong_context["host_invocation"]["authentication_context_sigil"] = "sha256:" + "c" * 64
+    wrong_context["host_invocation"]["invocation_sigil"] = content_sigil({
+        key: value for key, value in wrong_context["host_invocation"].items()
+        if key != "invocation_sigil"
+    })
+    wrong_context["authorization_sigil"] = content_sigil({key: value for key, value in wrong_context.items() if key != "authorization_sigil"})
+    with pytest.raises(AthanorError, match="authentication contexts"):
+        validate_agent_result_acceptance_authorization_v1(wrong_context)
+    outside_prefix = deepcopy(authorization)
+    outside_prefix["acceptance_storage_binding"]["validation_evidence"][0]["availability_event"]["sequence"] = 2
+    outside_prefix["acceptance_storage_binding"]["validation_evidence_set_sigil"] = content_sigil(
+        outside_prefix["acceptance_storage_binding"]["validation_evidence"]
+    )
+    outside_prefix["authorization_sigil"] = content_sigil({
+        key: value for key, value in outside_prefix.items() if key != "authorization_sigil"
+    })
+    with pytest.raises(AthanorError, match="frozen Storage prefix"):
+        validate_agent_result_acceptance_authorization_v1(outside_prefix)
 
 
 def _allocated_event(queued: dict[str, Any], attempt: dict[str, Any]) -> dict[str, Any]:
