@@ -10,6 +10,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
     load_artifact_storage_disposition_v1,
+    load_artifact_gc_plan_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
@@ -25,6 +26,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_head_v1,
     validate_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_disposition_v1,
+    validate_artifact_gc_plan_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
     validate_artifact_storage_legacy_protection_v1,
@@ -237,6 +239,36 @@ def _retention_policy() -> dict[str, object]:
         key: member for key, member in policy.items() if key != "record_sigil"
     })
     return policy
+
+
+def _gc_plan() -> dict[str, object]:
+    bounds = {
+        "max_roots": 1, "max_nodes": 1, "max_edges": 1, "max_depth": 1,
+        "max_control_record_bytes": 1, "max_wall_millis": 1,
+    }
+    plan: dict[str, object] = {
+        "schema_version": "artifact-gc-plan/1.0", "gc_plan_id": "SG-ONE", "policy_id": "SP-ONE",
+        "root_snapshot": {
+            "chronicle_head": {"schema_version": "chronicle-head/1.1", "event_count": 0,
+                               "terminal_receipt_sigil": None},
+            "storage_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                              "event_sigil": SIGIL},
+            "execution_roots": {"execution_journal_id": "EXECUTION", "execution_event_count": 0,
+                                "execution_last_event_sigil": None, "roots": [], "root_set_sigil": SIGIL},
+            "hold_set_sigil": SIGIL, "legacy_protection_set_sigil": SIGIL,
+            "reference_intent_set_sigil": SIGIL, "reference_set_sigils": [], "policy_set_sigil": SIGIL,
+        }, "extractor_suite_sigil": SIGIL, "bounds": bounds,
+        "closure_proof": {"root_set_sigil": SIGIL, "extractor_suite_sigil": SIGIL,
+                          "bounds": bounds, "visited_node_count": 0, "visited_edge_count": 0,
+                          "cycle_summary_sigil": SIGIL, "reachable_blob_sigils": [],
+                          "reachable_replica_ids": [], "proof_sigil": SIGIL},
+        "targets": [], "created_at": STAMP, "grace_ends_at": "2026-08-06T00:00:01Z",
+        "record_sigil": "",
+    }
+    plan["record_sigil"] = content_sigil({
+        key: member for key, member in plan.items() if key != "record_sigil"
+    })
+    return plan
 
 
 def _recovery_marker() -> dict[str, object]:
@@ -492,6 +524,22 @@ def test_retention_policy_and_hold_projection_matrix() -> None:
     })
     with pytest.raises(AthanorError, match="Hold release authorization"):
         validate_artifact_storage_state_v1(invalid_hold)
+
+
+def test_gc_plan_closes_local_proof_bindings_and_sorting() -> None:
+    plan = _gc_plan()
+    validate_artifact_gc_plan_v1(plan)
+    assert load_artifact_gc_plan_v1(json.dumps(plan)) == plan
+
+    wrong_proof = deepcopy(plan)
+    wrong_proof["closure_proof"]["bounds"] = {  # type: ignore[index]
+        **wrong_proof["bounds"], "max_depth": 2  # type: ignore[index]
+    }
+    wrong_proof["record_sigil"] = content_sigil({
+        key: member for key, member in wrong_proof.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="Closure Proof disagrees"):
+        validate_artifact_gc_plan_v1(wrong_proof)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

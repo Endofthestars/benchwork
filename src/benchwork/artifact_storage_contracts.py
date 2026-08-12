@@ -301,6 +301,40 @@ def load_artifact_retention_policy_v1(
     return policy
 
 
+def validate_artifact_gc_plan_v1(plan: dict[str, Any]) -> None:
+    """Validate a GC Plan's closed local bindings without redoing traversal."""
+    validate_instance("artifact-gc-plan-1.0.json", plan)
+    _check_nfc_and_numbers(plan)
+    if plan["record_sigil"] != content_sigil(_without(plan, "record_sigil")):
+        _fail("Artifact GC Plan self-Sigil mismatch")
+    if _parse_time(plan["created_at"]) >= _parse_time(plan["grace_ends_at"]):
+        _fail("Artifact GC Plan grace deadline must follow creation")
+    root_snapshot = plan["root_snapshot"]
+    proof = plan["closure_proof"]
+    if (
+        proof["root_set_sigil"] != root_snapshot["execution_roots"]["root_set_sigil"]
+        or proof["extractor_suite_sigil"] != plan["extractor_suite_sigil"]
+        or proof["bounds"] != plan["bounds"]
+    ):
+        _fail("Artifact GC Plan Closure Proof disagrees with plan bindings")
+    for collection in (
+        root_snapshot["reference_set_sigils"], proof["reachable_blob_sigils"],
+        proof["reachable_replica_ids"], [target["target_id"] for target in plan["targets"]],
+    ):
+        if collection != sorted(collection) or len(set(collection)) != len(collection):
+            _fail("Artifact GC Plan collections must be uniquely sorted")
+    for target in plan["targets"]:
+        remaining = target["expected_remaining_replica_ids"]
+        if remaining != sorted(remaining) or len(set(remaining)) != len(remaining):
+            _fail("Artifact GC Plan target remaining replicas must be uniquely sorted")
+
+
+def load_artifact_gc_plan_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    plan = _load_strict_object(raw, "Artifact GC Plan")
+    validate_artifact_gc_plan_v1(plan)
+    return plan
+
+
 def validate_artifact_storage_state_supplied_retention_policies_v1(
     state: dict[str, Any], *, policies: list[dict[str, Any]],
 ) -> None:
