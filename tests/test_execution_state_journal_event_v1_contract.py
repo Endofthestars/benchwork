@@ -1059,6 +1059,48 @@ def test_empty_recovery_phase_replay_projects_each_control_phase() -> None:
     }]
     assert state["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
 
+    completed = {
+        "schema_version": "execution-journal-event/1.0",
+        "journal_id": "EJ-ONE",
+        "event_id": "JE-SEVEN",
+        "sequence": 7,
+        "event_type": "recovery.completed",
+        "executor_instance_id": "XI-ONE",
+        "executor_epoch": 1,
+        "executor_build_sigil": state["executor"]["executor_build_binding"]["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:06Z",
+        "observed_at": None,
+        "entity_revisions": [
+            {"entity_kind": "EXECUTOR", "entity_id": "XI-ONE", "preceding_revision": 2, "next_revision": 3},
+            {"entity_kind": "RECOVERY", "entity_id": "RY-ONE", "preceding_revision": 3, "next_revision": 4},
+        ],
+        "causation_event_id": None,
+        "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {
+            "recovery_id": "RY-ONE",
+            "completed_action_set_sigil": finalizing_set["action_set_sigil"],
+            "finalizing_state_sigil": state["state_sigil"],
+            "fence_tombstone_event_ids": [],
+            "quarantined_entity_ids": [],
+            "resumable_job_ids": [],
+        },
+        "previous_event_sigil": finalizing["event_sigil"],
+    }
+    completed["event_sigil"] = content_sigil({
+        key: member for key, member in completed.items() if key != "event_sigil"
+    })
+    fully_completed = replay_execution_empty_recovery_phase_prefix_v1(
+        [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing, completed],
+        [started_set, fencing_set, reconciling_set, finalizing_set],
+    )
+    assert replay_execution_journal_prefix_v1(
+        [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing, completed],
+        recovery_action_sets=[started_set, fencing_set, reconciling_set, finalizing_set],
+    ) == fully_completed
+    assert fully_completed["recoveries"][0]["state"] == "COMPLETED"
+    assert fully_completed["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN"]
+
     one_step = replay_execution_supplied_state_suffix_v1(
         replay_execution_journal_prefix_v1([initial, clock_uncertain, recovery_started]),
         [fencing],

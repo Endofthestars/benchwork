@@ -3345,7 +3345,7 @@ def replay_execution_journal_prefix_v1(
     Prefix integrity is checked before reducer dispatch.  A syntactically valid
     Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
     fails closed rather than being interpreted as a no-op or guessed transition.
-    ``recovery_action_sets`` is required only for the six-Event, action-free
+    ``recovery_action_sets`` is required only for the action-free
     Recovery control path; it is not an authority to derive or execute actions.
     """
     if not events:
@@ -3369,9 +3369,10 @@ def replay_execution_journal_prefix_v1(
             "recovery.phase_advanced",
             "recovery.phase_advanced",
         ]
-        if [
+        event_types = [
             event.get("event_type") if isinstance(event, dict) else None for event in events
-        ] != empty_recovery_types:
+        ]
+        if event_types not in (empty_recovery_types, [*empty_recovery_types, "recovery.completed"]):
             _fail(
                 "Execution Journal recovery action sets are only supported for the empty Recovery path"
             )
@@ -3661,21 +3662,25 @@ def replay_execution_empty_recovery_phase_prefix_v1(
     This narrow deterministic projection is intentionally not a general
     Journal replay: it requires the initial empty State, an uncertain clock,
     four sealed empty action sets, and exactly the three phase transitions.
-    It neither establishes durable action-set availability nor handles
-    ``recovery.completed``, whose post-State assertion needs the complete
-    installed reducer and external durable facts.
+    A final ``recovery.completed`` Event is optional; when supplied, its
+    ``finalizing_state_sigil`` is verified against the State produced by the
+    three transitions before the installed completion reducer is invoked.
+    It does not establish durable action-set availability.
     """
-    if len(events) != 6 or len(recovery_action_sets) != 4:
-        _fail("empty Recovery phase replay requires six Events and four action sets")
+    if len(events) not in (6, 7) or len(recovery_action_sets) != 4:
+        _fail("empty Recovery phase replay requires six or seven Events and four action sets")
     validate_execution_journal_prefix_wire_v1(events, head=head)
-    if [event["event_type"] for event in events] != [
+    expected_types = [
         "executor.epoch_started",
         "executor.clock_uncertain",
         "recovery.started",
         "recovery.phase_advanced",
         "recovery.phase_advanced",
         "recovery.phase_advanced",
-    ]:
+    ]
+    if len(events) == 7:
+        expected_types.append("recovery.completed")
+    if [event["event_type"] for event in events] != expected_types:
         _fail("empty Recovery phase replay has an unsupported Event sequence")
     for action_set in recovery_action_sets:
         validate_execution_recovery_action_set_v1(action_set)
@@ -3690,7 +3695,7 @@ def replay_execution_empty_recovery_phase_prefix_v1(
     )
     if state["recoveries"][0]["current_action_set_sigil"] != started_set["action_set_sigil"]:
         _fail("empty Recovery phase replay start State disagrees with action set")
-    for index, event in enumerate(events[3:], 1):
+    for index, event in enumerate(events[3:6], 1):
         completed_set = recovery_action_sets[index - 1]
         next_set = recovery_action_sets[index]
         validate_execution_recovery_action_set_supplied_prefix_v1(
@@ -3706,6 +3711,12 @@ def replay_execution_empty_recovery_phase_prefix_v1(
             event,
             completed_set,
             next_set,
+        )
+    if len(events) == 7:
+        state = _reduce_recovery_completed_v1(
+            state,
+            events[6],
+            recovery_action_sets[-1],
         )
     return state
 
