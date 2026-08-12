@@ -7,7 +7,7 @@ runtime or scientific authority.
 | Exit requirement | Current evidence | Status |
 | --- | --- | --- |
 | Five accepted RFCs | RFC-0011 through RFC-0015 remain `draft`. | Blocked by explicit RFC acceptance. |
-| Executable Schemas and examples | `scripts/ci/check-schemas.py` validates 214 published Schemas; Phase 3 fixtures are checked by the contract suite. | Present. |
+| Executable Schemas and examples | `scripts/ci/check-schemas.py` validates 214 published Schemas; Phase 3 fixtures are checked by the contract suite, including Promotion Journal revision algebra, abandonment-record closure, and adapter-generation consistency. | Present. |
 | Threat-model review | [Independent local trust-boundary review](PHASE3_THREAT_MODEL_REVIEW.md) found no P1/P2 in the bounded implementation slice. It explicitly leaves external authority and RFC acceptance open. | Partial retained review evidence. |
 | Conformance suite | `scripts/ci/check-phase3-contracts.py` validates the contract-only local slice. It deliberately does not establish full conformance. | Partial. |
 | Local reference vertical slice | Local `benchwork-local-*/0.1` storage and execution primitives retain bounded operational evidence. RFC-0012 replay preserves multi-Attempt history, fresh retry-allocation identities, lease-fence monotonicity, Result acceptance local closure, and supplied-facts assurance-Claim closure. RFC-0013 replay projects exact supplied provenance-policy registrations and active-Store retention-policy registrations with locally closed PROJECT or already-projected Reference Set scope. Retry scheduling/readiness, initialization retention policies, BLOB/PROGRAM retention scopes, and complete Storage replay remain unavailable; all authority-bearing paths fail closed. | Partial. |
