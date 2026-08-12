@@ -358,6 +358,21 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert claimed_state["leases"][0]["state"] == "ACTIVE"
     assert claimed_state["attempts"][0]["state"] == "LEASED"
     assert claimed_state["worker_sessions"][0]["capacity_in_use"] == 1
+
+    expired = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-EXPIRED", "sequence": 9, "event_type": "lease.expired", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": lease["initial_expiry_due_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 4, "next_revision": 5}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": claimed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"deadline_kind": "LEASE_EXPIRY", "due_at": lease["initial_expiry_due_at"], "prior_fence_floor": 1, "tombstone_generation": 2, "tombstone_publication_sigil": SIGIL, "session_capacity_after": 0}, "previous_event_sigil": claimed["event_sigil"]})
+    expired_state = replay_execution_supplied_state_suffix_v1(claimed_state, [expired])
+    assert expired_state["leases"][0]["state"] == "EXPIRED"
+    assert expired_state["attempts"][0]["state"] == "LEASED"
+    assert expired_state["attempts"][0]["lease_terminal_binding"]["lease_state"] == "EXPIRED"
+    assert expired_state["jobs"][0]["fence_floor"] == 2
+    assert expired_state["worker_sessions"][0]["capacity_in_use"] == 0
+
+    wrong_expiry = deepcopy(expired)
+    wrong_expiry["payload"]["due_at"] = "2026-08-06T00:00:08Z"
+    wrong_expiry = build_execution_journal_event_v1({key: value for key, value in wrong_expiry.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(claimed_state, [wrong_expiry])
+
     starting = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-NINE", "sequence": 9, "event_type": "attempt.starting", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 4, "next_revision": 5}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"backend_start_handle_sigil": SIGIL, "start_request_sigil": SIGIL}, "previous_event_sigil": claimed["event_sigil"]})
     running = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-TEN", "sequence": 10, "event_type": "attempt.running", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 5, "next_revision": 6}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"process_tree_identity": "PROCESS", "process_tree_evidence_sigil": SIGIL, "side_effect_handle_set_sigil": SIGIL}, "previous_event_sigil": starting["event_sigil"]})
     running_state = replay_execution_supplied_state_suffix_v1(claimed_state, [starting, running])
