@@ -843,9 +843,25 @@ def validate_execution_result_ingress_index_v1(index: dict[str, Any]) -> None:
         or index["idempotency_key_sigil"] != candidate["idempotency_key_sigil"]
     ):
         _fail("Result ingress Index top-level binding disagrees with Receipt or candidate")
+    owner = receipt["owner_binding"]
+    if (
+        candidate["executor_instance_id"] != receipt["receiver_identity"]["executor_instance_id"]
+        or candidate["executor_epoch"] != owner["executor_epoch"]
+        or ("ATTEMPT", owner["attempt_id"]) not in {
+            (revision["entity_kind"], revision["entity_id"])
+            for revision in candidate["entity_revisions"]
+        }
+    ):
+        _fail("Result ingress candidate Event disagrees with Receipt owner")
+    expected_key = content_sigil([
+        "execution-result-ingress-key/1.0", owner["attempt_id"], receipt["result_sigil"],
+    ])
+    if index["idempotency_key_sigil"] != expected_key:
+        _fail("Result ingress Index idempotency key disagrees with Receipt")
     status = index["status"]
     if status["kind"] == "PENDING_EVENT":
         head = status["expected_journal_head"]
+        validate_execution_journal_head_v1(head)
         if (
             head["journal_id"] != candidate["journal_id"]
             or head["last_sequence"] + 1 != candidate["sequence"]

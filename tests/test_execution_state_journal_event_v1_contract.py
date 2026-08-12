@@ -104,7 +104,7 @@ def _event_unsigned() -> dict[str, Any]:
             }
         ],
         "causation_event_id": None,
-        "idempotency_key_sigil": SIGIL,
+            "idempotency_key_sigil": SIGIL,
         "recovery_action_binding": None,
         "payload": {
             "intake_kind": "CHUNK",
@@ -265,7 +265,9 @@ def _result_ingress_index() -> dict[str, Any]:
             "entity_kind": "ATTEMPT", "entity_id": receipt["owner_binding"]["attempt_id"],
             "preceding_revision": 4, "next_revision": 5,
         }],
-        "idempotency_key_sigil": SIGIL,
+        "idempotency_key_sigil": content_sigil([
+            "execution-result-ingress-key/1.0", receipt["owner_binding"]["attempt_id"], receipt["result_sigil"],
+        ]),
         "payload": {
             "ingress_receipt_id": receipt["ingress_receipt_id"],
             "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
@@ -1093,6 +1095,20 @@ def test_result_ingress_index_seals_receipt_candidate_and_status_bindings() -> N
     )
     with pytest.raises(Exception, match="pending Index Head"):
         validate_execution_result_ingress_index_v1(bad_pending)
+
+    bad_owner = deepcopy(index)
+    bad_owner["ingress_event_intent"]["event_candidate"]["executor_epoch"] = 2
+    bad_owner["ingress_event_intent"]["event_candidate"]["event_sigil"] = content_sigil(
+        {key: member for key, member in bad_owner["ingress_event_intent"]["event_candidate"].items() if key != "event_sigil"}
+    )
+    bad_owner["ingress_event_intent"]["intent_sigil"] = content_sigil(
+        {key: member for key, member in bad_owner["ingress_event_intent"].items() if key != "intent_sigil"}
+    )
+    bad_owner["index_sigil"] = content_sigil(
+        {key: member for key, member in bad_owner.items() if key != "index_sigil"}
+    )
+    with pytest.raises(Exception, match="candidate Event disagrees with Receipt owner"):
+        validate_execution_result_ingress_index_v1(bad_owner)
 
     committed = deepcopy(index)
     candidate = committed["ingress_event_intent"]["event_candidate"]
