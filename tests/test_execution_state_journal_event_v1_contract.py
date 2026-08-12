@@ -394,6 +394,36 @@ def test_state_locally_binds_log_stream_closure_projections() -> None:
         load_execution_state_v1(json.dumps(closed_past_next))
 
 
+def test_state_locally_binds_deadline_priority_and_order() -> None:
+    state = _state_with_session_and_lease()
+    state["deadlines"] = [
+        {"deadline_kind": "JOB_DEADLINE", "due_at": STAMP, "fixed_priority": 10,
+         "entity_id": JOB_ID, "source_event_id": "JE-ONE", "source_event_sigil": SIGIL},
+        {"deadline_kind": "LEASE_EXPIRY", "due_at": STAMP, "fixed_priority": 40,
+         "entity_id": LEASE_ID, "source_event_id": "JE-ONE", "source_event_sigil": SIGIL},
+    ]
+    _reseal_state(state)
+    assert load_execution_state_v1(json.dumps(state)) == state
+
+    wrong_priority = deepcopy(state)
+    wrong_priority["deadlines"][0]["fixed_priority"] = 20
+    _reseal_state(wrong_priority)
+    with pytest.raises(Exception, match="fixed priority"):
+        load_execution_state_v1(json.dumps(wrong_priority))
+
+    wrong_order = deepcopy(state)
+    wrong_order["deadlines"].reverse()
+    _reseal_state(wrong_order)
+    with pytest.raises(Exception, match="canonical deadline key"):
+        load_execution_state_v1(json.dumps(wrong_order))
+
+    duplicate_key = deepcopy(state)
+    duplicate_key["deadlines"].append(deepcopy(duplicate_key["deadlines"][1]))
+    _reseal_state(duplicate_key)
+    with pytest.raises(Exception, match="duplicate Deadline"):
+        load_execution_state_v1(json.dumps(duplicate_key))
+
+
 def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> None:
     event = json.loads(
         (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()

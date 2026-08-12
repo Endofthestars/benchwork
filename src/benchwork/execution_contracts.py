@@ -60,6 +60,15 @@ _ENTITY_KIND_ORDER = (
 _ENTITY_KIND_RANK = {value: rank for rank, value in enumerate(_ENTITY_KIND_ORDER)}
 _AUTHORITY_GATE_ORDER = ("INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "RECOVERY_ACTIVE")
 _AUTHORITY_GATE_RANK = {value: rank for rank, value in enumerate(_AUTHORITY_GATE_ORDER)}
+_DEADLINE_PRIORITY = {
+    "JOB_DEADLINE": 10,
+    "ATTEMPT_DEADLINE": 20,
+    "HEARTBEAT_TIMEOUT": 30,
+    "LEASE_EXPIRY": 40,
+    "LEASE_CLAIM_DEADLINE": 50,
+    "CANCELLATION_GRACE": 60,
+    "RETRY_ELIGIBILITY": 70,
+}
 _EXECUTION_REQUEST_SCHEMAS_V1 = {
     "start": "execution-start-request-1.0.json",
     "observe": "execution-observe-request-1.0.json",
@@ -279,6 +288,19 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             _fail("Closed Log stream must have a stream-set Sigil")
         elif final_sequence is not None and final_sequence >= log_stream["next_sequence"]:
             _fail("Closed Log stream final sequence must precede next sequence")
+    deadline_keys: list[tuple[datetime, int, bytes]] = []
+    for deadline in state["deadlines"]:
+        if deadline["fixed_priority"] != _DEADLINE_PRIORITY[deadline["deadline_kind"]]:
+            _fail("Deadline fixed priority disagrees with deadline kind")
+        deadline_keys.append((
+            _parse_time(deadline["due_at"]),
+            deadline["fixed_priority"],
+            _unsigned_ascii(deadline["entity_id"], "Deadline entity ID"),
+        ))
+    if deadline_keys != sorted(deadline_keys):
+        _fail("Deadlines are not sorted by canonical deadline key")
+    if len(deadline_keys) != len(set(deadline_keys)):
+        _fail("duplicate Deadline projection key")
     keys = [_idempotency_projection(record) for record in state["idempotency_records"]]
     if keys != sorted(keys):
         _fail("idempotency_records are not sorted by the canonical 11-rank key")
