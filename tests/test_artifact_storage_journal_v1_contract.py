@@ -26,6 +26,7 @@ from benchwork.artifact_storage_contracts import (
     require_artifact_storage_journal_replay_authority_v1,
     require_artifact_storage_runtime_authority_v1,
     replay_artifact_storage_initial_prefix_v1,
+    replay_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_journal_event_v1,
     validate_artifact_storage_journal_head_supplied_event_v1,
     validate_artifact_storage_journal_head_supplied_prefix_v1,
@@ -217,6 +218,35 @@ def test_storage_initial_replay_builds_the_exact_empty_state() -> None:
     })
     with pytest.raises(AthanorError, match="validation failed|tail recovery"):
         replay_artifact_storage_initial_prefix_v1([recovered])
+
+
+def test_storage_replay_activates_the_empty_initialized_store() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{
+        "entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1, "next_revision": 2,
+    }]
+    activation["payload"] = {
+        "legacy_protection_ids": [], "activation_evidence_sigil": SIGIL,
+        "clock": initial["payload"]["clock"],
+    }
+    activation["quota_effects"] = []
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    state = replay_artifact_storage_journal_prefix_v1([initial, activation])
+    assert state["store_status"] == "ACTIVE"
+    assert state["applied_event_count"] == 2
+    assert state["last_event_sigil"] == activation["event_sigil"]
+
+    wrong_revision = deepcopy(activation)
+    wrong_revision["entity_revisions"][0]["next_revision"] = 3
+    wrong_revision["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_revision.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="invalid Store revision"):
+        replay_artifact_storage_journal_prefix_v1([initial, wrong_revision])
 
 
 def _reference_set() -> dict[str, object]:

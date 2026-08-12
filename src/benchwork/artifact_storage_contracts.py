@@ -723,6 +723,60 @@ def replay_artifact_storage_initial_prefix_v1(
     return state
 
 
+def _reduce_artifact_storage_activation_v1(
+    state: dict[str, Any], event: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply the empty-protection activation branch after initialization."""
+    if state["store_status"] != "INITIALIZING" or event["event_type"] != "storage.activation_completed":
+        _fail("Artifact Storage activation reducer has an invalid source state or Event")
+    if (
+        event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+    ):
+        _fail("Artifact Storage activation Event disagrees with prior State")
+    expected_revisions = [{
+        "entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1, "next_revision": 2,
+    }]
+    if event["entity_revisions"] != expected_revisions:
+        _fail("Artifact Storage activation Event has invalid Store revision")
+    payload = event["payload"]
+    protection_ids = [item["protection_id"] for item in state["legacy_v1_protections"]]
+    if payload["legacy_protection_ids"] != sorted(protection_ids):
+        _fail("Artifact Storage activation protections disagree with State")
+    if any(item["state"] != "PROTECTED" for item in state["legacy_v1_protections"]):
+        _fail("Artifact Storage activation cannot proceed with failed legacy protection")
+    if _parse_time(payload["clock"]["utc"]) < _parse_time(state["clock_anchor"]["utc"]):
+        _fail("Artifact Storage activation clock regresses")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "store_status": "ACTIVE", "clock_anchor": payload["clock"],
+        "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
+def replay_artifact_storage_journal_prefix_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Replay installed Storage Journal reducers, failing closed for all others."""
+    validate_artifact_storage_journal_prefix_v1(events)
+    state = replay_artifact_storage_initial_prefix_v1([events[0]])
+    if len(events) == 1:
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[0], state["state_sigil"])
+        return state
+    if len(events) == 2 and events[1]["event_type"] == "storage.activation_completed":
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[1], state["state_sigil"])
+        return state
+    _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
+
+
 def _state_identity(value: dict[str, Any], collection: str) -> str | tuple[str, str]:
     if collection == "open_intents":
         return value["intent_kind"], value["intent_id"]
