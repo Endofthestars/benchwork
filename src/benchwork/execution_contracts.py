@@ -93,6 +93,11 @@ _ATTEMPT_TERMINAL_EVENT_TYPES = {
     "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced",
     "attempt.rejected",
 }
+_CONTROL_DIMENSION_ORDER = (
+    "IDENTITY_AUTHORIZATION", "FILESYSTEM", "NETWORK", "PROCESS_EXECUTABLE", "RESOURCE",
+    "ENVIRONMENT_CREDENTIAL", "LOG_OUTPUT_CAPTURE", "RUNTIME_INPUT_OUTPUT_IDENTITY",
+    "CANCELLATION_FENCING", "TERMINATION_CLEANUP",
+)
 _AUTHORITY_GATE_ORDER = ("INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "RECOVERY_ACTIVE")
 _AUTHORITY_GATE_RANK = {value: rank for rank, value in enumerate(_AUTHORITY_GATE_ORDER)}
 _DEADLINE_PRIORITY = {
@@ -1003,6 +1008,39 @@ def load_execution_root_hold_release_authorization_v1(
     authorization = _load_strict_object(raw, "Execution Root Hold Release Authorization")
     validate_execution_root_hold_release_authorization_v1(authorization)
     return authorization
+
+
+def derive_execution_control_evidence_set_id_v1(evidence_set: dict[str, Any]) -> str:
+    """Derive the immutable CES-ID from its Attempt owner binding."""
+    digest = content_sigil([
+        "execution-control-evidence-set-id/1.0", evidence_set["job_id"],
+        evidence_set["attempt_id"], evidence_set["attempt_binding_sigil"],
+    ]).removeprefix("sha256:").upper()
+    return f"CES-{digest}"
+
+
+def validate_execution_control_evidence_set_v1(evidence_set: dict[str, Any]) -> None:
+    """Validate a frozen CES locally without resolving its evidence records."""
+    validate_instance("execution-control-evidence-set-1.0.json", evidence_set)
+    _check_nfc(evidence_set)
+    if evidence_set["control_evidence_set_id"] != derive_execution_control_evidence_set_id_v1(evidence_set):
+        _fail("Execution Control Evidence Set ID mismatch")
+    if evidence_set["control_evidence_set_sigil"] != content_sigil(
+        _without(evidence_set, "control_evidence_set_sigil")
+    ):
+        _fail("Execution Control Evidence Set self-Sigil mismatch")
+    refs = evidence_set["control_evidence_refs"]
+    if [reference["control_dimension"] for reference in refs] != list(_CONTROL_DIMENSION_ORDER):
+        _fail("Execution Control Evidence Set dimensions are not in matrix order")
+    ids = [reference["control_evidence_id"] for reference in refs]
+    if len(set(ids)) != len(ids):
+        _fail("Execution Control Evidence Set evidence IDs must be unique")
+
+
+def load_execution_control_evidence_set_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    evidence_set = _load_strict_object(raw, "Execution Control Evidence Set")
+    validate_execution_control_evidence_set_v1(evidence_set)
+    return evidence_set
 
 
 def derive_observation_evidence_subject_sigil_v1(

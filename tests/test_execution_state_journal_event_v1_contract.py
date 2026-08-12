@@ -15,6 +15,7 @@ from benchwork.execution_contracts import (
     derive_execution_observation_cursor_sigil_v1,
     derive_execution_storage_root_manifest_id_v1,
     derive_execution_root_hold_release_authorization_id_v1,
+    derive_execution_control_evidence_set_id_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
@@ -28,6 +29,7 @@ from benchwork.execution_contracts import (
     load_execution_state_v1,
     load_execution_storage_root_manifest_v1,
     load_execution_root_hold_release_authorization_v1,
+    load_execution_control_evidence_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
@@ -40,6 +42,7 @@ from benchwork.execution_contracts import (
     validate_execution_recovery_action_set_v1,
     validate_execution_storage_root_manifest_v1,
     validate_execution_root_hold_release_authorization_v1,
+    validate_execution_control_evidence_set_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -376,6 +379,31 @@ def _root_hold_release_authorization() -> dict[str, Any]:
         key: member for key, member in authorization.items() if key != "release_authorization_sigil"
     })
     return authorization
+
+
+def _control_evidence_set() -> dict[str, Any]:
+    dimensions = [
+        "IDENTITY_AUTHORIZATION", "FILESYSTEM", "NETWORK", "PROCESS_EXECUTABLE", "RESOURCE",
+        "ENVIRONMENT_CREDENTIAL", "LOG_OUTPUT_CAPTURE", "RUNTIME_INPUT_OUTPUT_IDENTITY",
+        "CANCELLATION_FENCING", "TERMINATION_CLEANUP",
+    ]
+    evidence_set = {
+        "schema_version": "execution-control-evidence-set/1.0", "control_evidence_set_id": "",
+        "job_id": JOB_ID, "attempt_id": "AT-ONE", "attempt_binding_sigil": SIGIL,
+        "control_evidence_refs": [
+            {"control_dimension": dimension, "control_evidence_id": "CVE-0" + "0" * 25,
+             "control_evidence_sigil": SIGIL if index == 0 else SIGIL_B}
+            for index, dimension in enumerate(dimensions)
+        ],
+        "control_evidence_set_sigil": "",
+    }
+    for index, reference in enumerate(evidence_set["control_evidence_refs"]):
+        reference["control_evidence_id"] = f"CVE-0{index:025d}"[-30:]
+    evidence_set["control_evidence_set_id"] = derive_execution_control_evidence_set_id_v1(evidence_set)
+    evidence_set["control_evidence_set_sigil"] = content_sigil({
+        key: member for key, member in evidence_set.items() if key != "control_evidence_set_sigil"
+    })
+    return evidence_set
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1331,6 +1359,32 @@ def test_root_hold_release_authorization_closes_id_sigil_and_prefix_bounds() -> 
     })
     with pytest.raises(Exception, match="Head predates"):
         validate_execution_root_hold_release_authorization_v1(short_head)
+
+
+def test_control_evidence_set_closes_owner_id_and_ten_dimension_matrix() -> None:
+    evidence_set = _control_evidence_set()
+    validate_execution_control_evidence_set_v1(evidence_set)
+    assert load_execution_control_evidence_set_v1(json.dumps(evidence_set)) == evidence_set
+
+    wrong_order = deepcopy(evidence_set)
+    wrong_order["control_evidence_refs"][0], wrong_order["control_evidence_refs"][1] = (
+        wrong_order["control_evidence_refs"][1], wrong_order["control_evidence_refs"][0]
+    )
+    wrong_order["control_evidence_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_order.items() if key != "control_evidence_set_sigil"
+    })
+    with pytest.raises(Exception, match="matrix order"):
+        validate_execution_control_evidence_set_v1(wrong_order)
+
+    duplicate_id = deepcopy(evidence_set)
+    duplicate_id["control_evidence_refs"][1]["control_evidence_id"] = (
+        duplicate_id["control_evidence_refs"][0]["control_evidence_id"]
+    )
+    duplicate_id["control_evidence_set_sigil"] = content_sigil({
+        key: member for key, member in duplicate_id.items() if key != "control_evidence_set_sigil"
+    })
+    with pytest.raises(Exception, match="evidence IDs"):
+        validate_execution_control_evidence_set_v1(duplicate_id)
 
 
 
