@@ -1061,6 +1061,30 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="globally unique"):
         validate_artifact_storage_state_v1(open_ids)
 
+    recovering = deepcopy(state)
+    recovering.update({
+        "store_status": "RECOVERING", "active_recovery_id": "RECOVERY",
+        "recovery_origin_status": "INITIALIZING", "current_epoch": 2,
+        "recoveries": [{
+            "recovery_id": "RECOVERY", "origin_status": "INITIALIZING", "state": "ACTIVE",
+            "started_event_sigil": SIGIL, "epoch_ids": [1, 2],
+            "tail_recovery_evidence_record_sigils": [], "completed_event_sigil": None,
+            "resume_status": None,
+        }],
+    })
+    recovering["state_sigil"] = content_sigil({
+        key: member for key, member in recovering.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(recovering)
+
+    stale_recovery = deepcopy(recovering)
+    stale_recovery["recoveries"][0]["epoch_ids"] = [1]  # type: ignore[index]
+    stale_recovery["state_sigil"] = content_sigil({
+        key: member for key, member in stale_recovery.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="active Recovery disagrees"):
+        validate_artifact_storage_state_v1(stale_recovery)
+
     wrong_open_sigil = deepcopy(open_ids)
     wrong_open_sigil["open_intents"] = [wrong_open_sigil["open_intents"][0]]
     wrong_open_sigil["open_intents"][0]["intent_sigil"] = SIGIL_B

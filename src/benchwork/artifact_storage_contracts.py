@@ -748,6 +748,20 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             _fail(f"Artifact Storage State {collection} identities must be unique")
         if identities != sorted(identities, key=_identity_sort_key):
             _fail(f"Artifact Storage State {collection} is not identity sorted")
+    recoveries = {recovery["recovery_id"]: recovery for recovery in state["recoveries"]}
+    for recovery in recoveries.values():
+        if recovery["epoch_ids"] != sorted(recovery["epoch_ids"]):
+            _fail("Artifact Storage State Recovery epochs are not strictly increasing")
+        if recovery["state"] == "COMPLETED" and recovery["resume_status"] != recovery["origin_status"]:
+            _fail("Artifact Storage State completed Recovery resume status disagrees with origin")
+    active_recovery = recoveries.get(state["active_recovery_id"])
+    if state["store_status"] == "RECOVERING" and (
+        active_recovery is None
+        or active_recovery["state"] != "ACTIVE"
+        or active_recovery["origin_status"] != state["recovery_origin_status"]
+        or active_recovery["epoch_ids"][-1] != state["current_epoch"]
+    ):
+        _fail("Artifact Storage State active Recovery disagrees with Store projection")
     for collection, schema_name in _STATE_WRAPPER_SCHEMAS.items():
         for wrapper in state[collection]:
             record = wrapper["record"]
