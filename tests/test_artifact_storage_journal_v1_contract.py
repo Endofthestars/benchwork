@@ -15,6 +15,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_provenance_policy_v1,
     load_artifact_storage_backend_v1,
     load_artifact_storage_doctor_report_v1,
+    load_artifact_transfer_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
@@ -36,6 +37,8 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_state_supplied_provenance_policies_v1,
     validate_artifact_storage_backend_v1,
     validate_artifact_storage_doctor_report_v1,
+    validate_artifact_transfer_v1,
+    validate_artifact_storage_state_supplied_transfers_v1,
     validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
@@ -413,6 +416,35 @@ def _doctor_report() -> dict[str, object]:
     return report
 
 
+def _transfer() -> dict[str, object]:
+    backend = {"backend_id": "BACKEND", "backend_profile_version": "1.0",
+               "backend_profile_sigil": SIGIL}
+    execution = {
+        "kind": "LEASED", "execution_journal_id": "EXECUTION", "executor_epoch": 1,
+        "job_id": "JOB", "attempt_id": "ATTEMPT", "lease_id": "LEASE", "worker_id": "WORKER",
+        "worker_session_id": "SESSION",
+        "fence": {"execution_journal_id": "EXECUTION", "executor_epoch": 1, "job_id": "JOB",
+                  "attempt_id": "ATTEMPT", "lease_id": "LEASE", "fencing_generation": 0,
+                  "execution_event_sigil": SIGIL, "job_fence_floor": 0, "tombstone_present": False},
+    }
+    transfer: dict[str, object] = {
+        "schema_version": "artifact-transfer/1.0", "transfer_id": "ST-ONE", "direction": "INGEST",
+        "purpose": "ATTEMPT_OUTPUT",
+        "source": {"kind": "ATTEMPT_OUTPUT", "execution": execution, "output_handle_id": "OUTPUT"},
+        "destination": {"kind": "MANAGED_BACKEND", "backend": backend}, "expected_blob_sigil": SIGIL,
+        "bounds": {"max_bytes": 1, "max_duration_millis": 1, "max_file_count": None,
+                   "max_chunk_count": 1, "buffer_bytes": 1}, "backend": backend,
+        "authorization_sigil": SIGIL, "idempotency_key_sigil": SIGIL, "execution": execution,
+        "verification_method": "FULL_READBACK_SHA256",
+        "provenance_policy": {"provenance_policy_id": "SPP-ONE", "provenance_policy_sigil": SIGIL},
+        "retention_policy_ids": [], "created_at": STAMP, "record_sigil": "",
+    }
+    transfer["record_sigil"] = content_sigil({
+        key: member for key, member in transfer.items() if key != "record_sigil"
+    })
+    return transfer
+
+
 def _recovery_marker() -> dict[str, object]:
     marker: dict[str, object] = {
         "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
@@ -749,6 +781,32 @@ def test_doctor_report_is_self_signed_and_nonnegative_in_duration() -> None:
     })
     with pytest.raises(AthanorError, match="completes before"):
         validate_artifact_storage_doctor_report_v1(reversed_times)
+
+
+def test_attempt_output_transfer_is_self_signed_and_matches_state_projection() -> None:
+    transfer = _transfer()
+    validate_artifact_transfer_v1(transfer)
+    assert load_artifact_transfer_v1(json.dumps(transfer)) == transfer
+
+    state = _state()
+    state["transfer_requests"] = [{
+        "transfer_id": transfer["transfer_id"], "request_record_sigil": transfer["record_sigil"],
+        "state": "ACTIVE", "attempt_ids": [], "selected_attempt_id": None,
+        "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_transfers_v1(state, transfers=[transfer])
+
+    invalid = deepcopy(transfer)
+    invalid["destination"]["backend"] = deepcopy(invalid["destination"]["backend"])  # type: ignore[index]
+    invalid["destination"]["backend"]["backend_id"] = "OTHER"  # type: ignore[index]
+    invalid["record_sigil"] = content_sigil({
+        key: member for key, member in invalid.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="ATTEMPT_OUTPUT local bindings"):
+        validate_artifact_transfer_v1(invalid)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

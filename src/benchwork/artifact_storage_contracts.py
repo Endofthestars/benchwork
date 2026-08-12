@@ -395,6 +395,48 @@ def load_artifact_storage_doctor_report_v1(raw: str | bytes | bytearray) -> dict
     return report
 
 
+def validate_artifact_transfer_v1(transfer: dict[str, Any]) -> None:
+    """Validate immutable Transfer bytes without admitting backend work."""
+    validate_instance("artifact-transfer-1.0.json", transfer)
+    _check_nfc_and_numbers(transfer)
+    if transfer["record_sigil"] != content_sigil(_without(transfer, "record_sigil")):
+        _fail("Artifact Transfer self-Sigil mismatch")
+    if transfer["purpose"] == "ATTEMPT_OUTPUT":
+        if (
+            transfer["direction"] != "INGEST"
+            or transfer["source"]["kind"] != "ATTEMPT_OUTPUT"
+            or transfer["source"]["execution"] != transfer["execution"]
+            or transfer["destination"]["kind"] != "MANAGED_BACKEND"
+            or transfer["destination"]["backend"] != transfer["backend"]
+            or transfer["expected_blob_sigil"] is None
+        ):
+            _fail("Artifact Transfer ATTEMPT_OUTPUT local bindings are inconsistent")
+
+
+def load_artifact_transfer_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    transfer = _load_strict_object(raw, "Artifact Transfer")
+    validate_artifact_transfer_v1(transfer)
+    return transfer
+
+
+def validate_artifact_storage_state_supplied_transfers_v1(
+    state: dict[str, Any], *, transfers: list[dict[str, Any]],
+) -> None:
+    """Compare State Transfer request projections with supplied immutable records."""
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, str] = {}
+    for transfer in transfers:
+        validate_artifact_transfer_v1(transfer)
+        if transfer["transfer_id"] in supplied:
+            _fail("Artifact Storage supplied Transfers have duplicate IDs")
+        supplied[transfer["transfer_id"]] = transfer["record_sigil"]
+    for projection in state["transfer_requests"]:
+        if supplied.get(projection["transfer_id"]) != projection["request_record_sigil"]:
+            _fail("Artifact Storage State Transfer projection lacks matching supplied record")
+    if set(supplied) != {projection["transfer_id"] for projection in state["transfer_requests"]}:
+        _fail("Artifact Storage supplied Transfers do not exactly match State projections")
+
+
 def validate_artifact_storage_state_supplied_provenance_policies_v1(
     state: dict[str, Any], *, policies: list[dict[str, Any]],
 ) -> None:
