@@ -1120,6 +1120,16 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="nonrecovering Store retains"):
         validate_artifact_storage_state_v1(unprojected_active_recovery)
 
+    over_limit_counter = deepcopy(state)
+    over_limit_counter["quota_counters"][0].update({  # type: ignore[index]
+        "limit": 1, "used": 1, "reserved": 1,
+    })
+    over_limit_counter["state_sigil"] = content_sigil({
+        key: member for key, member in over_limit_counter.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="quota counter exceeds"):
+        validate_artifact_storage_state_v1(over_limit_counter)
+
     wrong_open_sigil = deepcopy(open_ids)
     wrong_open_sigil["open_intents"] = [wrong_open_sigil["open_intents"][0]]
     wrong_open_sigil["open_intents"][0]["intent_sigil"] = SIGIL_B

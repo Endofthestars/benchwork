@@ -975,6 +975,9 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     }
     if state["availability_counters"] != expected_availability_counters:
         _fail("Artifact Storage State availability counters disagree with Blob records")
+    for counter in state["quota_counters"]:
+        if counter["used"] + counter["reserved"] > counter["limit"]:
+            _fail("Artifact Storage quota counter exceeds its limit")
     for reservation in state["quota_reservations"]:
         for field in ("consumed_claims", "released_claims", "remaining_claims"):
             _validate_quota_claim_array(reservation[field], f"Quota Reservation {field}")
