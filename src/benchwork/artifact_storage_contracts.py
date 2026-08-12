@@ -186,6 +186,82 @@ def validate_artifact_storage_journal_head_supplied_prefix_v1(
     validate_artifact_storage_journal_head_supplied_event_v1(head, events[-1], state_sigil)
 
 
+def _state_identity(value: dict[str, Any], collection: str) -> str | tuple[str, str]:
+    if collection == "open_intents":
+        return value["intent_kind"], value["intent_id"]
+    if collection == "quota_reservations":
+        return value["reservation"]["reservation_id"]
+    if collection in {"blobs", "replicas", "transfer_attempts", "materializations"}:
+        record = value["record"]
+        return record[{"blobs": "blob_sigil", "replicas": "replica_id", "transfer_attempts": "transfer_attempt_id", "materializations": "materialization_id"}[collection]]
+    identity_member = {
+        "recoveries": "recovery_id", "transfer_requests": "transfer_id",
+        "quarantines": "quarantine_id", "provenance": "provenance_id",
+        "provenance_policies": "provenance_policy_id", "retention_policies": "policy_id",
+        "holds": "hold_id", "reference_sets": "reference_set_id",
+        "legacy_v1_protections": "protection_id", "gc_plans": "gc_plan_id",
+        "canonical_reference_intents": "reference_intent_id", "dispositions": "disposition_id",
+        "incidents": "incident_id",
+    }[collection]
+    return value[identity_member]
+
+
+_STATE_IDENTITY_COLLECTIONS = (
+    "recoveries", "blobs", "replicas", "transfer_requests", "transfer_attempts",
+    "materializations", "quarantines", "provenance", "provenance_policies",
+    "retention_policies", "holds", "reference_sets", "legacy_v1_protections",
+    "gc_plans", "canonical_reference_intents", "dispositions", "quota_reservations",
+    "open_intents", "incidents",
+)
+
+
+def _identity_sort_key(value: str | tuple[str, str]) -> bytes | tuple[bytes, bytes]:
+    if isinstance(value, tuple):
+        return value[0].encode("ascii"), value[1].encode("ascii")
+    return value.encode("ascii")
+
+
+def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
+    """Validate a Storage State's local identity projection, never its replay."""
+    validate_instance("artifact-storage-state-1.0.json", state)
+    _check_nfc_and_numbers(state)
+    if state["state_sigil"] != content_sigil(_without(state, "state_sigil")):
+        _fail("Artifact Storage State self-Sigil mismatch")
+    for collection in _STATE_IDENTITY_COLLECTIONS:
+        identities = [_state_identity(value, collection) for value in state[collection]]
+        if len(set(identities)) != len(identities):
+            _fail(f"Artifact Storage State {collection} identities must be unique")
+        if identities != sorted(identities, key=_identity_sort_key):
+            _fail(f"Artifact Storage State {collection} is not identity sorted")
+    open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
+    if len(set(open_intent_ids)) != len(open_intent_ids):
+        _fail("Artifact Storage State open-intent IDs must be globally unique")
+
+
+def load_artifact_storage_state_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    state = _load_strict_object(raw, "Artifact Storage State")
+    validate_artifact_storage_state_v1(state)
+    return state
+
+
+def validate_artifact_storage_head_supplied_state_v1(
+    head: dict[str, Any], state: dict[str, Any],
+) -> None:
+    """Compare a Head with a caller-supplied State projection exactly."""
+    validate_artifact_storage_journal_head_v1(head)
+    validate_artifact_storage_state_v1(state)
+    if (
+        head["journal_id"] != state["journal_id"]
+        or head["storage_format_version"] != state["storage_format_version"]
+        or head["event_count"] != state["applied_event_count"]
+        or head["last_sequence"] != state["applied_event_count"]
+        or head["last_event_sigil"] != state["last_event_sigil"]
+        or head["current_epoch"] != state["current_epoch"]
+        or head["state_sigil"] != state["state_sigil"]
+    ):
+        _fail("Artifact Storage Journal Head contradicts supplied State")
+
+
 def require_artifact_storage_journal_replay_authority_v1() -> NoReturn:
     """Fail closed: this module does not replay or repair a Storage Journal."""
     _fail("Artifact Storage Journal replay authority is unavailable in contract-only scope")
