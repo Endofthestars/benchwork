@@ -440,6 +440,12 @@ def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None
     with pytest.raises(Exception, match="receiver epoch"):
         validate_execution_observation_evidence_supplied_receipt_v1(evidence, bad_receipt)
 
+    bad_subject = deepcopy(receipt)
+    bad_subject["result_observation_binding"]["observation_evidence_subject_sigil"] = SIGIL
+    _reseal_receipt(bad_subject)
+    with pytest.raises(Exception, match="observation subject Sigil"):
+        validate_execution_result_ingress_receipt_v1(bad_subject)
+
     mismatched_assessment = deepcopy(evidence)
     mismatched_assessment["assessment"]["verified_runtime_observation"] = {
         **mismatched_assessment["assessment"]["verified_runtime_observation"],

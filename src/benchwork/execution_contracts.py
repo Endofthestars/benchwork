@@ -233,6 +233,11 @@ def validate_execution_result_ingress_receipt_v1(receipt: dict[str, Any]) -> Non
     _validate_observation_owner_binding(receipt["owner_binding"])
     if receipt["receiver_identity"]["executor_epoch"] != receipt["owner_binding"]["executor_epoch"]:
         _fail("Result ingress receiver epoch disagrees with owner binding")
+    observation = receipt["result_observation_binding"]
+    if observation["observation_evidence_subject_sigil"] != derive_observation_evidence_subject_sigil_v1(
+        receipt["owner_binding"], observation
+    ):
+        _fail("Result ingress receipt observation subject Sigil mismatch")
     if receipt["ingress_receipt_id"] != derive_result_ingress_receipt_id_v1(receipt):
         _fail("Result ingress receipt ID mismatch")
     verification = receipt["credential_verification"]
