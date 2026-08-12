@@ -12,15 +12,18 @@ from benchwork.execution_contracts import (
     build_execution_journal_event_v1,
     derive_observation_evidence_id_v1,
     derive_observation_evidence_subject_sigil_v1,
+    derive_execution_observation_cursor_sigil_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
     load_execution_journal_event_v1,
     load_execution_observation_evidence_v1,
+    load_execution_request_v1,
     load_execution_result_ingress_receipt_v1,
     load_execution_state_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
+    validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
 )
 
@@ -266,6 +269,48 @@ def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
     raw = (FIXTURES / "execution-state-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_state_v1(raw)
+
+
+def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -> None:
+    cursor = {
+        "job_id": JOB_ID,
+        "last_returned_sequence": 2,
+        "through_journal_sequence": 3,
+        "through_event_sigil": SIGIL,
+    }
+    cursor["cursor_sigil"] = derive_execution_observation_cursor_sigil_v1(cursor)
+    observe = {
+        "schema_version": "execution-observe-request/1.0",
+        "job_id": JOB_ID,
+        "limit": 2,
+        "cursor": cursor,
+    }
+    validate_execution_request_v1("observe", observe)
+    assert load_execution_request_v1("observe", json.dumps(observe)) == observe
+    for raw in (
+        b'\xef\xbb\xbf{}',
+        b'{"schema_version":"execution-observe-request/1.0","limit":1,"limit":2}',
+    ):
+        with pytest.raises(Exception):
+            load_execution_request_v1("observe", raw)
+    wrong_job = deepcopy(observe)
+    wrong_job["cursor"]["job_id"] = "JB-" + "B" * 64
+    wrong_job["cursor"]["cursor_sigil"] = derive_execution_observation_cursor_sigil_v1(wrong_job["cursor"])
+    with pytest.raises(Exception, match="does not match"):
+        validate_execution_request_v1("observe", wrong_job)
+    bad_range = deepcopy(observe)
+    bad_range["cursor"]["last_returned_sequence"] = 4
+    bad_range["cursor"]["cursor_sigil"] = derive_execution_observation_cursor_sigil_v1(bad_range["cursor"])
+    with pytest.raises(Exception, match="sequence range"):
+        validate_execution_request_v1("observe", bad_range)
+    with pytest.raises(Exception, match="unknown Execution API"):
+        validate_execution_request_v1("dispatch", observe)
+
+    get_result = {"schema_version": "execution-get-result-request/1.0", "job_id": JOB_ID}
+    validate_execution_request_v1("get_result", get_result)
+    get_result["job_id"] = "JB-" + "Z" * 64
+    with pytest.raises(Exception):
+        validate_execution_request_v1("get_result", get_result)
 
 
 def test_state_rejects_split_policy_legacy_shapes_unknowns_and_duplicate_bytes() -> None:

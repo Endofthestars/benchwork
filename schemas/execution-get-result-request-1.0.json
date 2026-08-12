@@ -9,10 +9,9 @@
     "schema_version": {"const": "execution-get-result-request/1.0"},
     "job_id": {
       "type": "string",
-      "pattern": "^JB-[A-Z0-9]+$",
-      "minLength": 3,
-      "maxLength": 128
+      "pattern": "^JB-[A-F0-9]{64}$",
+      "minLength": 67,
+      "maxLength": 67
     }
   }
 }
-

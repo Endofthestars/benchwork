@@ -54,6 +54,13 @@ IDEMPOTENCY_OPERATION_KINDS_V1 = (
     "RECEIVE_RESULT_INGRESS", "SUBMIT_RESULT", "APPEND_LOG_CHUNK",
     "CLOSE_LOG_STREAM",
 )
+_EXECUTION_REQUEST_SCHEMAS_V1 = {
+    "start": "execution-start-request-1.0.json",
+    "observe": "execution-observe-request-1.0.json",
+    "cancel": "execution-cancel-request-1.0.json",
+    "get_result": "execution-get-result-request-1.0.json",
+    "accept_result": "execution-accept-result-request-1.0.json",
+}
 _IDEMPOTENCY_RANK = {value: rank for rank, value in enumerate(IDEMPOTENCY_OPERATION_KINDS_V1)}
 _MISSING = object()
 
@@ -114,6 +121,38 @@ def _without(value: dict[str, Any], member: str) -> dict[str, Any]:
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def derive_execution_observation_cursor_sigil_v1(cursor: dict[str, Any]) -> str:
+    """Derive the public fixed-prefix cursor Sigil from its other members."""
+    if "cursor_sigil" in cursor:
+        cursor = _without(cursor, "cursor_sigil")
+    return content_sigil(cursor)
+
+
+def validate_execution_request_v1(kind: str, request: dict[str, Any]) -> None:
+    """Validate one closed RFC-0015 request without performing its operation."""
+    try:
+        schema_name = _EXECUTION_REQUEST_SCHEMAS_V1[kind]
+    except KeyError:
+        _fail(f"unknown Execution API request kind: {kind}")
+    validate_instance(schema_name, request)
+    _check_nfc(request)
+    cursor = request.get("cursor")
+    if cursor is not None:
+        if cursor["job_id"] != request["job_id"]:
+            _fail("Execution observation cursor Job does not match request Job")
+        if cursor["last_returned_sequence"] > cursor["through_journal_sequence"]:
+            _fail("Execution observation cursor sequence range is invalid")
+        if cursor["cursor_sigil"] != derive_execution_observation_cursor_sigil_v1(cursor):
+            _fail("Execution observation cursor Sigil mismatch")
+
+
+def load_execution_request_v1(kind: str, raw: str | bytes | bytearray) -> dict[str, Any]:
+    """Strictly decode a closed RFC-0015 request without dispatching it."""
+    request = _load_strict_object(raw, f"Execution API {kind} request")
+    validate_execution_request_v1(kind, request)
+    return request
 
 
 def _idempotency_projection(record: dict[str, Any]) -> tuple[int, str, str]:
