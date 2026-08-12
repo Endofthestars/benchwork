@@ -5323,6 +5323,108 @@ def load_agent_result_acceptance_transition_request_v1(
     return request
 
 
+def project_agent_result_record_v2_supplied_facts(
+    event: dict[str, Any],
+    request: dict[str, Any],
+    intent: dict[str, Any],
+) -> dict[str, Any]:
+    """Project one v2 acceptance Event from complete caller-supplied preimages.
+
+    This is a strict supplied-facts comparator, not Chronicle replay or
+    acceptance authority: callers must separately establish the authoritative
+    prefix, immutable request lookup, and committed canonical-reference pin.
+    """
+    from .artifact_storage_contracts import validate_artifact_storage_reference_intent_v1
+
+    validate_instance("chronicle-event-1.1.json", event)
+    _check_nfc(event)
+    event_body = {key: value for key, value in event.items() if key not in {"event_body_sigil", "receipt"}}
+    if event["event_body_sigil"] != content_sigil(event_body):
+        _fail("Agent Result v2 Event body self-Sigil mismatch")
+    receipt = event["receipt"]
+    if receipt["receipt_sigil"] != content_sigil(_without(receipt, "receipt_sigil")):
+        _fail("Agent Result v2 Receipt self-Sigil mismatch")
+    if (
+        receipt["event_id"] != event["event_id"]
+        or receipt["event_body_sigil"] != event["event_body_sigil"]
+        or receipt["previous_receipt_sigil"] != event["previous_receipt_sigil"]
+        or receipt["accepted_at"] != event["occurred_at"]
+    ):
+        _fail("Agent Result v2 Receipt disagrees with Event")
+    validate_agent_result_acceptance_transition_request_v1(request)
+    validate_artifact_storage_reference_intent_v1(intent)
+    if event["type"] != request["event_type"] or event["type"] != intent["canonical_event_type"]:
+        _fail("Agent Result v2 Event family disagrees with request or intent")
+    if event["type"] != "agent-result.accepted":
+        _fail("Agent Result v2 Event has an invalid family")
+    payload = event["payload"]
+    expected_payload_keys = {
+        "agent_result", "program_id", "host_identity_sigil", "capability_contract_sigil",
+        "snapshot_sigil", "task_capsule_sigil", "job_outcome_sigil", "result_sigil",
+        "acceptance_request_sigil", "idempotency_key_sigil", "transition_request_id",
+        "transition_request_sigil", "acceptance_storage_binding", "actor", "host_invocation",
+        "authorization_sigil", "reference_intent_id", "reference_intent_record_sigil",
+        "reference_set_id", "reference_set_sigil", "occurred_at",
+    }
+    if set(payload) != expected_payload_keys:
+        _fail("Agent Result v2 Event payload has an invalid field set")
+    result = request["agent_result"]
+    exact_payload = {
+        "agent_result": result,
+        "program_id": result["program_id"],
+        "host_identity_sigil": result["host_identity_sigil"],
+        "capability_contract_sigil": result["capability_binding"]["capability_contract_sigil"],
+        "snapshot_sigil": result["snapshot_binding"]["snapshot_sigil"],
+        "task_capsule_sigil": result["task_capsule_sigil"],
+        "job_outcome_sigil": result["job_outcome_binding"]["outcome_sigil"],
+        "result_sigil": result["result_sigil"],
+        "acceptance_request_sigil": request["acceptance_request_sigil"],
+        "idempotency_key_sigil": request["idempotency_key_sigil"],
+        "transition_request_id": request["transition_request_id"],
+        "transition_request_sigil": request["transition_request_sigil"],
+        "acceptance_storage_binding": request["acceptance_storage_binding"],
+        "actor": request["actor"],
+        "host_invocation": request["host_invocation"],
+        "authorization_sigil": request["authorization_sigil"],
+        "reference_intent_id": intent["reference_intent_id"],
+        "reference_intent_record_sigil": intent["record_sigil"],
+        "reference_set_id": intent["reference_sets"][0]["reference_set_id"],
+        "reference_set_sigil": intent["reference_sets"][0]["reference_set_sigil"],
+        "occurred_at": event["occurred_at"],
+    }
+    if payload != exact_payload:
+        _fail("Agent Result v2 Event payload disagrees with supplied request or intent")
+    if event["actor"] != request["chronicle_actor"] or event["object_id"] != result["task_id"]:
+        _fail("Agent Result v2 Event Actor or object disagrees with request")
+    head = request["expected_chronicle_head"]
+    if head["event_count"] == 9223372036854775807:
+        _fail("Agent Result v2 expected Chronicle Head is count-exhausted")
+    if event["sequence"] != head["event_count"] + 1 or event["previous_receipt_sigil"] != head["terminal_receipt_sigil"]:
+        _fail("Agent Result v2 Event does not continue the expected Head")
+    if (
+        intent["transition_request_id"] != request["transition_request_id"]
+        or intent["transition_request_sigil"] != request["transition_request_sigil"]
+        or intent["expected_chronicle_head"] != head
+        or intent["reference_sets"] != request["reference_sets"]
+        or intent["blob_sigils"] != request["managed_blob_sigils"]
+        or intent["actor_id"] != request["actor"]["actor_id"]
+        or intent["authorization_sigil"] != request["authorization_sigil"]
+        or intent["idempotency_key_sigil"] != request["idempotency_key_sigil"]
+        or intent["requested_at"] != request["requested_at"]
+    ):
+        _fail("Agent Result v2 Reference Intent disagrees with request")
+    record = {
+        "schema_version": "agent-result-record/2.0",
+        **{key: result[key] for key in ("task_id", "program_id", "task_capsule_sigil", "host_identity_sigil", "capability_binding", "snapshot_binding", "job_binding", "execution_specification_binding", "job_outcome_binding", "terminal_event_sigil", "selected_attempt_id", "assurance_claim_sigil", "terminal_source_binding", "outputs", "provenance", "status")},
+        "canonical_reference_binding": {key: payload[key] for key in ("reference_intent_id", "reference_intent_record_sigil", "transition_request_id", "transition_request_sigil", "acceptance_storage_binding", "reference_set_id", "reference_set_sigil")},
+        "agent_result_sigil": result["result_sigil"],
+        "accepted_at": event["occurred_at"],
+        "acceptance_receipt": receipt["receipt_id"],
+    }
+    validate_instance("agent-result-record-2.0.json", record)
+    return record
+
+
 def derive_execution_storage_root_manifest_id_v1(manifest: dict[str, Any]) -> str:
     """Derive an ESM-ID from its immutable owner tuple."""
     digest = (

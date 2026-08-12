@@ -6,6 +6,7 @@ import pytest
 
 from benchwork.athanor import AthanorError, content_sigil
 from benchwork.execution_contracts import (
+    project_agent_result_record_v2_supplied_facts,
     validate_agent_result_acceptance_transition_request_v1,
     validate_agent_result_v2,
 )
@@ -112,3 +113,54 @@ def test_agent_result_record_v2_receipt_domain_is_closed() -> None:
     record["acceptance_receipt"] = "RC-lower.case"
     with pytest.raises(AthanorError, match="validation failed"):
         validate_instance("agent-result-record-2.0.json", record)
+
+
+def test_v2_acceptance_event_projects_record_from_exact_supplied_facts() -> None:
+    request = _request()
+    intent: dict[str, object] = {
+        "schema_version": "artifact-storage-reference-intent/1.0", "reference_intent_id": "",
+        "transition_request_id": request["transition_request_id"], "transition_request_sigil": request["transition_request_sigil"],
+        "canonical_event_type": "agent-result.accepted", "expected_chronicle_head": request["expected_chronicle_head"],
+        "reference_sets": request["reference_sets"], "blob_sigils": request["managed_blob_sigils"], "actor_id": "ACTOR",
+        "authorization_sigil": request["authorization_sigil"], "idempotency_key_sigil": request["idempotency_key_sigil"],
+        "requested_at": request["requested_at"], "record_sigil": "",
+    }
+    intent["reference_intent_id"] = "RI-" + content_sigil(["artifact-storage-reference-intent-id/1.0", "agent-result.accepted", request["transition_request_id"]]).removeprefix("sha256:").upper()
+    intent["record_sigil"] = content_sigil({key: value for key, value in intent.items() if key != "record_sigil"})
+    result = request["agent_result"]
+    payload = {"agent_result": result, "program_id": result["program_id"], "host_identity_sigil": result["host_identity_sigil"], "capability_contract_sigil": result["capability_binding"]["capability_contract_sigil"], "snapshot_sigil": result["snapshot_binding"]["snapshot_sigil"], "task_capsule_sigil": result["task_capsule_sigil"], "job_outcome_sigil": result["job_outcome_binding"]["outcome_sigil"], "result_sigil": result["result_sigil"], "acceptance_request_sigil": request["acceptance_request_sigil"], "idempotency_key_sigil": request["idempotency_key_sigil"], "transition_request_id": request["transition_request_id"], "transition_request_sigil": request["transition_request_sigil"], "acceptance_storage_binding": request["acceptance_storage_binding"], "actor": request["actor"], "host_invocation": request["host_invocation"], "authorization_sigil": request["authorization_sigil"], "reference_intent_id": intent["reference_intent_id"], "reference_intent_record_sigil": intent["record_sigil"], "reference_set_id": intent["reference_sets"][0]["reference_set_id"], "reference_set_sigil": intent["reference_sets"][0]["reference_set_sigil"], "occurred_at": "2026-08-06T00:00:01Z"}
+    event: dict[str, object] = {"schema_version": "chronicle-event/1.1", "event_id": "CE-ONE", "sequence": 2, "type": "agent-result.accepted", "object_id": "TK-ONE", "occurred_at": "2026-08-06T00:00:01Z", "previous_receipt_sigil": SIGIL, "actor": request["chronicle_actor"], "payload": payload, "event_body_sigil": "", "receipt": {"schema_version": "receipt/1.1", "receipt_id": "RC-ONE", "event_id": "CE-ONE", "event_body_sigil": "", "previous_receipt_sigil": SIGIL, "accepted_at": "2026-08-06T00:00:01Z", "receipt_sigil": ""}}
+    event["event_body_sigil"] = content_sigil({key: value for key, value in event.items() if key not in {"event_body_sigil", "receipt"}})
+    event["receipt"]["event_body_sigil"] = event["event_body_sigil"]  # type: ignore[index]
+    event["receipt"]["receipt_sigil"] = content_sigil({key: value for key, value in event["receipt"].items() if key != "receipt_sigil"})  # type: ignore[index]
+    record = project_agent_result_record_v2_supplied_facts(event, request, intent)
+    assert record["schema_version"] == "agent-result-record/2.0"
+    tampered = deepcopy(event)
+    tampered["payload"]["reference_set_id"] = "RS-TWO"  # type: ignore[index]
+    tampered["event_body_sigil"] = content_sigil({key: value for key, value in tampered.items() if key not in {"event_body_sigil", "receipt"}})
+    tampered["receipt"]["event_body_sigil"] = tampered["event_body_sigil"]  # type: ignore[index]
+    tampered["receipt"]["receipt_sigil"] = content_sigil({key: value for key, value in tampered["receipt"].items() if key != "receipt_sigil"})  # type: ignore[index]
+    with pytest.raises(AthanorError, match="payload disagrees"):
+        project_agent_result_record_v2_supplied_facts(tampered, request, intent)
+    exhausted_request = deepcopy(request)
+    exhausted_request["expected_chronicle_head"]["event_count"] = 9223372036854775807  # type: ignore[index]
+    exhausted_request["acceptance_authorization"]["expected_chronicle_head"] = exhausted_request["expected_chronicle_head"]  # type: ignore[index]
+    exhausted_request["acceptance_authorization"]["ward_pass"]["evaluated_chronicle_head"] = exhausted_request["expected_chronicle_head"]  # type: ignore[index]
+    exhausted_request["acceptance_authorization"]["authorization_sigil"] = content_sigil({key: value for key, value in exhausted_request["acceptance_authorization"].items() if key != "authorization_sigil"})  # type: ignore[index]
+    exhausted_request["authorization_sigil"] = exhausted_request["acceptance_authorization"]["authorization_sigil"]  # type: ignore[index]
+    exhausted_request["transition_request_sigil"] = content_sigil({key: value for key, value in exhausted_request.items() if key != "transition_request_sigil"})
+    exhausted_intent = deepcopy(intent)
+    exhausted_intent["expected_chronicle_head"] = exhausted_request["expected_chronicle_head"]
+    exhausted_intent["record_sigil"] = content_sigil({key: value for key, value in exhausted_intent.items() if key != "record_sigil"})
+    exhausted_event = deepcopy(event)
+    exhausted_event["sequence"] = 9223372036854775808
+    exhausted_event["previous_receipt_sigil"] = SIGIL
+    exhausted_event["payload"]["authorization_sigil"] = exhausted_request["authorization_sigil"]  # type: ignore[index]
+    exhausted_event["payload"]["transition_request_sigil"] = exhausted_request["transition_request_sigil"]  # type: ignore[index]
+    exhausted_event["payload"]["transition_request_id"] = exhausted_request["transition_request_id"]  # type: ignore[index]
+    exhausted_event["payload"]["reference_intent_record_sigil"] = exhausted_intent["record_sigil"]  # type: ignore[index]
+    exhausted_event["event_body_sigil"] = content_sigil({key: value for key, value in exhausted_event.items() if key not in {"event_body_sigil", "receipt"}})
+    exhausted_event["receipt"]["event_body_sigil"] = exhausted_event["event_body_sigil"]  # type: ignore[index]
+    exhausted_event["receipt"]["receipt_sigil"] = content_sigil({key: value for key, value in exhausted_event["receipt"].items() if key != "receipt_sigil"})  # type: ignore[index]
+    with pytest.raises(AthanorError, match="count-exhausted"):
+        project_agent_result_record_v2_supplied_facts(exhausted_event, exhausted_request, exhausted_intent)
