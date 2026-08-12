@@ -1148,6 +1148,33 @@ def test_storage_replay_projects_exact_registered_reference_set() -> None:
     with pytest.raises(AthanorError, match="requires its supplied record"):
         replay_artifact_storage_journal_prefix_v1([initial, activation, registered])
 
+    for member, wrong_value in (
+        ("reference_set_sigil", SIGIL_B),
+        ("source_identity", "OTHER"),
+        ("source_sigil", SIGIL_B),
+    ):
+        malformed = deepcopy(registered)
+        malformed["payload"][member] = wrong_value
+        malformed["event_sigil"] = content_sigil({
+            key: value for key, value in malformed.items() if key != "event_sigil"
+        })
+        with pytest.raises(AthanorError, match="disagrees with record"):
+            replay_artifact_storage_journal_prefix_v1(
+                [initial, activation, malformed],
+                supplied_reference_sets=[reference_set],
+            )
+
+    wrong_timestamp = deepcopy(registered)
+    wrong_timestamp["recorded_at"] = "2026-08-06T00:00:02Z"
+    wrong_timestamp["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_timestamp.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees with record"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, wrong_timestamp],
+            supplied_reference_sets=[reference_set],
+        )
+
 
 def test_legacy_protection_is_self_signed_and_matches_state_projection() -> None:
     protection = _legacy_protection()
