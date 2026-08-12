@@ -665,6 +665,64 @@ def validate_artifact_storage_journal_head_supplied_prefix_v1(
     validate_artifact_storage_journal_head_supplied_event_v1(head, events[-1], state_sigil)
 
 
+def replay_artifact_storage_initial_prefix_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Rebuild the exact empty Storage State from one initialization Event.
+
+    This is the installed initial reducer only.  It checks the fixed twelve
+    quota snapshots and creates no handles, blobs, or runtime authority.
+    Later Storage Events remain unavailable until their reducers are installed.
+    """
+    if len(events) != 1:
+        _fail("Artifact Storage initial replay requires exactly one Event")
+    event = events[0]
+    validate_artifact_storage_journal_prefix_v1([event])
+    if event["event_type"] != "storage.initialized":
+        _fail("Artifact Storage initial replay requires storage.initialized")
+    payload = event["payload"]
+    snapshots = payload["quota_snapshots"]
+    expected_pairs = (
+        ("JOURNAL", "JOURNAL_BYTE"), ("CONTROL_RECORD", "CONTROL_RECORD_BYTE"),
+        ("STAGING", "BYTE"), ("STAGING", "OBJECT"), ("QUARANTINE", "BYTE"),
+        ("QUARANTINE", "OBJECT"), ("COMMITTED", "BYTE"), ("COMMITTED", "OBJECT"),
+        ("MATERIALIZATION", "BYTE"), ("MATERIALIZATION", "OBJECT"),
+        ("STREAM", "STREAM"), ("INODE", "INODE"),
+    )
+    if [(item["quota_class"], item["dimension"]) for item in snapshots] != list(expected_pairs):
+        _fail("Artifact Storage initialization quota snapshots are not the fixed twelve counters")
+    if any(item["used"] or item["reserved"] or item["pressure_state"] != "CLEAR" for item in snapshots):
+        _fail("Artifact Storage initialization quota snapshots must be unspent and clear")
+    effects = event["quota_effects"]
+    if effects != [{"kind": "INITIALIZE", "snapshot": item} for item in snapshots]:
+        _fail("Artifact Storage initialization quota effects disagree with snapshots")
+    if payload["tail_recovery"] is not None:
+        _fail("Artifact Storage initial replay does not install tail recovery")
+    backend = payload["backend"]
+    state: dict[str, Any] = {
+        "schema_version": "artifact-storage-state/1.0", "journal_id": event["journal_id"],
+        "storage_format_version": payload["storage_format_version"], "project_id": payload["project_id"],
+        "backend_profile_id": backend["record_id"], "backend_profile_sigil": backend["record_sigil"],
+        "conformance_profile_id": payload["conformance_profile_id"],
+        "conformance_suite_sigil": payload["conformance_suite_sigil"],
+        "store_status": "INITIALIZING", "active_recovery_id": None, "recovery_origin_status": None,
+        "clock_status": "TRUSTED", "clock_anchor": payload["clock"], "current_epoch": event["epoch"],
+        "applied_event_count": 1, "last_event_sigil": event["event_sigil"],
+        "recoveries": [], "blobs": [], "replicas": [], "transfer_requests": [], "transfer_attempts": [],
+        "materializations": [], "quarantines": [], "provenance": [], "provenance_policies": [],
+        "retention_policies": [], "holds": [], "reference_sets": [], "legacy_v1_protections": [],
+        "gc_plans": [], "canonical_reference_intents": [], "dispositions": [],
+        "quota_reservations": [], "open_intents": [], "incidents": [],
+        "availability_counters": {"available_blobs": 0, "degraded_blobs": 0, "unavailable_blobs": 0, "incident_blobs": 0},
+        "quota_counters": snapshots, "state_sigil": "",
+    }
+    state["state_sigil"] = content_sigil(_without(state, "state_sigil"))
+    validate_artifact_storage_state_v1(state)
+    if head is not None:
+        validate_artifact_storage_journal_head_supplied_event_v1(head, event, state["state_sigil"])
+    return state
+
+
 def _state_identity(value: dict[str, Any], collection: str) -> str | tuple[str, str]:
     if collection == "open_intents":
         return value["intent_kind"], value["intent_id"]

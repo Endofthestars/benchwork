@@ -25,6 +25,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_state_v1,
     require_artifact_storage_journal_replay_authority_v1,
     require_artifact_storage_runtime_authority_v1,
+    replay_artifact_storage_initial_prefix_v1,
     validate_artifact_storage_journal_event_v1,
     validate_artifact_storage_journal_head_supplied_event_v1,
     validate_artifact_storage_journal_head_supplied_prefix_v1,
@@ -161,6 +162,61 @@ def _state() -> dict[str, object]:
         key: member for key, member in state.items() if key != "state_sigil"
     })
     return state
+
+
+def _initial_replay_event() -> dict[str, object]:
+    event = _initial_event()
+    pairs = (
+        ("JOURNAL", "JOURNAL_BYTE"), ("CONTROL_RECORD", "CONTROL_RECORD_BYTE"),
+        ("STAGING", "BYTE"), ("STAGING", "OBJECT"), ("QUARANTINE", "BYTE"),
+        ("QUARANTINE", "OBJECT"), ("COMMITTED", "BYTE"), ("COMMITTED", "OBJECT"),
+        ("MATERIALIZATION", "BYTE"), ("MATERIALIZATION", "OBJECT"),
+        ("STREAM", "STREAM"), ("INODE", "INODE"),
+    )
+    snapshots = [
+        {"quota_class": quota_class, "dimension": dimension, "limit": 0, "used": 0,
+         "reserved": 0, "pressure_state": "CLEAR"}
+        for quota_class, dimension in pairs
+    ]
+    event["payload"]["quota_snapshots"] = snapshots  # type: ignore[index]
+    event["quota_effects"] = [{"kind": "INITIALIZE", "snapshot": snapshot} for snapshot in snapshots]
+    event["entity_revisions"] = [
+        {"entity_type": "STORE", "entity_id": "STORE", "previous_revision": None, "next_revision": 1},
+        *[
+            {"entity_type": "QUOTA", "entity_id": f"quota-counter:{quota_class}:{dimension}",
+             "previous_revision": None, "next_revision": 1}
+            for quota_class, dimension in pairs
+        ],
+    ]
+    event["event_sigil"] = content_sigil({key: value for key, value in event.items() if key != "event_sigil"})
+    return event
+
+
+def test_storage_initial_replay_builds_the_exact_empty_state() -> None:
+    event = _initial_replay_event()
+    state = replay_artifact_storage_initial_prefix_v1([event])
+    assert state["journal_id"] == event["journal_id"]
+    assert state["store_status"] == "INITIALIZING"
+    assert state["current_epoch"] == 1
+    assert state["last_event_sigil"] == event["event_sigil"]
+    assert state["quota_counters"] == event["payload"]["quota_snapshots"]
+    assert state["blobs"] == []
+
+    wrong_effects = deepcopy(event)
+    wrong_effects["quota_effects"] = []
+    wrong_effects["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_effects.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="quota effects"):
+        replay_artifact_storage_initial_prefix_v1([wrong_effects])
+
+    recovered = deepcopy(event)
+    recovered["payload"]["tail_recovery"] = {"recovery_id": "RECOVERY"}  # type: ignore[index]
+    recovered["event_sigil"] = content_sigil({
+        key: value for key, value in recovered.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="validation failed|tail recovery"):
+        replay_artifact_storage_initial_prefix_v1([recovered])
 
 
 def _reference_set() -> dict[str, object]:
