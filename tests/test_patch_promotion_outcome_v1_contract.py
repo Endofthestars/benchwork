@@ -119,6 +119,12 @@ def test_promotion_outcome_requires_per_entry_evidence_for_each_path() -> None:
     with pytest.raises(AthanorError, match="per-entry evidence"):
         validate_patch_promotion_outcome_v1(extra_path)
 
+    wrong_generation = deepcopy(outcome)
+    wrong_generation["adapter_write_evidence"]["after_generation"] = "other"
+    _seal(wrong_generation)
+    with pytest.raises(AthanorError, match="evidence disagrees with generations"):
+        validate_patch_promotion_outcome_v1(wrong_generation)
+
 
 def _attempt_for(outcome: dict[str, object]) -> dict[str, object]:
     attempt = {

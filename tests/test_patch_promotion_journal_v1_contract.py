@@ -58,6 +58,25 @@ def test_patch_promotion_journal_event_and_head_self_sigils_are_checked() -> Non
     with pytest.raises(AthanorError, match="self-Sigil"):
         validate_patch_promotion_journal_event_v1(wrong)
 
+    wrong_revision = deepcopy(event)
+    wrong_revision["entity_revisions"][0]["next_revision"] = 7
+    wrong_revision["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_revision.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="revision algebra"):
+        validate_patch_promotion_journal_event_v1(wrong_revision)
+
+    duplicate_revision = deepcopy(event)
+    duplicate_revision["entity_revisions"].append({
+        "entity_type": "COORDINATOR", "entity_id": "PC-ONE",
+        "prior_revision": 1, "next_revision": 2,
+    })
+    duplicate_revision["event_sigil"] = content_sigil({
+        key: value for key, value in duplicate_revision.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="duplicate entity revisions"):
+        validate_patch_promotion_journal_event_v1(duplicate_revision)
+
 
 def test_patch_promotion_prefix_and_head_require_one_contiguous_chain() -> None:
     first = _event(1, None, "PJE-ONE")

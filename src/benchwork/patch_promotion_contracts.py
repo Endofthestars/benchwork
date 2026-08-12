@@ -258,7 +258,7 @@ def validate_patch_promotion_authorization_v1(authorization: dict[str, Any]) -> 
     evidence_ids = [item["id"].encode("ascii") for item in evidence]
     if evidence_ids != sorted(evidence_ids) or len(evidence_ids) != len(set(evidence_ids)):
         _fail("Patch Promotion Authorization validation evidence must be sorted and unique")
-    if authorization["decision_at"] > authorization["expires_at"]:
+    if _time(authorization["decision_at"]) > _time(authorization["expires_at"]):
         _fail("Patch Promotion Authorization expires before its decision")
 
 
@@ -336,6 +336,11 @@ def validate_patch_promotion_outcome_v1(outcome: dict[str, Any]) -> None:
         _fail("Patch Promotion Outcome verifier evidence must be sorted and unique")
     adapter_evidence = outcome["adapter_write_evidence"]
     if adapter_evidence is not None:
+        if (
+            adapter_evidence["before_generation"] != outcome["before_generation"]
+            or adapter_evidence["after_generation"] != outcome["after_generation"]
+        ):
+            _fail("Patch Promotion Outcome adapter evidence disagrees with generations")
         receipts = adapter_evidence["receipt_sigils"]
         if receipts != sorted(receipts) or len(receipts) != len(set(receipts)):
             _fail("Patch Promotion Outcome adapter receipt Sigils must be sorted and unique")
@@ -412,6 +417,44 @@ def validate_patch_promotion_recovery_record_v1(record: dict[str, Any]) -> None:
     sigils = [item["sigil"].encode("ascii") for item in record["verifier_evidence"]]
     if sigils != sorted(sigils) or len(sigils) != len(set(sigils)):
         _fail("Patch Promotion Recovery Record verifier evidence must be sorted and unique")
+    disposition = record["abandonment_disposition"]
+    if (record["status"] == "ABANDONED") != (disposition is not None):
+        _fail("Patch Promotion Recovery Record abandonment disposition disagrees with status")
+    if disposition is None:
+        return
+    if disposition["disposition_sigil"] != content_sigil(
+        _without(disposition, "disposition_sigil")
+    ):
+        _fail("Patch Promotion Recovery Record abandonment disposition self-Sigil mismatch")
+    if disposition["terminal_event"]["event_type"] != "recovery.abandoned":
+        _fail("Patch Promotion Recovery Record abandonment terminal Event type is invalid")
+    expected_guard_events = {
+        "RELEASED": "target.guard-released",
+        "FENCED": "target.guard-fenced",
+        "FAILED": "target.guard-failed",
+    }
+    if expected_guard_events[disposition["guard_completion"]["terminal_state"]] != (
+        disposition["guard_completion"]["terminal_event"]["event_type"]
+    ):
+        _fail("Patch Promotion Recovery Record guard completion Event type is invalid")
+    root_ids = [item["operational_root_id"].encode("ascii") for item in disposition["root_dispositions"]]
+    if root_ids != sorted(root_ids) or len(root_ids) != len(set(root_ids)):
+        _fail("Patch Promotion Recovery Record abandonment roots must be sorted and unique")
+    if (
+        disposition["recovery_attempt_id"] != record["recovery_attempt_id"]
+        or disposition["parent_attempt_id"] != record["parent_attempt_id"]
+        or disposition["authorization_receipt"] != record["authorization_receipt"]
+        or disposition["terminal_event"]["event_id"] != record["terminal_journal_event_id"]
+        or disposition["terminal_event"]["event_sigil"] != record["terminal_journal_event_sigil"]
+        or disposition["observed_partial_identity"] != record["before_identity"]
+        or record["after_identity"] != record["before_identity"]
+        or disposition["observed_generation"] != record["before_generation"]
+        or record["after_generation"] != record["before_generation"]
+        or disposition["logical_fence_generation"] != record["resulting_logical_fence_generation"]
+        or disposition["logical_fence_generation"] != record["lineage"]["logical_fence_generation"]
+        or disposition["guard_completion"]["guard"] != record["guard"]
+    ):
+        _fail("Patch Promotion Recovery Record abandonment disposition disagrees with record")
 
 
 def validate_patch_promotion_recovery_record_supplied_attempt_v1(
@@ -450,6 +493,18 @@ def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     _check_nfc(event)
     if event["event_sigil"] != content_sigil(_without(event, "event_sigil")):
         _fail("Patch Promotion Journal Event self-Sigil mismatch")
+    revision_keys: set[tuple[str, str]] = set()
+    u64_max = 18_446_744_073_709_551_615
+    for revision in event["entity_revisions"]:
+        key = (revision["entity_type"], revision["entity_id"])
+        if key in revision_keys:
+            _fail("Patch Promotion Journal Event has duplicate entity revisions")
+        revision_keys.add(key)
+        if (
+            revision["prior_revision"] == u64_max
+            or revision["next_revision"] != revision["prior_revision"] + 1
+        ):
+            _fail("Patch Promotion Journal Event revision algebra is invalid")
 
 
 def load_patch_promotion_journal_event_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
