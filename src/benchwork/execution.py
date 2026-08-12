@@ -421,7 +421,21 @@ class ExecutionService:
     def _project(events: list[dict[str, Any]]) -> dict[str, Any]:
         if not events or events[0]["event_type"] != "executor.epoch-started":
             raise AthanorError("execution journal has no executor epoch")
-        executor = dict(events[0]["payload"])
+        executor = events[0]["payload"]
+        if (
+            set(executor) != {
+                "executor_instance_id", "executor_epoch", "executor_build_sigil"
+            }
+            or not isinstance(executor["executor_instance_id"], str)
+            or not executor["executor_instance_id"]
+            or not isinstance(executor["executor_epoch"], int)
+            or isinstance(executor["executor_epoch"], bool)
+            or executor["executor_epoch"] < 1
+            or not isinstance(executor["executor_build_sigil"], str)
+            or not SIGIL.fullmatch(executor["executor_build_sigil"])
+        ):
+            raise AthanorError("execution executor epoch payload is invalid")
+        executor = dict(executor)
         jobs: dict[str, dict[str, Any]] = {}
         starts: dict[tuple[str, str], tuple[str, str]] = {}
         cancellations: dict[tuple[str, str], str] = {}
@@ -429,24 +443,50 @@ class ExecutionService:
             payload = event["payload"]
             event_type = event["event_type"]
             if event_type == "job.submitted":
-                job_id = payload.get("job_id")
-                task_id = payload.get("task_id")
-                key_sigil = payload.get("idempotency_key_sigil")
+                if set(payload) != {
+                    "job_id", "job_binding_sigil", "task_id", "specification",
+                    "start_request_sigil", "idempotency_key_sigil",
+                }:
+                    raise AthanorError("execution Job submission payload is invalid")
+                job_id = payload["job_id"]
+                task_id = payload["task_id"]
+                key_sigil = payload["idempotency_key_sigil"]
                 if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id) or job_id in jobs:
                     raise AthanorError("invalid or duplicate execution Job")
-                if not isinstance(task_id, str) or not isinstance(key_sigil, str):
+                if (
+                    not isinstance(task_id, str)
+                    or not task_id
+                    or not isinstance(key_sigil, str)
+                    or not SIGIL.fullmatch(key_sigil)
+                    or not isinstance(payload["start_request_sigil"], str)
+                    or not SIGIL.fullmatch(payload["start_request_sigil"])
+                    or not isinstance(payload["job_binding_sigil"], str)
+                    or not SIGIL.fullmatch(payload["job_binding_sigil"])
+                ):
                     raise AthanorError("execution Job idempotency binding is invalid")
+                specification = payload["specification"]
+                ExecutionService._validate_specification(specification)
+                if task_id != specification["task_binding"]["task_id"]:
+                    raise AthanorError("execution Job submission Task binding is invalid")
+                expected_job_id = "JB-" + hashlib.sha256(canonical_json([
+                    "execution-job-id/1.0", task_id, key_sigil,
+                ]).encode("utf-8")).hexdigest().upper()
+                expected_binding = content_sigil([
+                    "execution-job-binding/1.0", job_id,
+                    specification["specification_sigil"], payload["start_request_sigil"],
+                ])
+                if job_id != expected_job_id or payload["job_binding_sigil"] != expected_binding:
+                    raise AthanorError("execution Job submission binding is invalid")
                 scope = (task_id, key_sigil)
-                request_sigil = payload.get("start_request_sigil")
+                request_sigil = payload["start_request_sigil"]
                 if scope in starts:
                     raise AthanorError("duplicate execution Job idempotency binding")
                 starts[scope] = (job_id, request_sigil)
                 jobs[job_id] = {
-                    "job_id": job_id,
-                    "job_binding_sigil": payload["job_binding_sigil"],
+                    "job_id": job_id, "job_binding_sigil": payload["job_binding_sigil"],
                     "task_id": task_id,
-                    "specification_id": payload["specification"]["specification_id"],
-                    "specification_sigil": payload["specification"]["specification_sigil"],
+                    "specification_id": specification["specification_id"],
+                    "specification_sigil": specification["specification_sigil"],
                     "state": "SUBMITTED",
                     "revision": 1,
                     "submitted_event_id": event["event_id"],
@@ -457,15 +497,31 @@ class ExecutionService:
                     "idempotency_key_sigil": key_sigil,
                 }
             elif event_type == "job.queued":
-                job = jobs.get(payload.get("job_id"))
+                if set(payload) != {"job_id"}:
+                    raise AthanorError("execution Job queue payload is invalid")
+                job = jobs.get(payload["job_id"])
                 if job is None or job["state"] != "SUBMITTED":
                     raise AthanorError("invalid execution Job queue transition")
                 job["state"] = "QUEUED"
                 job["revision"] += 1
             elif event_type == "job.cancellation_requested":
-                job = jobs.get(payload.get("job_id"))
-                key = payload.get("idempotency_key_sigil")
-                if job is None or not isinstance(key, str):
+                if set(payload) != {
+                    "job_id", "job_binding_sigil", "expected_job_revision",
+                    "idempotency_key_sigil", "reason",
+                }:
+                    raise AthanorError("execution Job cancellation payload is invalid")
+                job = jobs.get(payload["job_id"])
+                key = payload["idempotency_key_sigil"]
+                if (
+                    job is None
+                    or not isinstance(key, str)
+                    or not SIGIL.fullmatch(key)
+                    or payload["job_binding_sigil"] != job["job_binding_sigil"]
+                    or payload["expected_job_revision"] != job["revision"]
+                    or not isinstance(payload["reason"], str)
+                    or not payload["reason"]
+                    or len(payload["reason"]) > 4096
+                ):
                     raise AthanorError("invalid execution Job cancellation")
                 scope = (job["job_id"], key)
                 if scope in cancellations:
@@ -476,18 +532,42 @@ class ExecutionService:
                 job["state"] = "CANCEL_REQUESTED"
                 job["revision"] += 1
             elif event_type == "job.cancellation_observed":
-                job = jobs.get(payload.get("job_id"))
-                key = payload.get("idempotency_key_sigil")
-                if job is None or job["state"] not in TERMINAL_STATES or not isinstance(key, str):
+                if set(payload) != {
+                    "job_id", "job_binding_sigil", "expected_job_revision",
+                    "idempotency_key_sigil", "reason",
+                }:
+                    raise AthanorError("execution terminal cancellation payload is invalid")
+                job = jobs.get(payload["job_id"])
+                key = payload["idempotency_key_sigil"]
+                if (
+                    job is None
+                    or job["state"] not in TERMINAL_STATES
+                    or not isinstance(key, str)
+                    or not SIGIL.fullmatch(key)
+                    or payload["job_binding_sigil"] != job["job_binding_sigil"]
+                    or payload["expected_job_revision"] != job["revision"]
+                    or not isinstance(payload["reason"], str)
+                    or not payload["reason"]
+                    or len(payload["reason"]) > 4096
+                ):
                     raise AthanorError("invalid terminal cancellation observation")
                 scope = (job["job_id"], key)
                 if scope in cancellations:
                     raise AthanorError("duplicate execution cancellation binding")
                 cancellations[scope] = event["event_sigil"]
             elif event_type == "job.terminal":
-                job = jobs.get(payload.get("job_id"))
-                state = payload.get("state")
-                if job is None or job["state"] in TERMINAL_STATES or state not in TERMINAL_STATES:
+                if set(payload) != {"job_id", "state", "reason"}:
+                    raise AthanorError("execution Job terminal payload is invalid")
+                job = jobs.get(payload["job_id"])
+                state = payload["state"]
+                if (
+                    job is None
+                    or job["state"] in TERMINAL_STATES
+                    or state not in TERMINAL_STATES
+                    or not isinstance(payload["reason"], str)
+                    or not payload["reason"]
+                    or len(payload["reason"]) > 4096
+                ):
                     raise AthanorError("invalid execution Job terminal transition")
                 if job["state"] == "CANCEL_REQUESTED" and state != "CANCELLED":
                     raise AthanorError("cancelled execution Job cannot accept a worker terminal result")
@@ -678,7 +758,7 @@ class ExecutionService:
         """Trusted local worker adapter hook; it cannot be reached from MCP."""
         if state not in TERMINAL_STATES:
             raise AthanorError("execution terminal state is invalid")
-        if not isinstance(reason, str) or not reason:
+        if not isinstance(reason, str) or not reason or len(reason) > 4096:
             raise AthanorError("execution terminal reason is invalid")
         if not self._journal_path.exists():
             raise AthanorError(f"unknown execution Job: {job_id}")

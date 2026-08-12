@@ -264,6 +264,38 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "time is decreasing"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_resealed_event_payloads_cannot_break_local_replay_bindings(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+        events[1]["payload"]["job_binding_sigil"] = "sha256:" + "2" * 64
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "submission binding"):
+            self.service.observe(observation["job"]["job_id"])
+
+        journal.unlink()
+        observation = self.service.start(_specification(), "start-002")
+        job = observation["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[2]["payload"]["expected_job_revision"] = 99
+        for index in range(2, len(events)):
+            if index > 2:
+                events[index]["previous_event_sigil"] = events[index - 1]["event_sigil"]
+            events[index]["event_sigil"] = content_sigil({
+                key: value for key, value in events[index].items() if key != "event_sigil"
+            })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "invalid execution Job cancellation"):
+            self.service.observe(job["job_id"])
+
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)
