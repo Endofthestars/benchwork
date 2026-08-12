@@ -286,3 +286,53 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="globally unique"):
         validate_artifact_storage_state_v1(open_ids)
+
+    wrong_open_sigil = deepcopy(open_ids)
+    wrong_open_sigil["open_intents"] = [wrong_open_sigil["open_intents"][0]]
+    wrong_open_sigil["open_intents"][0]["intent_sigil"] = SIGIL_B
+    wrong_open_sigil["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_open_sigil.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Open Intent Sigils disagree"):
+        validate_artifact_storage_state_v1(wrong_open_sigil)
+
+    selected_unknown = deepcopy(ordered)
+    selected_unknown["transfer_requests"][0]["selected_attempt_id"] = "SA-UNKNOWN"
+    selected_unknown["state_sigil"] = content_sigil({
+        key: member for key, member in selected_unknown.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="selects an unknown Attempt"):
+        validate_artifact_storage_state_v1(selected_unknown)
+
+    replica_state = deepcopy(state)
+    replica = {
+        "schema_version": "artifact-replica/1.0", "replica_id": "SR-ONE",
+        "blob_sigil": SIGIL, "size_bytes": 0,
+        "backend": {"backend_id": "BACKEND", "backend_profile_version": "1.0",
+                    "backend_profile_sigil": SIGIL},
+        "object": {"backend_id": "BACKEND", "object_identity_sigil": SIGIL,
+                   "locator_sigil": SIGIL, "generation": "GENERATION", "size_bytes": 0,
+                   "blob_sigil": SIGIL}, "state": "COMMITTING",
+        "created_by_transfer_attempt_id": "SA-ONE", "verification": None,
+        "retention_policy_ids": [], "revision": 1, "record_sigil": "",
+    }
+    replica["record_sigil"] = content_sigil({
+        key: member for key, member in replica.items() if key != "record_sigil"
+    })
+    replica_state["replicas"] = [{"record": replica, "last_event_sigil": SIGIL}]
+    replica_state["state_sigil"] = content_sigil({
+        key: member for key, member in replica_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(replica_state)
+
+    wrong_replica = deepcopy(replica_state)
+    wrong_replica["replicas"][0]["record"]["object"]["size_bytes"] = 1
+    wrong_replica["replicas"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in wrong_replica["replicas"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    wrong_replica["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_replica.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Replica object disagrees"):
+        validate_artifact_storage_state_v1(wrong_replica)

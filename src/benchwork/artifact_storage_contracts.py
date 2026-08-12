@@ -214,6 +214,13 @@ _STATE_IDENTITY_COLLECTIONS = (
     "open_intents", "incidents",
 )
 
+_STATE_WRAPPER_SCHEMAS = {
+    "blobs": "artifact-blob-1.0.json",
+    "replicas": "artifact-replica-1.0.json",
+    "transfer_attempts": "artifact-transfer-attempt-1.0.json",
+    "materializations": "artifact-materialization-1.0.json",
+}
+
 
 def _identity_sort_key(value: str | tuple[str, str]) -> bytes | tuple[bytes, bytes]:
     if isinstance(value, tuple):
@@ -233,6 +240,26 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             _fail(f"Artifact Storage State {collection} identities must be unique")
         if identities != sorted(identities, key=_identity_sort_key):
             _fail(f"Artifact Storage State {collection} is not identity sorted")
+    for collection, schema_name in _STATE_WRAPPER_SCHEMAS.items():
+        for wrapper in state[collection]:
+            record = wrapper["record"]
+            validate_instance(schema_name, record)
+            if record["record_sigil"] != content_sigil(_without(record, "record_sigil")):
+                _fail(f"Artifact Storage State {collection} record self-Sigil mismatch")
+            if collection == "replicas" and (
+                record["object"]["blob_sigil"] != record["blob_sigil"]
+                or record["object"]["size_bytes"] != record["size_bytes"]
+                or record["backend"]["backend_id"] != record["object"]["backend_id"]
+            ):
+                _fail("Artifact Storage State Replica object disagrees with record")
+    for request in state["transfer_requests"]:
+        selected = request["selected_attempt_id"]
+        if selected is not None and selected not in request["attempt_ids"]:
+            _fail("Artifact Storage State Transfer Request selects an unknown Attempt")
+    for intent in state["open_intents"]:
+        source_sigil = intent["source_event"]["event_sigil"]
+        if intent["intent_sigil"] != source_sigil or intent["last_event_sigil"] != source_sigil:
+            _fail("Artifact Storage State Open Intent Sigils disagree with source Event")
     open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
     if len(set(open_intent_ids)) != len(open_intent_ids):
         _fail("Artifact Storage State open-intent IDs must be globally unique")
