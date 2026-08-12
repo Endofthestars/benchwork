@@ -1318,6 +1318,42 @@ def _reduce_log_chunk_committed_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_worker_session_heartbeat_accepted_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Advance one ready/busy/draining Session's monotonic heartbeat."""
+    matches = [session for session in state["worker_sessions"] if session["worker_session_id"] == event["entity_revisions"][0]["entity_id"]]
+    if len(matches) != 1:
+        _fail("Worker-Session heartbeat Event has no unique Session projection")
+    session, payload, executor = matches[0], event["payload"], state["executor"]
+    floors = payload["resource_counter_floors_after"]
+    if (
+        event["event_type"] != "worker_session.heartbeat_accepted" or session["state"] not in {"READY", "BUSY", "DRAINING"}
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != session["executor_epoch"]
+        or event["entity_revisions"] != [{"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1}]
+        or payload["worker_session_heartbeat_policy_id"] != session["worker_session_heartbeat_policy_id"]
+        or payload["worker_session_heartbeat_policy_sigil"] != session["worker_session_heartbeat_policy_sigil"]
+        or payload["prior_accepted_sequence"] != session["last_heartbeat_sequence"]
+        or payload["sequence"] != (session["last_heartbeat_sequence"] + 1 if session["last_heartbeat_sequence"] is not None else 0)
+        or _parse_time(payload["received_at"]) > _parse_time(payload["next_heartbeat_due_at"])
+        or any(value is not None and value < (session["resource_counter_floors"][key] or 0) for key, value in floors.items())
+    ):
+        _fail("Worker-Session heartbeat Event disagrees with Session projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["worker_sessions"] = [
+        {**candidate, "revision": candidate["revision"] + 1, "last_heartbeat_sequence": payload["sequence"],
+         "last_heartbeat_message_sigil": payload["heartbeat_message_sigil"], "last_resource_sample_sigil": payload["resource_sample_sigil"],
+         "resource_counter_floors": floors, "next_heartbeat_due_at": payload["next_heartbeat_due_at"],
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]
+    ]
+    reduced["deadlines"] = sorted([item for item in state["deadlines"] if not (item["deadline_kind"] == "HEARTBEAT_TIMEOUT" and item["entity_id"] == session["worker_session_id"])] + [{
+        "deadline_kind": "HEARTBEAT_TIMEOUT", "due_at": payload["next_heartbeat_due_at"],
+        "fixed_priority": _DEADLINE_PRIORITY["HEARTBEAT_TIMEOUT"], "entity_id": session["worker_session_id"],
+        "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"],
+    }], key=lambda item: (_parse_time(item["due_at"]), item["fixed_priority"], _unsigned_ascii(item["entity_id"], "Deadline entity ID")))
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record a duplicate chunk observation without appending bytes twice."""
     payload, executor = event["payload"], state["executor"]
@@ -1861,6 +1897,8 @@ def replay_execution_supplied_state_suffix_v1(
             lease_id = event["entity_revisions"][-1]["entity_id"]
             lease = _find_supplied_v1(supplied_leases, lease_id, "lease_id", "Lease offer")
             current = _reduce_lease_offered_v1(current, event, lease)
+        elif event["event_type"] == "worker_session.heartbeat_accepted":
+            current = _reduce_worker_session_heartbeat_accepted_v1(current, event)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
         elif event["event_type"] == "attempt.starting":
