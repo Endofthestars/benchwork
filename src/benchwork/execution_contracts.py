@@ -1307,6 +1307,55 @@ def _reduce_log_closed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[
     return build_execution_state_v1(reduced)
 
 
+def _reduce_log_chunk_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Retain a rejected log chunk without changing the stream contents."""
+    payload, executor = event["payload"], state["executor"]
+    matches = [stream for stream in state["log_streams"] if stream["log_stream_id"] == payload["log_stream_id"]]
+    if len(matches) != 1:
+        _fail("Log rejection Event has no unique Log-stream projection")
+    stream = matches[0]
+    if (
+        event["event_type"] != "log.chunk_rejected" or payload["stream"] != stream["stream"]
+        or not payload["reason_codes"] or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LOG_STREAM", "entity_id": stream["log_stream_id"], "preceding_revision": stream["revision"], "next_revision": stream["revision"] + 1}]
+    ):
+        _fail("Log rejection Event disagrees with Log-stream projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["log_streams"] = [
+        {**candidate, "revision": candidate["revision"] + 1,
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["log_stream_id"] == stream["log_stream_id"] else candidate
+        for candidate in state["log_streams"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_log_truncated_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Latch a stream truncation without inventing a policy resolver."""
+    payload, executor = event["payload"], state["executor"]
+    matches = [stream for stream in state["log_streams"] if stream["log_stream_id"] == payload["log_stream_id"]]
+    if len(matches) != 1:
+        _fail("Log truncation Event has no unique Log-stream projection")
+    stream = matches[0]
+    if (
+        event["event_type"] != "log.truncated" or stream["state"] != "OPEN" or stream["truncated"]
+        or payload["stream"] != stream["stream"] or payload["captured_bytes"] != stream["captured_bytes"]
+        or payload["dropped_bytes"] < stream["dropped_bytes"] or payload["limit_bytes"] < stream["captured_bytes"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LOG_STREAM", "entity_id": stream["log_stream_id"], "preceding_revision": stream["revision"], "next_revision": stream["revision"] + 1}]
+    ):
+        _fail("Log truncation Event disagrees with open Log-stream projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["log_streams"] = [
+        {**candidate, "revision": candidate["revision"] + 1, "truncated": True,
+         "dropped_bytes": payload["dropped_bytes"], "last_event_id": event["event_id"],
+         "last_event_sigil": event["event_sigil"]}
+        if candidate["log_stream_id"] == stream["log_stream_id"] else candidate
+        for candidate in state["log_streams"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close a running Attempt after its immutable result disposition."""
     if len(state["attempts"]) != 1:
@@ -1773,6 +1822,10 @@ def replay_execution_supplied_state_suffix_v1(
                 current = _reduce_late_result_rejected_v1(current, event)
         elif event["event_type"] == "log.closed":
             current = _reduce_log_closed_v1(current, event)
+        elif event["event_type"] == "log.chunk_rejected":
+            current = _reduce_log_chunk_rejected_v1(current, event)
+        elif event["event_type"] == "log.truncated":
+            current = _reduce_log_truncated_v1(current, event)
         elif event["event_type"] == "attempt.draining":
             current = _reduce_attempt_draining_v1(current, event)
         elif event["event_type"] == "attempt.cleaning":

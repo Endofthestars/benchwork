@@ -546,6 +546,31 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     with pytest.raises(AthanorError, match="disagrees"):
         replay_execution_supplied_state_suffix_v1(closed_state, [wrong_log_close])
 
+    log_rejected = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LOGREJECT", "sequence": 16, "event_type": "log.chunk_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "LOG_STREAM", "entity_id": stdout_stream["log_stream_id"], "preceding_revision": 0, "next_revision": 1}], "causation_event_id": None, "idempotency_key_sigil": SIGIL, "recovery_action_binding": None, "payload": {"intake_kind": "RAW_CHUNK", "intake_id": "LCI-ONE", "intake_record_sigil": SIGIL, "disposition_intent_id": "LDI-ONE", "log_stream_id": stdout_stream["log_stream_id"], "stream": "STDOUT", "sequence": 0, "message_sigil": SIGIL, "reason_codes": ["LEASE_TERMINAL"], "historical_disposition_event_id": None}, "previous_event_sigil": closed["event_sigil"]})
+    log_rejected_state = replay_execution_supplied_state_suffix_v1(closed_state, [log_rejected])
+    rejected_stream = next(stream for stream in log_rejected_state["log_streams"] if stream["stream"] == "STDOUT")
+    assert (rejected_stream["captured_bytes"], rejected_stream["next_sequence"]) == (0, 0)
+
+    wrong_log_rejection = deepcopy(log_rejected)
+    wrong_log_rejection["payload"]["stream"] = "STDERR"
+    wrong_log_rejection = build_execution_journal_event_v1({key: value for key, value in wrong_log_rejection.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(closed_state, [wrong_log_rejection])
+
+    log_truncated = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LOGTRUNCATED", "sequence": 16, "event_type": "log.truncated", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "LOG_STREAM", "entity_id": stdout_stream["log_stream_id"], "preceding_revision": 0, "next_revision": 1}], "causation_event_id": None, "idempotency_key_sigil": SIGIL, "recovery_action_binding": None, "payload": {"intake_kind": "RAW_CHUNK", "intake_id": "LCI-ONE", "intake_record_sigil": SIGIL, "disposition_intent_id": "LDI-ONE", "log_stream_id": stdout_stream["log_stream_id"], "stream": "STDOUT", "limit_kind": "PER_STREAM", "limit_bytes": 0, "captured_bytes": 0, "dropped_bytes": 1, "overflow_behavior": "TRUNCATE", "structured_truncation_status": "NOT_APPLICABLE", "accepted_prefix_length": 0, "capture_cutoff_ordinal": 0}, "previous_event_sigil": closed["event_sigil"]})
+    log_truncated_state = replay_execution_supplied_state_suffix_v1(closed_state, [log_truncated])
+    truncated_stream = next(stream for stream in log_truncated_state["log_streams"] if stream["stream"] == "STDOUT")
+    assert (truncated_stream["truncated"], truncated_stream["dropped_bytes"]) == (True, 1)
+
+    duplicate_truncation = deepcopy(log_truncated)
+    duplicate_truncation["event_id"] = "JE-LOGTRUNCATED2"
+    duplicate_truncation["sequence"] = 17
+    duplicate_truncation["entity_revisions"][0].update({"preceding_revision": 1, "next_revision": 2})
+    duplicate_truncation["previous_event_sigil"] = log_truncated["event_sigil"]
+    duplicate_truncation = build_execution_journal_event_v1({key: value for key, value in duplicate_truncation.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(log_truncated_state, [duplicate_truncation])
+
     wrong_late_rejection = deepcopy(late_rejection)
     wrong_late_rejection["payload"]["historical_disposition_event_id"] = None
     wrong_late_rejection = build_execution_journal_event_v1({key: value for key, value in wrong_late_rejection.items() if key != "event_sigil"})
