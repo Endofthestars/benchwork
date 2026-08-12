@@ -11,6 +11,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_journal_head_v1,
     load_artifact_storage_disposition_v1,
     load_artifact_gc_plan_v1,
+    load_artifact_provenance_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
@@ -27,6 +28,8 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_disposition_v1,
     validate_artifact_gc_plan_v1,
+    validate_artifact_provenance_v1,
+    validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
     validate_artifact_storage_legacy_protection_v1,
@@ -269,6 +272,42 @@ def _gc_plan() -> dict[str, object]:
         key: member for key, member in plan.items() if key != "record_sigil"
     })
     return plan
+
+
+def _provenance() -> dict[str, object]:
+    backend = {"backend_id": "BACKEND", "backend_profile_version": "1.0",
+               "backend_profile_sigil": SIGIL}
+    object_ref = {"backend_id": "BACKEND", "object_identity_sigil": SIGIL,
+                  "locator_sigil": SIGIL, "generation": "GENERATION", "size_bytes": 1,
+                  "blob_sigil": SIGIL}
+    event = {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+             "event_sigil": SIGIL}
+    provenance: dict[str, object] = {
+        "schema_version": "artifact-provenance/1.0", "provenance_id": "PROVENANCE",
+        "relation": "IMPORTED", "blob": {"blob_sigil": SIGIL, "size_bytes": 1},
+        "source": {"kind": "EXTERNAL", "source_class": "SOURCE",
+                   "sanitized_identity_sigil": SIGIL, "authorization_sigil": SIGIL},
+        "destination": {"kind": "MANAGED_BACKEND", "backend": backend}, "actor_id": "ACTOR",
+        "authorization_sigil": SIGIL, "execution": {"kind": "NONE"}, "backend": backend,
+        "transfer": {"transfer_id": "ST-ONE", "transfer_attempt_id": "SA-ONE",
+                     "request_record_sigil": SIGIL, "attempt_record_sigil": SIGIL,
+                     "terminal_event": event},
+        "provenance_policy": {"provenance_policy_id": "SPP-ONE", "provenance_policy_sigil": SIGIL},
+        "verifications": [{"event": event, "replica_id": "SR-ONE",
+                            "blob": {"blob_sigil": SIGIL, "size_bytes": 1}, "backend": backend,
+                            "backend_object": object_ref,
+                            "verification": {"method": "FULL_READBACK_SHA256",
+                                             "evidence_sigil": SIGIL, "verified_at": STAMP,
+                                             "next_due_at": None}}],
+        "transformation": {"kind": "NONE"},
+        "times": {"observed_at": None, "started_at": STAMP, "committed_at": STAMP,
+                  "verified_at": STAMP, "terminal_at": STAMP}, "terminal_reason": None,
+        "record_sigil": "",
+    }
+    provenance["record_sigil"] = content_sigil({
+        key: member for key, member in provenance.items() if key != "record_sigil"
+    })
+    return provenance
 
 
 def _recovery_marker() -> dict[str, object]:
@@ -540,6 +579,25 @@ def test_gc_plan_closes_local_proof_bindings_and_sorting() -> None:
     })
     with pytest.raises(AthanorError, match="Closure Proof disagrees"):
         validate_artifact_gc_plan_v1(wrong_proof)
+
+
+def test_provenance_is_self_signed_and_matches_state_projection() -> None:
+    provenance = _provenance()
+    validate_artifact_provenance_v1(provenance)
+    assert load_artifact_provenance_v1(json.dumps(provenance)) == provenance
+
+    state = _state()
+    state["provenance"] = [{"provenance_id": provenance["provenance_id"],
+                            "record_sigil": provenance["record_sigil"], "revision": 1,
+                            "last_event_sigil": SIGIL}]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_provenance_v1(state, records=[provenance])
+
+    missing = deepcopy(state)
+    with pytest.raises(AthanorError, match="Provenance projection lacks"):
+        validate_artifact_storage_state_supplied_provenance_v1(missing, records=[])
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

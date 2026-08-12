@@ -335,6 +335,38 @@ def load_artifact_gc_plan_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
     return plan
 
 
+def validate_artifact_provenance_v1(provenance: dict[str, Any]) -> None:
+    """Validate an immutable Provenance record without resolving its lineage."""
+    validate_instance("artifact-provenance-1.0.json", provenance)
+    _check_nfc_and_numbers(provenance)
+    if provenance["record_sigil"] != content_sigil(_without(provenance, "record_sigil")):
+        _fail("Artifact Provenance self-Sigil mismatch")
+
+
+def load_artifact_provenance_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    provenance = _load_strict_object(raw, "Artifact Provenance")
+    validate_artifact_provenance_v1(provenance)
+    return provenance
+
+
+def validate_artifact_storage_state_supplied_provenance_v1(
+    state: dict[str, Any], *, records: list[dict[str, Any]],
+) -> None:
+    """Compare State Provenance projections with complete supplied records."""
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, str] = {}
+    for provenance in records:
+        validate_artifact_provenance_v1(provenance)
+        if provenance["provenance_id"] in supplied:
+            _fail("Artifact Storage supplied Provenance records have duplicate IDs")
+        supplied[provenance["provenance_id"]] = provenance["record_sigil"]
+    for projection in state["provenance"]:
+        if supplied.get(projection["provenance_id"]) != projection["record_sigil"]:
+            _fail("Artifact Storage State Provenance projection lacks matching supplied record")
+    if set(supplied) != {projection["provenance_id"] for projection in state["provenance"]}:
+        _fail("Artifact Storage supplied Provenance records do not exactly match State projections")
+
+
 def validate_artifact_storage_state_supplied_retention_policies_v1(
     state: dict[str, Any], *, policies: list[dict[str, Any]],
 ) -> None:
