@@ -223,7 +223,7 @@ class CliSurfaceTest(unittest.TestCase):
 
         code, output = self._run("root")
         self.assertEqual(code, 0)
-        self.assertEqual(Path(output.strip()), self.root)
+        self.assertEqual(Path(output.strip()).resolve(), self.root.resolve())
         self.assertEqual(self._run("status")[0], 0)
 
     def test_project_manifest_is_also_a_root_marker(self) -> None:
@@ -234,7 +234,7 @@ class CliSurfaceTest(unittest.TestCase):
 
         code, output = self._run("root")
         self.assertEqual(code, 0)
-        self.assertEqual(Path(output.strip()), self.root)
+        self.assertEqual(Path(output.strip()).resolve(), self.root.resolve())
 
     def test_active_program_is_explicit_and_used_by_direct_verbs(self) -> None:
         self._run("init")
