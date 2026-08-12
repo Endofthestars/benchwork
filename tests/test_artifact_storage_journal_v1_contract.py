@@ -954,7 +954,7 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
                                     "terminal_receipt_sigil": None},
         "reference_sets": [{"reference_set_id": reference_set["reference_set_id"],
                             "reference_set_sigil": reference_set["reference_set_sigil"]}],
-        "blob_sigils": [], "actor_id": "ACTOR", "authorization_sigil": SIGIL,
+        "blob_sigils": [SIGIL], "actor_id": "ACTOR", "authorization_sigil": SIGIL,
         "idempotency_key_sigil": SIGIL, "requested_at": STAMP, "record_sigil": "",
     }
     intent["reference_intent_id"] = derive_artifact_storage_reference_intent_id_v1(intent)
@@ -1173,6 +1173,233 @@ def test_storage_replay_projects_exact_registered_reference_set() -> None:
         replay_artifact_storage_journal_prefix_v1(
             [initial, activation, wrong_timestamp],
             supplied_reference_sets=[reference_set],
+        )
+
+
+def test_storage_replay_projects_canonical_reference_write_ahead_pin() -> None:
+    initial = _initial_replay_event()
+    for snapshot in initial["payload"]["quota_snapshots"]:  # type: ignore[index]
+        if snapshot["quota_class"] in {"JOURNAL", "CONTROL_RECORD"}:
+            snapshot["limit"] = 10
+    initial["quota_effects"] = [  # type: ignore[index]
+        {"kind": "INITIALIZE", "snapshot": snapshot}
+        for snapshot in initial["payload"]["quota_snapshots"]  # type: ignore[index]
+    ]
+    initial["event_sigil"] = content_sigil({
+        key: value for key, value in initial.items() if key != "event_sigil"
+    })
+    activation = _next_event(initial)
+    activation.update({
+        "event_type": "storage.activation_completed",
+        "entity_revisions": [{"entity_type": "STORE", "entity_id": "STORE",
+                              "previous_revision": 1, "next_revision": 2}],
+        "payload": {"legacy_protection_ids": [], "activation_evidence_sigil": SIGIL,
+                    "clock": initial["payload"]["clock"]},  # type: ignore[index]
+        "quota_effects": [],
+    })
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    reference_set = _reference_set()
+    registered = _next_event(activation)
+    registered.update({
+        "event_id": reference_set["registration_event_id"], "sequence": 3,
+        "event_type": "reference_set.registered", "recorded_at": "2026-08-06T00:00:02Z",
+        "observed_at": None,
+        "entity_revisions": [{"entity_type": "REFERENCE_SET",
+                              "entity_id": reference_set["reference_set_id"],
+                              "previous_revision": None, "next_revision": 1}],
+        "causation_event_id": None, "idempotency_key_sigil": None, "quota_effects": [],
+        "payload": {"reference_set_id": reference_set["reference_set_id"],
+                    "reference_set_sigil": reference_set["reference_set_sigil"],
+                    "source_identity": reference_set["source"]["identity"],
+                    "source_sigil": reference_set["source"]["sigil"]},
+    })
+    reference_set["created_at"] = registered["recorded_at"]
+    reference_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in reference_set.items() if key != "reference_set_sigil"
+    })
+    registered["payload"]["reference_set_sigil"] = reference_set["reference_set_sigil"]  # type: ignore[index]
+    registered["event_sigil"] = content_sigil({
+        key: value for key, value in registered.items() if key != "event_sigil"
+    })
+    reservation = {
+        "reservation_id": "RESERVATION", "claims": [
+            {"quota_class": "CONTROL_RECORD", "byte_count": 0, "object_count": 0,
+             "inode_count": 0, "stream_count": 0, "journal_bytes": 0,
+             "control_record_bytes": 1},
+            {"quota_class": "JOURNAL", "byte_count": 0, "object_count": 0,
+             "inode_count": 0, "stream_count": 0, "journal_bytes": 1,
+             "control_record_bytes": 0},
+        ],
+        "capacity_plan": {"allowed_event_types": ["canonical_reference.committed",
+                                                     "canonical_reference.released"],
+                          "max_event_frame_count": 1, "max_control_record_count": 1,
+                          "max_recovery_evidence_count": 0, "max_event_frame_bytes": 1,
+                          "max_control_record_bytes": 1,
+                          "max_recovery_evidence_bytes": 1},
+        "expires_at": None, "created_clock": initial["payload"]["clock"],  # type: ignore[index]
+        "remaining_micros_at_creation": None,
+    }
+    intent = {
+        "schema_version": "artifact-storage-reference-intent/1.0", "reference_intent_id": "",
+        "transition_request_id": "REQUEST", "transition_request_sigil": SIGIL,
+        "canonical_event_type": "patch.proposed",
+        "expected_chronicle_head": {"schema_version": "chronicle-head/1.1", "event_count": 0,
+                                    "terminal_receipt_sigil": None},
+        "reference_sets": [{"reference_set_id": reference_set["reference_set_id"],
+                            "reference_set_sigil": reference_set["reference_set_sigil"]}],
+        "blob_sigils": [], "actor_id": "ACTOR", "authorization_sigil": SIGIL,
+        "idempotency_key_sigil": SIGIL, "requested_at": "2026-08-06T00:00:03Z",
+        "record_sigil": "",
+    }
+    intent["reference_intent_id"] = derive_artifact_storage_reference_intent_id_v1(intent)
+    intent["record_sigil"] = content_sigil({
+        key: value for key, value in intent.items() if key != "record_sigil"
+    })
+    recorded = _next_event(registered)
+    recorded.update({
+        "event_id": "SE-INTENT", "sequence": 4,
+        "event_type": "canonical_reference.intent_recorded",
+        "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
+        "entity_revisions": [
+            {"entity_type": "REFERENCE_INTENT", "entity_id": intent["reference_intent_id"],
+             "previous_revision": None, "next_revision": 1},
+            {"entity_type": "QUOTA", "entity_id": reservation["reservation_id"],
+             "previous_revision": None, "next_revision": 1},
+        ], "causation_event_id": None, "idempotency_key_sigil": SIGIL,
+        "quota_effects": [{"kind": "RESERVE", "reservation": reservation,
+                           "owner_kind": "CANONICAL_REFERENCE",
+                           "owner_id": intent["reference_intent_id"],
+                           "purpose": "CANONICAL_PIN_LIFECYCLE"}],
+        "payload": {"reference_intent": {
+            "schema_version": "artifact-storage-reference-intent/1.0",
+            "record_id": intent["reference_intent_id"], "record_sigil": intent["record_sigil"],
+        }, "expected_chronicle_head": intent["expected_chronicle_head"],
+                "blob_sigils": [], "reference_set_sigils": [reference_set["reference_set_sigil"]],
+            "lifecycle_reservation": reservation},
+    })
+    recorded["event_sigil"] = content_sigil({
+        key: value for key, value in recorded.items() if key != "event_sigil"
+    })
+    state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered, recorded], supplied_reference_sets=[reference_set],
+        supplied_reference_intents=[intent],
+    )
+    assert state["canonical_reference_intents"][0]["state"] == "OPEN"
+    assert state["open_intents"][0]["intent_id"] == intent["reference_intent_id"]
+    assert [counter["reserved"] for counter in state["quota_counters"] if counter["quota_class"]
+            in {"JOURNAL", "CONTROL_RECORD"}] == [1, 1]
+
+    malformed = deepcopy(recorded)
+    malformed["payload"]["blob_sigils"] = [SIGIL]
+    malformed["event_sigil"] = content_sigil({
+        key: value for key, value in malformed.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees with immutable records"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, malformed],
+            supplied_reference_sets=[reference_set], supplied_reference_intents=[intent],
+        )
+    closure_mismatch = deepcopy(intent)
+    closure_mismatch["blob_sigils"] = [SIGIL]
+    closure_mismatch["record_sigil"] = content_sigil({
+        key: value for key, value in closure_mismatch.items() if key != "record_sigil"
+    })
+    malformed = deepcopy(recorded)
+    malformed["payload"]["reference_intent"]["record_sigil"] = closure_mismatch["record_sigil"]
+    malformed["payload"]["blob_sigils"] = [SIGIL]
+    malformed["event_sigil"] = content_sigil({
+        key: value for key, value in malformed.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees with immutable records"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, malformed],
+            supplied_reference_sets=[reference_set], supplied_reference_intents=[closure_mismatch],
+        )
+    under_reserved = deepcopy(recorded)
+    under_reserved["payload"]["lifecycle_reservation"]["capacity_plan"]["max_event_frame_count"] = 2
+    under_reserved["quota_effects"][0]["reservation"] = under_reserved["payload"]["lifecycle_reservation"]
+    under_reserved["event_sigil"] = content_sigil({
+        key: value for key, value in under_reserved.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="lacks terminal capacity"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, under_reserved],
+            supplied_reference_sets=[reference_set], supplied_reference_intents=[intent],
+        )
+    with pytest.raises(AthanorError, match="requires supplied control records"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, recorded], supplied_reference_sets=[reference_set]
+        )
+
+    unknown_blob_set = deepcopy(reference_set)
+    unknown_blob_set["edges"] = [{
+        "relationship": "CANONICAL_BINDS_BLOB", "target_kind": "BLOB",
+        "target_identity": SIGIL, "target_sigil": SIGIL,
+    }]
+    unknown_blob_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(
+        unknown_blob_set
+    )
+    unknown_blob_set["registration_event_id"] = "SE-" + content_sigil([
+        "artifact-storage-reference-set-registration-event-id/1.0",
+        unknown_blob_set["reference_set_id"],
+    ]).removeprefix("sha256:").upper()
+    unknown_blob_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in unknown_blob_set.items()
+        if key != "reference_set_sigil"
+    })
+    unknown_registered = deepcopy(registered)
+    unknown_registered.update({
+        "event_id": unknown_blob_set["registration_event_id"],
+        "entity_revisions": [{"entity_type": "REFERENCE_SET",
+                              "entity_id": unknown_blob_set["reference_set_id"],
+                              "previous_revision": None, "next_revision": 1}],
+        "payload": {"reference_set_id": unknown_blob_set["reference_set_id"],
+                    "reference_set_sigil": unknown_blob_set["reference_set_sigil"],
+                    "source_identity": unknown_blob_set["source"]["identity"],
+                    "source_sigil": unknown_blob_set["source"]["sigil"]},
+    })
+    unknown_blob_set["created_at"] = unknown_registered["recorded_at"]
+    unknown_blob_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in unknown_blob_set.items()
+        if key != "reference_set_sigil"
+    })
+    unknown_registered["payload"]["reference_set_sigil"] = unknown_blob_set["reference_set_sigil"]  # type: ignore[index]
+    unknown_registered["event_sigil"] = content_sigil({
+        key: value for key, value in unknown_registered.items() if key != "event_sigil"
+    })
+    unknown_blob_intent = deepcopy(intent)
+    unknown_blob_intent["reference_sets"] = [{
+        "reference_set_id": unknown_blob_set["reference_set_id"],
+        "reference_set_sigil": unknown_blob_set["reference_set_sigil"],
+    }]
+    unknown_blob_intent["blob_sigils"] = [SIGIL]
+    unknown_blob_intent["reference_intent_id"] = derive_artifact_storage_reference_intent_id_v1(
+        unknown_blob_intent
+    )
+    unknown_blob_intent["record_sigil"] = content_sigil({
+        key: value for key, value in unknown_blob_intent.items() if key != "record_sigil"
+    })
+    unknown_blob_event = deepcopy(recorded)
+    unknown_blob_event["previous_event_sigil"] = unknown_registered["event_sigil"]
+    unknown_blob_event["payload"]["reference_intent"] = {
+        "schema_version": "artifact-storage-reference-intent/1.0",
+        "record_id": unknown_blob_intent["reference_intent_id"],
+        "record_sigil": unknown_blob_intent["record_sigil"],
+    }
+    unknown_blob_event["payload"]["blob_sigils"] = [SIGIL]
+    unknown_blob_event["payload"]["reference_set_sigils"] = [unknown_blob_set["reference_set_sigil"]]
+    unknown_blob_event["entity_revisions"][0]["entity_id"] = unknown_blob_intent["reference_intent_id"]  # type: ignore[index]
+    unknown_blob_event["quota_effects"][0]["owner_id"] = unknown_blob_intent["reference_intent_id"]  # type: ignore[index]
+    unknown_blob_event["event_sigil"] = content_sigil({
+        key: value for key, value in unknown_blob_event.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="Blob edge identity"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, unknown_registered, unknown_blob_event],
+            supplied_reference_sets=[unknown_blob_set],
+            supplied_reference_intents=[unknown_blob_intent],
         )
 
 

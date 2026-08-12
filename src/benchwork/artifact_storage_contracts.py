@@ -1108,9 +1108,293 @@ def _reduce_artifact_storage_reference_set_registered_v1(
     return reduced
 
 
+def _quota_counter_updates_for_claims_v1(
+    counters: list[dict[str, Any]], claims: list[dict[str, Any]], *, reserve: bool,
+) -> list[dict[str, Any]]:
+    """Apply one checked Reservation claim vector to the twelve counters."""
+    by_class = {claim["quota_class"]: claim for claim in claims}
+    dimensions = {
+        ("JOURNAL", "JOURNAL_BYTE"): "journal_bytes",
+        ("CONTROL_RECORD", "CONTROL_RECORD_BYTE"): "control_record_bytes",
+        ("STAGING", "BYTE"): "byte_count",
+        ("STAGING", "OBJECT"): "object_count",
+        ("QUARANTINE", "BYTE"): "byte_count",
+        ("QUARANTINE", "OBJECT"): "object_count",
+        ("COMMITTED", "BYTE"): "byte_count",
+        ("COMMITTED", "OBJECT"): "object_count",
+        ("MATERIALIZATION", "BYTE"): "byte_count",
+        ("MATERIALIZATION", "OBJECT"): "object_count",
+        ("STREAM", "STREAM"): "stream_count",
+        ("INODE", "INODE"): "inode_count",
+    }
+    updated: list[dict[str, Any]] = []
+    for counter in counters:
+        amount = by_class.get(counter["quota_class"], {}).get(
+            dimensions[(counter["quota_class"], counter["dimension"])], 0
+        )
+        next_reserved = counter["reserved"] + amount if reserve else counter["reserved"] - amount
+        if next_reserved < 0 or counter["used"] + next_reserved > counter["limit"]:
+            _fail("Artifact Storage Reservation exceeds a quota counter")
+        updated.append({**counter, "reserved": next_reserved})
+    return updated
+
+
+def _canonical_reference_blob_closure_v1(
+    roots: list[dict[str, Any]], reference_sets: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> list[str]:
+    """Recompute the bounded typed Reference Set closure for an intent pin."""
+    records = {record["reference_set_id"]: record for record in reference_sets}
+    if len(records) != len(reference_sets):
+        _fail("Canonical Reference closure has duplicate supplied Reference Sets")
+    replica_blobs = {
+        wrapper["record"]["replica_id"]: wrapper["record"]["blob_sigil"]
+        for wrapper in state["replicas"]
+    }
+    storage_blobs = {
+        wrapper["record"]["blob_sigil"] for wrapper in state["blobs"]
+    }
+    state_sets = {
+        projection["reference_set_id"]: projection["reference_set_sigil"]
+        for projection in state["reference_sets"]
+    }
+    relationship_matrix = {
+        "BUNDLE_RETAINS_MEMBER": ("BLOB_MANIFEST", {"BLOB"}),
+        "CANONICAL_BINDS_BLOB": ("CANONICAL_OBJECT", {"BLOB"}),
+        "CANONICAL_RETAINS_OBJECT": (
+            "CANONICAL_OBJECT", {"CANONICAL_OBJECT", "OPERATIONAL_CONTROL_RECORD", "REFERENCE_SET"}
+        ),
+        "CONTROL_RETAINS_BLOB": ("OPERATIONAL_CONTROL_RECORD", {"BLOB"}),
+        "CONTROL_RETAINS_CONTROL": ("OPERATIONAL_CONTROL_RECORD", {"OPERATIONAL_CONTROL_RECORD"}),
+        "HOLD_PROTECTS_BLOB": ("OPERATIONAL_CONTROL_RECORD", {"BLOB"}),
+        "JOB_REQUIRES_BLOB": ("OPERATIONAL_CONTROL_RECORD", {"BLOB"}),
+        "PATCH_RETAINS_BASE": ("BLOB_MANIFEST", {"BLOB"}),
+        "PATCH_RETAINS_POSTIMAGE": ("BLOB_MANIFEST", {"BLOB"}),
+        "REFERENCE_SET_RETAINS_SET": ("OPERATIONAL_CONTROL_RECORD", {"REFERENCE_SET"}),
+        "TRANSFER_PINS_REPLICA": ("OPERATIONAL_CONTROL_RECORD", {"REPLICA"}),
+    }
+    pending = [("REFERENCE_SET", item["reference_set_id"], item["reference_set_sigil"], 0)
+               for item in roots]
+    seen: set[tuple[str, str, str]] = set()
+    edge_keys: set[tuple[str, str, str, str]] = set()
+    blobs: set[str] = set()
+    while pending:
+        kind, identity, sigil, depth = pending.pop()
+        node = (kind, identity, sigil)
+        if node in seen:
+            continue
+        if len(seen) >= 4096 or depth >= 4096:
+            _fail("Canonical Reference closure exceeds its traversal bounds")
+        seen.add(node)
+        if kind != "REFERENCE_SET":
+            continue
+        record = records.get(identity)
+        if (
+            record is None
+            or record["reference_set_sigil"] != sigil
+            or state_sets.get(identity) != sigil
+        ):
+            _fail("Canonical Reference closure lacks an exact Reference Set")
+        for edge in record["edges"]:
+            edge_key = (
+                edge["relationship"], edge["target_kind"], edge["target_identity"],
+                edge["target_sigil"],
+            )
+            if edge_key in edge_keys:
+                continue
+            if len(edge_keys) >= 4096:
+                _fail("Canonical Reference closure exceeds its edge bound")
+            edge_keys.add(edge_key)
+            target_kind = edge["target_kind"]
+            target_id = edge["target_identity"]
+            target_sigil = edge["target_sigil"]
+            expected_source, expected_targets = relationship_matrix[edge["relationship"]]
+            if record["source"]["kind"] != expected_source or target_kind not in expected_targets:
+                _fail("Canonical Reference closure has an illegal typed edge")
+            if (
+                edge["relationship"] == "REFERENCE_SET_RETAINS_SET"
+                and record["source"]["schema_version"]
+                != "artifact-storage-reference-set/1.0"
+            ):
+                _fail("Canonical Reference closure Reference Set edge has an invalid source")
+            if target_kind == "BLOB":
+                if target_id != target_sigil or target_sigil not in storage_blobs:
+                    _fail("Canonical Reference Blob edge identity disagrees with Sigil")
+                blobs.add(target_sigil)
+            elif target_kind == "REPLICA":
+                blob_sigil = replica_blobs.get(target_id)
+                if blob_sigil is None or target_sigil != next(
+                    (wrapper["record"]["record_sigil"] for wrapper in state["replicas"]
+                     if wrapper["record"]["replica_id"] == target_id), None
+                ):
+                    _fail("Canonical Reference closure lacks an exact Replica")
+                blobs.add(blob_sigil)
+            elif target_kind == "REFERENCE_SET":
+                pending.append((target_kind, target_id, target_sigil, depth + 1))
+            else:
+                _fail("Canonical Reference closure has an unresolved typed target")
+            if len(blobs) > 4096:
+                _fail("Canonical Reference closure exceeds its Blob bound")
+    return sorted(blobs)
+
+
+def _validate_canonical_lifecycle_reservation_v1(reservation: dict[str, Any]) -> None:
+    """Close the capacity arithmetic required before a canonical pin is durable."""
+    plan = reservation["capacity_plan"]
+    if plan["allowed_event_types"] != [
+        "canonical_reference.committed", "canonical_reference.released"
+    ]:
+        _fail("Canonical Reference lifecycle Reservation has an invalid terminal plan")
+    required_journal = plan["max_event_frame_count"] * plan["max_event_frame_bytes"]
+    required_control = (
+        plan["max_control_record_count"] * plan["max_control_record_bytes"]
+        + plan["max_recovery_evidence_count"] * plan["max_recovery_evidence_bytes"]
+    )
+    if required_journal > 9223372036854775807 or required_control > 9223372036854775807:
+        _fail("Canonical Reference lifecycle Reservation capacity arithmetic overflows")
+    claims = {claim["quota_class"]: claim for claim in reservation["claims"]}
+    if (
+        claims.get("JOURNAL", {}).get("journal_bytes", 0) < required_journal
+        or claims.get("CONTROL_RECORD", {}).get("control_record_bytes", 0) < required_control
+    ):
+        _fail("Canonical Reference lifecycle Reservation lacks terminal capacity")
+
+
+def _reduce_artifact_storage_canonical_reference_intent_v1(
+    state: dict[str, Any], event: dict[str, Any], intent: dict[str, Any],
+    reference_sets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Project a canonical-reference pin from exact supplied control records.
+
+    This closes the immutable Storage portion of write-ahead intent admission,
+    including the bounded Reference Set closure. Chronicle authority remains
+    external and is deliberately not inferred here.
+    """
+    validate_artifact_storage_reference_intent_v1(intent)
+    for reference_set in reference_sets:
+        validate_artifact_storage_reference_set_v1(reference_set)
+    payload = event["payload"]
+    reservation = payload["lifecycle_reservation"]
+    if state["store_status"] != "ACTIVE" or state["clock_status"] != "TRUSTED":
+        _fail("Canonical Reference intent requires an active trusted Store")
+    reference_pairs = {
+        record["reference_set_id"]: record["reference_set_sigil"]
+        for record in reference_sets
+    }
+    if len(reference_pairs) != len(reference_sets):
+        _fail("Canonical Reference intent supplied Reference Sets have duplicate IDs")
+    intent_set_pairs = [
+        (reference["reference_set_id"], reference["reference_set_sigil"])
+        for reference in intent["reference_sets"]
+    ]
+    if any(reference_pairs.get(identifier) != sigil for identifier, sigil in intent_set_pairs):
+        _fail("Canonical Reference intent lacks a supplied immutable Reference Set")
+    state_set_pairs = {
+        projection["reference_set_id"]: projection["reference_set_sigil"]
+        for projection in state["reference_sets"]
+    }
+    if any(state_set_pairs.get(identifier) != sigil for identifier, sigil in intent_set_pairs):
+        _fail("Canonical Reference intent Reference Set is absent from Storage State")
+    if any(
+        item["reference_intent_id"] == intent["reference_intent_id"]
+        for item in state["canonical_reference_intents"]
+    ) or any(
+        item["intent_id"] == intent["reference_intent_id"]
+        for item in state["open_intents"]
+    ) or any(
+        item["reservation"]["reservation_id"] == reservation["reservation_id"]
+        for item in state["quota_reservations"]
+    ):
+        _fail("Canonical Reference intent duplicates a Storage projection")
+    _validate_quota_claim_array(reservation["claims"], "Canonical Reference Reservation claims")
+    closure_blobs = _canonical_reference_blob_closure_v1(
+        intent["reference_sets"], reference_sets, state
+    )
+    if (
+        reservation["expires_at"] is not None
+        or reservation["remaining_micros_at_creation"] is not None
+        or reservation["created_clock"] != state["clock_anchor"]
+    ):
+        _fail("Canonical Reference lifecycle Reservation is not the fixed nonexpiring plan")
+    _validate_canonical_lifecycle_reservation_v1(reservation)
+    expected_revisions = [
+        {"entity_type": "REFERENCE_INTENT", "entity_id": intent["reference_intent_id"],
+         "previous_revision": None, "next_revision": 1},
+        {"entity_type": "QUOTA", "entity_id": reservation["reservation_id"],
+         "previous_revision": None, "next_revision": 1},
+    ]
+    expected_effect = {
+        "kind": "RESERVE", "reservation": reservation,
+        "owner_kind": "CANONICAL_REFERENCE", "owner_id": intent["reference_intent_id"],
+        "purpose": "CANONICAL_PIN_LIFECYCLE",
+    }
+    expected_set_sigils = [sigil for _, sigil in intent_set_pairs]
+    if (
+        event["event_type"] != "canonical_reference.intent_recorded"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] != intent["idempotency_key_sigil"]
+        or event["quota_effects"] != [expected_effect]
+        or payload["reference_intent"] != {
+            "schema_version": "artifact-storage-reference-intent/1.0",
+            "record_id": intent["reference_intent_id"], "record_sigil": intent["record_sigil"],
+        }
+        or payload["expected_chronicle_head"] != intent["expected_chronicle_head"]
+        or intent["blob_sigils"] != closure_blobs
+        or payload["blob_sigils"] != closure_blobs
+        or payload["reference_set_sigils"] != expected_set_sigils
+    ):
+        _fail("Canonical Reference intent Event disagrees with immutable records")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "canonical_reference_intents": sorted([
+            *state["canonical_reference_intents"], {
+                "reference_intent_id": intent["reference_intent_id"], "record_sigil": intent["record_sigil"],
+                "state": "OPEN", "chronicle_commit": None, "release_kind": None,
+                "release_authority_sigil": None, "release_reason": None, "revision": 1,
+                "last_event_sigil": event["event_sigil"],
+            },
+        ], key=lambda item: item["reference_intent_id"].encode("ascii")),
+        "quota_reservations": sorted([
+            *state["quota_reservations"], {
+                "reservation": reservation, "owner_kind": "CANONICAL_REFERENCE",
+                "owner_id": intent["reference_intent_id"], "purpose": "CANONICAL_PIN_LIFECYCLE",
+                "state": "ACTIVE", "consumed_claims": [], "released_claims": [],
+                "remaining_claims": reservation["claims"], "retained_for_event_types": [],
+                "revision": 1, "last_event_sigil": event["event_sigil"],
+            },
+        ], key=lambda item: item["reservation"]["reservation_id"].encode("ascii")),
+        "open_intents": sorted([
+            *state["open_intents"], {
+                "intent_kind": "CANONICAL_REFERENCE", "intent_id": intent["reference_intent_id"],
+                "owner_id": intent["reference_intent_id"], "source_event": {
+                    "journal_id": event["journal_id"], "sequence": event["sequence"],
+                    "event_id": event["event_id"], "event_sigil": event["event_sigil"],
+                }, "intent_sigil": event["event_sigil"], "revision": 1,
+                "last_event_sigil": event["event_sigil"], "authorization_expires_at": None,
+                "expected_chronicle_head": intent["expected_chronicle_head"],
+                "blob_sigils": intent["blob_sigils"], "reference_set_sigils": expected_set_sigils,
+            },
+        ], key=lambda item: (item["intent_kind"].encode("ascii"), item["intent_id"].encode("ascii"))),
+        "quota_counters": _quota_counter_updates_for_claims_v1(
+            state["quota_counters"], reservation["claims"], reserve=True
+        ),
+        "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
     supplied_reference_sets: list[dict[str, Any]] | None = None,
+    supplied_reference_intents: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay installed Storage Journal reducers, failing closed for all others.
 
@@ -1149,6 +1433,18 @@ def replay_artifact_storage_journal_prefix_v1(
                 _fail("Reference Set registration replay requires exactly one supplied record")
             state = _reduce_artifact_storage_reference_set_registered_v1(
                 state, event, matches[0]
+            )
+        elif event["event_type"] == "canonical_reference.intent_recorded":
+            if supplied_reference_intents is None or supplied_reference_sets is None:
+                _fail("Canonical Reference intent replay requires supplied control records")
+            matches = [
+                record for record in supplied_reference_intents
+                if record.get("reference_intent_id") == event["payload"]["reference_intent"]["record_id"]
+            ]
+            if len(matches) != 1:
+                _fail("Canonical Reference intent replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_canonical_reference_intent_v1(
+                state, event, matches[0], supplied_reference_sets
             )
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for this Event")
