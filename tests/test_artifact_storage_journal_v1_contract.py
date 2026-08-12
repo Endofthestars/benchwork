@@ -474,6 +474,38 @@ def _transfer_attempt() -> dict[str, object]:
     return attempt
 
 
+def _materialization() -> dict[str, object]:
+    clock = {"utc": STAMP, "monotonic_anchor_id": "CLOCK", "monotonic_ticks": 0,
+             "monotonic_frequency_hz": 1, "uncertainty_micros": 0,
+             "observation_sigil": SIGIL}
+    materialization: dict[str, object] = {
+        "schema_version": "artifact-materialization/1.0", "materialization_id": "SM-ONE",
+        "source_blob_sigil": SIGIL, "source_replica_id": "SR-ONE",
+        "source_verification_sigil": SIGIL, "destination_class": "SANCTUM_INPUT",
+        "destination_sigil": SIGIL, "task_id": None, "attempt_id": None,
+        "access_mode": "READ_ONLY",
+        "bounds": {"max_bytes": 0, "max_duration_millis": 1, "max_file_count": None,
+                   "max_chunk_count": 1, "buffer_bytes": 1},
+        "reservation": {"reservation_id": "RESERVATION", "claims": [],
+                        "capacity_plan": {"allowed_event_types": [], "max_event_frame_count": 1,
+                                          "max_control_record_count": 0,
+                                          "max_recovery_evidence_count": 0, "max_event_frame_bytes": 1,
+                                          "max_control_record_bytes": 1, "max_recovery_evidence_bytes": 1},
+                        "expires_at": None, "created_clock": clock,
+                        "remaining_micros_at_creation": None},
+        "destination_staging_object": None, "commit_intent": None,
+        "residual_staging_cleanup": {"state": "NOT_REQUIRED", "staging_object": None,
+                                     "evidence_sigil": None, "reason": None},
+        "state": "PREPARED", "verification": None,
+        "cleanup": {"state": "NOT_REQUIRED", "evidence_sigil": None, "reason": None},
+        "created_at": STAMP, "terminal_at": None, "revision": 1, "record_sigil": "",
+    }
+    materialization["record_sigil"] = content_sigil({
+        key: member for key, member in materialization.items() if key != "record_sigil"
+    })
+    return materialization
+
+
 def _recovery_marker() -> dict[str, object]:
     marker: dict[str, object] = {
         "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
@@ -1111,6 +1143,35 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="disagrees with selected Replica"):
         validate_artifact_storage_state_v1(mismatched_selected)
+
+    materialization_state = deepcopy(replica_state)
+    materialization_state["materializations"] = [{
+        "record": _materialization(), "last_event_sigil": SIGIL,
+    }]
+    materialization_state["state_sigil"] = content_sigil({
+        key: member for key, member in materialization_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(materialization_state)
+
+    missing_source = deepcopy(materialization_state)
+    missing_source["replicas"] = []
+    missing_source["state_sigil"] = content_sigil({
+        key: member for key, member in missing_source.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="lacks its source Replica"):
+        validate_artifact_storage_state_v1(missing_source)
+
+    wrong_source_blob = deepcopy(materialization_state)
+    wrong_source_blob["materializations"][0]["record"]["source_blob_sigil"] = SIGIL_B
+    wrong_source_blob["materializations"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in wrong_source_blob["materializations"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    wrong_source_blob["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_source_blob.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="source Replica disagrees with Blob"):
+        validate_artifact_storage_state_v1(wrong_source_blob)
 
     blob_state = deepcopy(state)
     blob = {

@@ -792,6 +792,13 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             or selected["state"] != "AVAILABLE"
         ):
             _fail("Artifact Storage committed Transfer Attempt disagrees with selected Replica")
+    for wrapper in state["materializations"]:
+        materialization = wrapper["record"]
+        source = replicas.get(materialization["source_replica_id"])
+        if source is None:
+            _fail("Artifact Storage Materialization lacks its source Replica")
+        if source["blob_sigil"] != materialization["source_blob_sigil"]:
+            _fail("Artifact Storage Materialization source Replica disagrees with Blob")
     for request in state["transfer_requests"]:
         selected = request["selected_attempt_id"]
         if selected is not None and selected not in request["attempt_ids"]:
