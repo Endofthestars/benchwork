@@ -12,7 +12,7 @@ import json
 import math
 import unicodedata
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, NoReturn
 
 from .athanor import AthanorError, canonical_json, content_sigil
@@ -339,11 +339,6 @@ def _without(value: dict[str, Any], member: str) -> dict[str, Any]:
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _format_time_v1(value: datetime) -> str:
-    """Format a UTC timestamp in the wire's canonical Z form."""
-    return value.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def derive_execution_observation_cursor_sigil_v1(cursor: dict[str, Any]) -> str:
@@ -739,51 +734,6 @@ def validate_execution_job_v1(job: dict[str, Any]) -> None:
         or evidence["evidence_sigil"] != content_sigil(_without(evidence, "evidence_sigil"))
     ):
         _fail("Execution Job admission evidence disagrees with Job binding")
-
-
-def validate_execution_specification_v1(specification: dict[str, Any]) -> None:
-    """Validate the immutable Specification wire used by retry guards.
-
-    Resolution of the Task, Capability, Snapshot, and approval bindings remains
-    outside this local comparator.  The retry policy itself is nevertheless an
-    immutable, self-sealed input and must never be inferred from a Job.
-    """
-    validate_instance("execution-specification-1.0.json", specification)
-    _check_nfc(specification)
-    if specification["specification_sigil"] != content_sigil(
-        _without(specification, "specification_sigil")
-    ):
-        _fail("Execution Specification self-Sigil mismatch")
-
-
-def _current_attempt_v1(state: dict[str, Any], label: str) -> dict[str, Any]:
-    """Return the Job's one live Attempt without discarding terminal history."""
-    if len(state["jobs"]) != 1:
-        _fail(f"{label} requires exactly one Job")
-    attempt_id = state["jobs"][0]["current_attempt_id"]
-    matches = [item for item in state["attempts"] if item["attempt_id"] == attempt_id]
-    if attempt_id is None or len(matches) != 1:
-        _fail(f"{label} requires one current Attempt")
-    return matches[0]
-
-
-def _replace_attempt_v1(
-    state: dict[str, Any], attempt_id: str, replacement: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Replace exactly one retained Attempt projection, preserving history."""
-    replaced = False
-    attempts: list[dict[str, Any]] = []
-    for candidate in state["attempts"]:
-        if candidate["attempt_id"] == attempt_id:
-            if replaced:
-                _fail("Execution State contains duplicate Attempt identity")
-            attempts.append(replacement)
-            replaced = True
-        else:
-            attempts.append(candidate)
-    if not replaced:
-        _fail("Execution State does not contain the Attempt to replace")
-    return attempts
 
 
 def _initial_budget_ledger_v1(job_budget: dict[str, Any]) -> dict[str, Any]:
@@ -1858,7 +1808,9 @@ _ACCOUNTING_CAPTURE_FINALIZATION_KEYS_V1 = {
 
 def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Replay cleanup, including the single immutable accounting capture."""
-    attempt, payload, executor = _current_attempt_v1(state, "Cleanup progress reducer"), event["payload"], state["executor"]
+    if len(state["attempts"]) != 1:
+        _fail("Cleanup progress reducer requires one Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
     is_capture = payload["step"] == "ACCOUNTING_CAPTURED"
     finalization = payload["finalization_bindings"]
     capture_valid = (
@@ -1901,7 +1853,7 @@ def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) 
             "terminalization_storage_manifest_binding": finalization["terminalization_storage_manifest_binding"],
             "output_root_protection": finalization["output_root_protection"],
         })
-    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], updated)
+    reduced["attempts"] = [updated]
     return build_execution_state_v1(reduced)
 
 
@@ -1914,13 +1866,13 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
     intentionally does not settle the Job budget, evaluate assurance, or
     accept an Outcome.
     """
-    if len(state["jobs"]) != 1:
-        _fail("Attempt terminal reducer requires one Job")
+    if len(state["attempts"]) != 1 or len(state["jobs"]) != 1:
+        _fail("Attempt terminal reducer requires one Job and one Attempt")
     terminal_state = _ATTEMPT_TERMINAL_EVENT_STATES_V1.get(event["event_type"])
     if terminal_state is None:
         _fail("Attempt terminal reducer received a nonterminal Event")
     attempt, job, payload, executor = (
-        _current_attempt_v1(state, "Attempt terminal reducer"), state["jobs"][0], event["payload"], state["executor"]
+        state["attempts"][0], state["jobs"][0], event["payload"], state["executor"]
     )
     evidence = payload["attempt_terminal_evidence"]
     expected_revision = [{
@@ -1966,7 +1918,7 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
     if terminal_state == "SUCCEEDED" and evidence["completion_anchor_binding"]["kind"] == "NOT_ESTABLISHED":
         _fail("Succeeded Attempt terminal Event requires an established completion anchor")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
+    reduced["attempts"] = [{
         **attempt,
         "revision": attempt["revision"] + 1,
         "state": terminal_state,
@@ -1982,9 +1934,8 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
             "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
             "terminal_sequence": event["sequence"], "terminal_recorded_at": event["recorded_at"],
         },
-        "terminal_reason_code": evidence["transition_cause"]["code"],
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    })
+    }]
     reduced["deadlines"] = [
         deadline for deadline in state["deadlines"]
         if not (
@@ -1999,10 +1950,10 @@ def _reduce_job_budget_settled_v1(
     state: dict[str, Any], event: dict[str, Any], immutable_attempt: dict[str, Any]
 ) -> dict[str, Any]:
     """Settle one terminal Attempt from its sealed reservation and accounting payload."""
-    if len(state["jobs"]) != 1:
-        _fail("Budget settlement reducer requires one Job")
+    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1:
+        _fail("Budget settlement reducer requires one Job and one Attempt")
     job, attempt, payload, executor = (
-        state["jobs"][0], _current_attempt_v1(state, "Budget settlement reducer"), event["payload"], state["executor"]
+        state["jobs"][0], state["attempts"][0], event["payload"], state["executor"]
     )
     validate_execution_attempt_v1(immutable_attempt)
     reservation = immutable_attempt["budget_reservation"]
@@ -2080,7 +2031,7 @@ def _reduce_job_budget_settled_v1(
     reduced = _advance_journal_binding_v1(state, event)
     reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "budget_ledger": ledger,
                         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
+    reduced["attempts"] = [{
         **attempt, "revision": attempt["revision"] + 1,
         "accounting_capture_binding": attempt["accounting_capture_binding"],
         "budget_settlement_binding": {"kind": "SETTLED", "event_id": event["event_id"],
@@ -2088,110 +2039,6 @@ def _reduce_job_budget_settled_v1(
                                       "accounting_capture_event_id": payload["accounting_capture_event_id"],
                                       "accounting_capture_event_sigil": payload["accounting_capture_event_sigil"],
                                       "usage_status": payload["usage_status"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    })
-    return build_execution_state_v1(reduced)
-
-
-def _retry_eligible_due_at_v1(attempt: dict[str, Any], policy: dict[str, Any]) -> str:
-    """Derive the RFC-0012 deterministic retry eligibility timestamp."""
-    terminal = attempt["terminal_event_binding"]
-    if terminal.get("kind") != "PRESENT":
-        _fail("Retry requires a terminal preceding Attempt")
-    base = _parse_time(terminal["terminal_recorded_at"])
-    kind = policy["backoff_kind"]
-    if kind == "NONE":
-        seconds = 0
-    elif kind == "FIXED":
-        seconds = policy["backoff_base_seconds"]
-    else:
-        exponent = attempt["retry_ordinal"] - 1
-        seconds = min(
-            policy["backoff_cap_seconds"], policy["backoff_base_seconds"] * (2**exponent)
-        )
-    try:
-        return _format_time_v1(base + timedelta(seconds=seconds))
-    except OverflowError:
-        _fail("Retry backoff time is unrepresentable")
-
-
-def _reduce_job_retry_scheduled_v1(
-    state: dict[str, Any], event: dict[str, Any], immutable_job: dict[str, Any], specification: dict[str, Any]
-) -> dict[str, Any]:
-    """Move a settled, assessed retryable Attempt into deterministic wait."""
-    if len(state["jobs"]) != 1:
-        _fail("Retry scheduling reducer requires one Job")
-    validate_execution_job_v1(immutable_job)
-    validate_execution_specification_v1(specification)
-    job = state["jobs"][0]
-    attempt = _current_attempt_v1(state, "Retry scheduling reducer")
-    policy = specification["retry_policy"]
-    payload, executor = event["payload"], state["executor"]
-    expected_revision = [{
-        "entity_kind": "JOB", "entity_id": job["job_id"],
-        "preceding_revision": job["revision"], "next_revision": job["revision"] + 1,
-    }]
-    if (
-        event["event_type"] != "job.retry_scheduled"
-        or immutable_job["job_id"] != job["job_id"]
-        or immutable_job["job_binding_sigil"] != job["job_binding_sigil"]
-        or specification["specification_id"] != immutable_job["specification_id"]
-        or specification["specification_sigil"] != immutable_job["specification_sigil"]
-        or job["state"] != "ACTIVE"
-        or attempt["state"] not in {"FAILED", "TIMED_OUT", "LEASE_EXPIRED", "LOST", "FENCED"}
-        or attempt["budget_settlement_binding"].get("kind") != "SETTLED"
-        or attempt["attempt_assurance_binding"].get("kind") != "CLAIMED"
-        or attempt["retry_ordinal"] >= policy["max_attempts"]
-        or payload["terminal_reason"] != attempt["terminal_reason_code"]
-        or payload["terminal_reason"] not in policy["retryable_terminal_reasons"]
-        or payload["preceding_attempt_id"] != attempt["attempt_id"]
-        or payload["backoff_ordinal"] != attempt["retry_ordinal"]
-        or payload["eligible_due_at"] != _retry_eligible_due_at_v1(attempt, policy)
-        or payload["post_settlement_budget_ledger_sigil"] != job["budget_ledger"]["budget_ledger_sigil"]
-        or event["executor_instance_id"] != executor["executor_instance_id"]
-        or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
-        or event["causation_event_id"] != attempt["last_event_id"]
-        or event["entity_revisions"] != expected_revision
-    ):
-        _fail("Retry scheduling Event disagrees with finalized Attempt")
-    reduced = _advance_journal_binding_v1(state, event)
-    reduced["jobs"] = [{
-        **job, "revision": job["revision"] + 1, "state": "RETRY_WAIT",
-        "current_attempt_id": None, "retry_eligible_due_at": payload["eligible_due_at"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    }]
-    return build_execution_state_v1(reduced)
-
-
-def _reduce_job_retry_ready_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
-    """Requeue only at the sealed eligibility time and before Job deadline."""
-    if len(state["jobs"]) != 1:
-        _fail("Retry-ready reducer requires one Job")
-    job, payload, executor = state["jobs"][0], event["payload"], state["executor"]
-    expected_revision = [{
-        "entity_kind": "JOB", "entity_id": job["job_id"],
-        "preceding_revision": job["revision"], "next_revision": job["revision"] + 1,
-    }]
-    expected_queue_key = {"ready_sequence": event["sequence"], "job_id": job["job_id"]}
-    if (
-        event["event_type"] != "job.retry_ready"
-        or job["state"] != "RETRY_WAIT"
-        or payload["eligible_due_at"] != job["retry_eligible_due_at"]
-        or _parse_time(event["recorded_at"]) < _parse_time(job["retry_eligible_due_at"])
-        or _parse_time(event["recorded_at"]) > _parse_time(job["deadline_due_at"])
-        or payload["queue_key"] != expected_queue_key
-        or event["executor_instance_id"] != executor["executor_instance_id"]
-        or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
-        or event["causation_event_id"] != job["last_event_id"]
-        or event["entity_revisions"] != expected_revision
-    ):
-        _fail("Retry-ready Event disagrees with retry wait projection")
-    reduced = _advance_journal_binding_v1(state, event)
-    reduced["jobs"] = [{
-        **job, "revision": job["revision"] + 1, "state": "QUEUED",
-        "queue_key": payload["queue_key"],
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
     }]
     return build_execution_state_v1(reduced)
@@ -2999,7 +2846,6 @@ def replay_execution_supplied_state_suffix_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
-    supplied_specifications: list[dict[str, Any]] | None = None,
     supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reduce installed suffix Events from one caller-supplied verified State.
@@ -3103,19 +2949,6 @@ def replay_execution_supplied_state_suffix_v1(
                 "Budget settlement",
             )
             current = _reduce_job_budget_settled_v1(current, event, immutable_attempt)
-        elif event["event_type"] == "job.retry_scheduled":
-            immutable_job = _find_supplied_v1(
-                supplied_jobs, current["jobs"][0]["job_id"], "job_id", "Retry scheduling"
-            )
-            specification = _find_supplied_v1(
-                supplied_specifications, immutable_job["specification_id"],
-                "specification_id", "Retry scheduling",
-            )
-            current = _reduce_job_retry_scheduled_v1(
-                current, event, immutable_job, specification
-            )
-        elif event["event_type"] == "job.retry_ready":
-            current = _reduce_job_retry_ready_v1(current, event)
         elif event["event_type"] == "attempt.assurance_evaluated":
             current = _reduce_attempt_assurance_evaluated_v1(current, event)
         elif event["event_type"] == "job.assurance_evaluated":
@@ -3477,22 +3310,14 @@ def _reduce_job_attempt_allocated_v1(
         _fail("Attempt allocation reducer requires exactly one queued Job")
     job = state["jobs"][0]
     executor = state["executor"]
-    prior_attempts = state["attempts"]
-    prior_attempt_ids = {item["attempt_id"] for item in prior_attempts}
-    prior_log_ids = {item["log_stream_id"] for item in state["log_streams"]}
-    expected_retry_ordinal = len(prior_attempts) + 1
     if (
         job["state"] != "QUEUED"
-        or job["current_attempt_id"] is not None
-        or set(job["attempt_ids"]) != prior_attempt_ids
-        or len(job["attempt_summaries"]) != len(prior_attempts)
-        or any(item["state"] not in _ATTEMPT_TERMINAL_EVENT_STATES_V1.values() for item in prior_attempts)
+        or state["attempts"]
+        or state["log_streams"]
         or attempt["job_id"] != job["job_id"]
         or attempt["job_binding_sigil"] != job["job_binding_sigil"]
-        or attempt["attempt_id"] in prior_attempt_ids
-        or attempt["retry_ordinal"] != expected_retry_ordinal
-        or attempt["fencing_generation"] != job["fencing_counter"] + 1
-        or any(log_id in prior_log_ids for log_id in attempt["log_stream_ids"].values())
+        or attempt["retry_ordinal"] != 1
+        or attempt["fencing_generation"] != 1
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
         or event["executor_build_sigil"]
@@ -3549,7 +3374,7 @@ def _reduce_job_attempt_allocated_v1(
             **job,
             "revision": job["revision"] + 1,
             "state": "ACTIVE",
-            "attempt_ids": [*job["attempt_ids"], attempt["attempt_id"]],
+            "attempt_ids": [attempt["attempt_id"]],
             "current_attempt_id": attempt["attempt_id"],
             "fencing_counter": attempt["fencing_generation"],
             "fence_floor": attempt["fencing_generation"],
@@ -3560,7 +3385,6 @@ def _reduce_job_attempt_allocated_v1(
         }
     ]
     reduced["attempts"] = [
-        *prior_attempts,
         {
             "attempt_id": attempt["attempt_id"],
             "revision": 0,
@@ -3597,12 +3421,11 @@ def _reduce_job_attempt_allocated_v1(
             "deadline_due_at": attempt["deadline_due_at"],
             "grace_due_at": None,
             "terminal_event_binding": {"kind": "NONE"},
-            "terminal_reason_code": None,
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
         }
     ]
-    new_log_streams = [
+    reduced["log_streams"] = [
         {
             "log_stream_id": log_ids[stream],
             "revision": 0,
@@ -3620,7 +3443,6 @@ def _reduce_job_attempt_allocated_v1(
         }
         for stream in ("STDOUT", "STDERR", "STRUCTURED")
     ]
-    reduced["log_streams"] = [*state["log_streams"], *new_log_streams]
     reduced["deadlines"] = [
         *state["deadlines"],
         {
@@ -3652,9 +3474,9 @@ def _reduce_attempt_preflight_started_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
     """Reduce a CREATED Attempt after its immutable bindings have been rechecked."""
-    if event["event_type"] != "attempt.preflight_started":
-        _fail("Attempt preflight reducer received the wrong Event")
-    attempt = _current_attempt_v1(state, "Attempt preflight reducer")
+    if event["event_type"] != "attempt.preflight_started" or len(state["attempts"]) != 1:
+        _fail("Attempt preflight reducer requires exactly one created Attempt")
+    attempt = state["attempts"][0]
     executor = state["executor"]
     if (
         attempt["state"] != "CREATED"
@@ -3678,16 +3500,15 @@ def _reduce_attempt_preflight_started_v1(
     ):
         _fail("Attempt preflight Event disagrees with created Attempt projection")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = _replace_attempt_v1(
-        state, attempt["attempt_id"],
+    reduced["attempts"] = [
         {
             **attempt,
             "revision": attempt["revision"] + 1,
             "state": "PREFLIGHTING",
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
-        },
-    )
+        }
+    ]
     reduced["journal_binding"] = {
         "journal_id": event["journal_id"],
         "through_sequence": event["sequence"],
@@ -3716,7 +3537,9 @@ def _reduce_attempt_preflight_progressed_v1(
     mutable progress field, so this reducer validates ordering and the allowed
     step without promoting the evidence to authority.
     """
-    attempt, payload, executor = _current_attempt_v1(state, "Preflight progress reducer"), event["payload"], state["executor"]
+    if len(state["attempts"]) != 1:
+        _fail("Preflight progress reducer requires one Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
     if (
         event["event_type"] != "attempt.preflight_progressed"
         or attempt["state"] != "PREFLIGHTING"
@@ -3736,12 +3559,12 @@ def _reduce_attempt_preflight_progressed_v1(
     ):
         _fail("Preflight progress Event disagrees with preflighting Attempt")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
+    reduced["attempts"] = [{
         **attempt,
         "revision": attempt["revision"] + 1,
         "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"],
-    })
+    }]
     return build_execution_state_v1(reduced)
 
 
@@ -3749,9 +3572,9 @@ def _reduce_attempt_preflight_passed_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
     """Reduce a completed preflight while retaining only its immutable root bindings."""
-    if event["event_type"] != "attempt.preflight_passed":
-        _fail("Attempt preflight-pass reducer received the wrong Event")
-    attempt = _current_attempt_v1(state, "Attempt preflight-pass reducer")
+    if event["event_type"] != "attempt.preflight_passed" or len(state["attempts"]) != 1:
+        _fail("Attempt preflight-pass reducer requires exactly one preflighting Attempt")
+    attempt = state["attempts"][0]
     executor = state["executor"]
     roots = event["payload"]["input_storage_roots"]
     if (
@@ -3780,8 +3603,7 @@ def _reduce_attempt_preflight_passed_v1(
     if len(roots) > 1:
         _fail("Attempt preflight-pass Event has too many input storage roots")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = _replace_attempt_v1(
-        state, attempt["attempt_id"],
+    reduced["attempts"] = [
         {
             **attempt,
             "revision": attempt["revision"] + 1,
@@ -3789,8 +3611,8 @@ def _reduce_attempt_preflight_passed_v1(
             "input_storage_roots": roots,
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
-        },
-    )
+        }
+    ]
     reduced["journal_binding"] = {
         "journal_id": event["journal_id"],
         "through_sequence": event["sequence"],
@@ -4037,7 +3859,6 @@ def replay_execution_journal_prefix_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
-    supplied_specifications: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix with the installed supplied-facts reducers.
 
@@ -4106,7 +3927,6 @@ def replay_execution_journal_prefix_v1(
         supplied_result_ingress_intents=supplied_result_ingress_intents,
         supplied_observation_evidence=supplied_observation_evidence,
         supplied_log_chunks=supplied_log_chunks,
-        supplied_specifications=supplied_specifications,
     )
 
 
@@ -4123,7 +3943,6 @@ def replay_execution_journal_supplied_facts_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
-    supplied_specifications: list[dict[str, Any]] | None = None,
     supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay the installed v1 reducer set from caller-supplied immutable facts.
@@ -4174,17 +3993,9 @@ def replay_execution_journal_supplied_facts_v1(
         elif event["event_type"] == "job.queued":
             state = _reduce_job_queued_v1(state, event)
         elif event["event_type"] == "job.attempt_allocated":
-            if supplied_attempts is None:
-                _fail("Attempt allocation replay requires supplied immutable records")
-            # Preserve self-Sigil validation for a one-record caller while
-            # selecting exactly the referenced immutable Attempt for retries.
-            if len(supplied_attempts) == 1:
-                attempt = supplied_attempts[0]
-            else:
-                attempt = _find_supplied_v1(
-                    supplied_attempts, event["payload"]["attempt_binding_sigil"],
-                    "attempt_binding_sigil", "Attempt allocation",
-                )
+            if supplied_attempts is None or len(supplied_attempts) != 1:
+                _fail("Attempt allocation replay requires exactly one supplied immutable record")
+            attempt = supplied_attempts[0]
             state = _reduce_job_attempt_allocated_v1(state, event, attempt)
         elif event["event_type"] == "attempt.authorization_bound":
             immutable_attempt = _find_supplied_v1(
@@ -4217,7 +4028,6 @@ def replay_execution_journal_supplied_facts_v1(
                 supplied_result_ingress_intents=supplied_result_ingress_intents,
                 supplied_observation_evidence=supplied_observation_evidence,
                 supplied_log_chunks=supplied_log_chunks,
-                supplied_specifications=supplied_specifications,
                 supplied_recovery_action_sets=supplied_recovery_action_sets,
             )
     return state
