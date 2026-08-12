@@ -2204,6 +2204,25 @@ def test_terminal_attempt_events_require_the_closed_terminal_evidence_shape() ->
     with pytest.raises(Exception):
         build_execution_journal_event_v1(event)
 
+    sigil = SIGIL
+    evidence = {
+        "transition_cause": {"code": "COMPLETION_ESTABLISHED", "trigger_kind": "PRIOR_EVENT", "trigger_event_id": "JE-RESULT", "effective_sequence": 2, "evidence_sigil": sigil},
+        "computation_status": "COMPLETED", "worker_status": "COMPLETED", "process_termination_status": "EXITED", "handle_revocation_status": "NOT_APPLICABLE", "cleanup_status": "VERIFIED", "mutable_resource_isolation_status": "NOT_APPLICABLE", "output_publication_status": "VERIFIED", "quarantine_status": "NOT_REQUIRED",
+        "termination_evidence_sigil": sigil, "handle_disposition_evidence_sigil": sigil, "cleanup_summary_sigil": sigil, "quarantine_evidence_sigil": sigil, "log_closure_sigil": sigil, "output_closure_sigil": sigil,
+        "result_binding": {"kind": "ACCEPTED", "result_sigil": sigil, "disposition_event_id": "JE-RESULT", "disposition_event_sigil": sigil, "disposition_sequence": 2},
+        "attempt_authorization_state": {"kind": "NONE"}, "completion_anchor_binding": {"kind": "RESULT_ACCEPTED", "event_id": "JE-RESULT", "event_sigil": sigil, "sequence": 2, "result_sigil": sigil}, "worker_session_binding": {"kind": "NONE"}, "lease_terminal_binding": {"kind": "NONE"}, "first_stop_or_fence_binding": {"kind": "NONE"},
+        "storage_observation_binding": {"kind": "FROZEN", "storage_journal_id": "SJ-ONE", "through_sequence": 1, "through_event_sigil": sigil, "output_storage_observation_set_id": "OS-ONE", "output_storage_observation_set_sigil": sigil},
+        "accounting_capture_event_id": "JE-CAPTURE", "accounting_capture_event_sigil": sigil,
+        "control_evidence_set_binding": {"kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64, "control_evidence_set_sigil": sigil}, "quarantine_binding_set_binding": {"kind": "FROZEN", "quarantine_binding_set_id": "QBS-" + "A" * 64, "quarantine_binding_set_sigil": sigil},
+        "terminalization_storage_manifest_binding": {"kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64, "storage_root_manifest_sigil": sigil}, "output_root_protection": {"kind": "NO_HOLD", "terminalization_storage_manifest_binding": {"kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64, "storage_root_manifest_sigil": sigil}}, "assurance_input_set_sigil": sigil, "terminal_source_binding": {"kind": "NOT_APPLICABLE"},
+    }
+    event["payload"] = {"attempt_terminal_evidence": evidence, "fencing_generation": 1, "final_fence_floor": 2, "output_storage_roots": []}
+    event["event_type"] = "attempt.succeeded"
+    assert build_execution_journal_event_v1(event)["event_type"] == "attempt.succeeded"
+    evidence["transition_cause"]["code"] = "COMPUTATION_FAILED"
+    with pytest.raises(Exception, match="completion anchor"):
+        build_execution_journal_event_v1(event)
+
 
 @pytest.mark.parametrize(
     "loader,fixture",

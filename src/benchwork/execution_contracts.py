@@ -3803,6 +3803,56 @@ def expected_event_idempotency_v1(event: dict[str, Any], context: dict[str, Any]
     return None
 
 
+_ATTEMPT_TERMINAL_EVENT_STATES_V1 = {
+    "attempt.succeeded": "SUCCEEDED", "attempt.failed": "FAILED", "attempt.cancelled": "CANCELLED",
+    "attempt.timed_out": "TIMED_OUT", "attempt.policy_violated": "POLICY_VIOLATION",
+    "attempt.lease_expired": "LEASE_EXPIRED", "attempt.lost": "LOST", "attempt.fenced": "FENCED",
+    "attempt.rejected": "REJECTED",
+}
+
+
+def _validate_attempt_terminal_evidence_v1(event: dict[str, Any]) -> None:
+    """Check terminal payload self-consistency before any replay authority."""
+    state = _ATTEMPT_TERMINAL_EVENT_STATES_V1.get(event["event_type"])
+    if state is None:
+        return
+    payload = event["payload"]
+    evidence = payload["attempt_terminal_evidence"]
+    frozen = evidence["storage_observation_binding"]
+    manifest = evidence["terminalization_storage_manifest_binding"]
+    protection = evidence["output_root_protection"]
+    if (
+        evidence["control_evidence_set_binding"].get("kind") != "FROZEN"
+        or evidence["quarantine_binding_set_binding"].get("kind") != "FROZEN"
+        or manifest.get("kind") != "FROZEN" or frozen.get("kind") != "FROZEN"
+        or evidence["accounting_capture_event_id"] == event["event_id"]
+        or evidence["accounting_capture_event_sigil"] == event["event_sigil"]
+        or payload["fencing_generation"] < 0
+        or payload["final_fence_floor"] < payload["fencing_generation"]
+        or evidence["output_root_protection"] .get("kind") not in {"NO_HOLD", "HELD"}
+        or protection["terminalization_storage_manifest_binding"] != manifest
+    ):
+        _fail("Attempt terminal Event has invalid frozen finalization evidence")
+    roots = payload["output_storage_roots"]
+    if protection["kind"] == "NO_HOLD":
+        if roots:
+            _fail("Attempt terminal Event NO_HOLD must not activate output roots")
+    elif roots != [protection["storage_root_binding"]]:
+        _fail("Attempt terminal Event HELD root disagrees with protection")
+    cause = evidence["transition_cause"]
+    if state == "SUCCEEDED":
+        anchor = evidence["completion_anchor_binding"]
+        if (
+            cause["code"] != "COMPLETION_ESTABLISHED" or cause["trigger_kind"] != "PRIOR_EVENT"
+            or anchor.get("kind") not in {"RESULT_ACCEPTED", "NO_RESULT"}
+            or cause["trigger_event_id"] != anchor["event_id"]
+            or cause["effective_sequence"] != anchor["sequence"]
+        ):
+            _fail("Succeeded Attempt terminal cause must bind its completion anchor")
+    elif cause["code"] == "COMPLETION_ESTABLISHED":
+        _fail("Only succeeded Attempt terminal events may establish completion")
+
+
 def validate_execution_journal_event_v1(
     event: dict[str, Any], *, context: dict[str, Any] | None = None
 ) -> None:
@@ -3833,6 +3883,7 @@ def validate_execution_journal_event_v1(
         _fail("noninitial Event must bind previous_event_sigil")
     if event["causation_event_id"] == event["event_id"]:
         _fail("Event self-causation is forbidden")
+    _validate_attempt_terminal_evidence_v1(event)
     if context is not None:
         if event["causation_event_id"] != expected_event_causation_v1(event, context):
             _fail("Journal Event causation_event_id violates JEW2")
