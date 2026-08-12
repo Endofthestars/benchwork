@@ -11,6 +11,7 @@ runtime or scientific authority.
 | Threat-model review | RFC-0011 and RFC-0013 contain threat models, but there is no recorded independent review decision. | Missing retained review evidence. |
 | Conformance suite | `scripts/ci/check-phase3-contracts.py` validates the contract-only local slice. It deliberately does not establish full conformance. | Partial. |
 | Local reference vertical slice | Local `benchwork-local-*/0.1` storage and execution primitives retain bounded operational evidence. RFC-0012 replay preserves multi-Attempt history, fresh retry-allocation identities, lease-fence monotonicity, Result acceptance local closure, and supplied-facts assurance-Claim closure. Retry scheduling/readiness and complete Storage replay remain unavailable; all authority-bearing paths fail closed. | Partial. |
+| Local runtime lifecycle demonstrations | `tests/test_execution.py` exercises lease-expired negative terminalization, cancellation, duplicate terminal delivery rejection, stale observation cursors, and restart recovery across queued and terminal Jobs. | Present for the bounded `benchwork-local-execution/0.1` runtime only. |
 
 ## Verified baseline
 
