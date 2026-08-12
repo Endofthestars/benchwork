@@ -371,6 +371,22 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert claimed_state["attempts"][0]["state"] == "LEASED"
     assert claimed_state["worker_sessions"][0]["capacity_in_use"] == 1
 
+    revocation_input = deepcopy(claimed_state)
+    first_stop = {"kind": "PRESENT", "event_id": claimed["event_id"], "event_type": "lease.claimed", "event_sigil": claimed["event_sigil"], "effective_sequence": claimed["sequence"]}
+    revocation_input["jobs"][0].update({"revision": 3, "state": "STOPPING", "first_stop_or_fence_binding": first_stop, "last_event_id": "JE-STOPLATCHED", "last_event_sigil": SIGIL})
+    revocation_input["attempts"][0].update({"revision": 5, "state": "STOPPING", "first_stop_or_fence_binding": first_stop, "grace_due_at": "2026-08-06T00:00:08Z", "last_event_id": "JE-STOPLATCHED", "last_event_sigil": SIGIL})
+    revocation_input["state_sigil"] = content_sigil({key: value for key, value in revocation_input.items() if key != "state_sigil"})
+    revoked = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-REVOKED", "sequence": 9, "event_type": "lease.revoked", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 5, "next_revision": 6}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": "JE-STOPLATCHED", "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"transition_cause": {"code": "CANCEL_REQUESTED", "trigger_kind": "PRIOR_EVENT", "trigger_event_id": claimed["event_id"], "effective_sequence": claimed["sequence"], "evidence_sigil": SIGIL}, "prior_fence_floor": 1, "tombstone_generation": 2, "tombstone_publication_sigil": SIGIL, "session_capacity_after": 0}, "previous_event_sigil": claimed["event_sigil"]})
+    revoked_state = replay_execution_supplied_state_suffix_v1(revocation_input, [revoked])
+    assert revoked_state["leases"][0]["state"] == "REVOKED"
+    assert revoked_state["attempts"][0]["lease_terminal_binding"]["lease_state"] == "REVOKED"
+    assert revoked_state["worker_sessions"][0]["capacity_in_use"] == 0
+
+    unlatched = deepcopy(claimed_state)
+    unlatched["state_sigil"] = content_sigil({key: value for key, value in unlatched.items() if key != "state_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(unlatched, [revoked])
+
     expired = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-EXPIRED", "sequence": 9, "event_type": "lease.expired", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": lease["initial_expiry_due_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 4, "next_revision": 5}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": claimed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"deadline_kind": "LEASE_EXPIRY", "due_at": lease["initial_expiry_due_at"], "prior_fence_floor": 1, "tombstone_generation": 2, "tombstone_publication_sigil": SIGIL, "session_capacity_after": 0}, "previous_event_sigil": claimed["event_sigil"]})
     expired_state = replay_execution_supplied_state_suffix_v1(claimed_state, [expired])
     assert expired_state["leases"][0]["state"] == "EXPIRED"
