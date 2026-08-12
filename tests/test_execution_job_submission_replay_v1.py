@@ -784,7 +784,45 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     closed_state = replay_execution_supplied_state_suffix_v1(cleaning_state, [closed])
     assert closed_state["attempts"][0]["revision"] == 11
 
-    terminal_attempt = closed_state["attempts"][0]
+    capture_finalization = {
+        "kind": "FROZEN",
+        "control_evidence_set_binding": {
+            "kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64,
+            "control_evidence_set_sigil": SIGIL,
+        },
+        "quarantine_binding_set_binding": {
+            "kind": "FROZEN", "quarantine_binding_set_id": "QBS-" + "A" * 64,
+            "quarantine_binding_set_sigil": SIGIL,
+        },
+        "terminalization_storage_manifest_binding": {
+            "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
+            "storage_root_manifest_sigil": SIGIL,
+        },
+        "output_root_protection": {
+            "kind": "NO_HOLD", "terminalization_storage_manifest_binding": {
+                "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
+                "storage_root_manifest_sigil": SIGIL,
+            },
+        },
+    }
+    accounting_capture = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-ACCOUNTING", "sequence": 16, "event_type": "attempt.cleanup_progressed",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": receipt["received_at"], "observed_at": None,
+        "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE",
+                              "preceding_revision": 11, "next_revision": 12}],
+        "causation_event_id": closed["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"step": "ACCOUNTING_CAPTURED", "cleanup_evidence_sigil": SIGIL,
+                    "remaining_resource_ids": [], "finalization_bindings": capture_finalization},
+        "previous_event_sigil": closed["event_sigil"],
+    })
+    captured_state = replay_execution_supplied_state_suffix_v1(closed_state, [accounting_capture])
+    assert captured_state["attempts"][0]["accounting_capture_binding"]["event_id"] == accounting_capture["event_id"]
+
+    terminal_attempt = captured_state["attempts"][0]
     terminal_evidence = {
         "transition_cause": {
             "code": "COMPLETION_ESTABLISHED", "trigger_kind": "PRIOR_EVENT",
@@ -809,47 +847,87 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
             "through_event_sigil": SIGIL, "output_storage_observation_set_id": "OS-ONE",
             "output_storage_observation_set_sigil": SIGIL,
         },
-        "accounting_capture_event_id": "JE-ACCOUNTING",
-        "accounting_capture_event_sigil": SIGIL,
-        "control_evidence_set_binding": {
-            "kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64,
-            "control_evidence_set_sigil": SIGIL,
-        },
-        "quarantine_binding_set_binding": {
-            "kind": "FROZEN", "quarantine_binding_set_id": "QBS-" + "A" * 64,
-            "quarantine_binding_set_sigil": SIGIL,
-        },
-        "terminalization_storage_manifest_binding": {
-            "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
-            "storage_root_manifest_sigil": SIGIL,
-        },
-        "output_root_protection": {
-            "kind": "NO_HOLD", "terminalization_storage_manifest_binding": {
-                "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
-                "storage_root_manifest_sigil": SIGIL,
-            },
-        },
+            "accounting_capture_event_id": accounting_capture["event_id"],
+            "accounting_capture_event_sigil": accounting_capture["event_sigil"],
+            "control_evidence_set_binding": capture_finalization["control_evidence_set_binding"],
+            "quarantine_binding_set_binding": capture_finalization["quarantine_binding_set_binding"],
+            "terminalization_storage_manifest_binding": capture_finalization["terminalization_storage_manifest_binding"],
+            "output_root_protection": capture_finalization["output_root_protection"],
         "assurance_input_set_sigil": SIGIL,
         "terminal_source_binding": terminal_attempt["terminal_source_binding"],
     }
     terminal = build_execution_journal_event_v1({
         "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
-        "event_id": "JE-TERMINAL", "sequence": 16, "event_type": "attempt.succeeded",
+            "event_id": "JE-TERMINAL", "sequence": 17, "event_type": "attempt.succeeded",
         "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
         "executor_build_sigil": INITIAL["executor_build_sigil"],
         "recorded_at": receipt["received_at"], "observed_at": None,
         "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE",
-                              "preceding_revision": 11, "next_revision": 12}],
-        "causation_event_id": closed["event_id"], "idempotency_key_sigil": None,
+                                  "preceding_revision": 12, "next_revision": 13}],
+            "causation_event_id": accounting_capture["event_id"], "idempotency_key_sigil": None,
         "recovery_action_binding": None,
         "payload": {"attempt_terminal_evidence": terminal_evidence,
                     "fencing_generation": 1, "final_fence_floor": 1,
                     "output_storage_roots": []},
-        "previous_event_sigil": closed["event_sigil"],
-    })
-    terminal_state = replay_execution_supplied_state_suffix_v1(closed_state, [terminal])
+            "previous_event_sigil": accounting_capture["event_sigil"],
+        })
+    terminal_state = replay_execution_supplied_state_suffix_v1(captured_state, [terminal])
     assert terminal_state["attempts"][0]["state"] == "SUCCEEDED"
     assert terminal_state["attempts"][0]["terminal_event_binding"]["terminal_event_sigil"] == terminal["event_sigil"]
+
+    reservation = attempt["budget_reservation"]
+    settled_ledger = {
+        name: {
+            "limit": value, "reserved": 0, "consumed": value,
+            "exhaustion_status": "EXHAUSTED",
+        }
+        for name, value in reservation.items()
+    }
+    settled_ledger["budget_ledger_sigil"] = content_sigil(settled_ledger)
+    settled = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-SETTLED", "sequence": 18, "event_type": "job.budget_settled",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": receipt["received_at"], "observed_at": None,
+        "entity_revisions": [
+            {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3},
+            {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 13, "next_revision": 14},
+        ],
+        "causation_event_id": terminal["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {
+            "attempt_id": "AT-ONE", "reservation": reservation,
+            "accounting_capture_event_id": accounting_capture["event_id"],
+            "accounting_capture_event_sigil": accounting_capture["event_sigil"], "usage_status": "UNAVAILABLE",
+            "measured": reservation, "charged": reservation,
+            "accounting_started_at": receipt["received_at"],
+            "accounting_ended_at": receipt["received_at"],
+            "supervisor_identity": {"kind": "EXECUTOR", "identity_sigil": SIGIL},
+            "accounting_evidence_set_sigil": accounting_capture["payload"]["cleanup_evidence_sigil"],
+            "resulting_budget_ledger_sigil": settled_ledger["budget_ledger_sigil"],
+        },
+        "previous_event_sigil": terminal["event_sigil"],
+    })
+    settled_state = replay_execution_supplied_state_suffix_v1(
+        terminal_state, [settled], supplied_attempts=[attempt]
+    )
+    assert settled_state["jobs"][0]["budget_ledger"] == settled_ledger
+    assert settled_state["attempts"][0]["budget_settlement_binding"]["kind"] == "SETTLED"
+
+    duplicate_settlement = deepcopy(settled)
+    duplicate_settlement["event_id"] = "JE-SETTLEDTWO"
+    duplicate_settlement["sequence"] = 19
+    duplicate_settlement["entity_revisions"][0].update({"preceding_revision": 3, "next_revision": 4})
+    duplicate_settlement["entity_revisions"][1].update({"preceding_revision": 14, "next_revision": 15})
+    duplicate_settlement["previous_event_sigil"] = settled["event_sigil"]
+    duplicate_settlement = build_execution_journal_event_v1({
+        key: value for key, value in duplicate_settlement.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(
+            settled_state, [duplicate_settlement], supplied_attempts=[attempt]
+        )
 
     forged_terminal = deepcopy(terminal)
     forged_terminal["payload"]["attempt_terminal_evidence"]["result_binding"] = {"kind": "NONE"}
@@ -857,7 +935,7 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         key: value for key, value in forged_terminal.items() if key != "event_sigil"
     })
     with pytest.raises(AthanorError, match="disagrees"):
-        replay_execution_supplied_state_suffix_v1(closed_state, [forged_terminal])
+        replay_execution_supplied_state_suffix_v1(captured_state, [forged_terminal])
 
     late_rejection = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LATEREJECT", "sequence": 16, "event_type": "attempt.result_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 11, "next_revision": 12}], "causation_event_id": closed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"disposition_kind": "LATE_OR_CONFLICTING_REJECTION", "message_sigil": SIGIL, "claimed_result_sigil": SIGIL, "received_at": receipt["received_at"], "reason_codes": ["LEASE_TERMINAL"], "historical_disposition_event_id": accepted["event_id"]}, "previous_event_sigil": closed["event_sigil"]})
     late_rejected_state = replay_execution_supplied_state_suffix_v1(closed_state, [late_rejection])

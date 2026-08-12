@@ -1800,16 +1800,38 @@ _NONFINAL_CLEANUP_STEPS_V1 = {
 }
 
 
+_ACCOUNTING_CAPTURE_FINALIZATION_KEYS_V1 = {
+    "kind", "control_evidence_set_binding", "quarantine_binding_set_binding",
+    "terminalization_storage_manifest_binding", "output_root_protection",
+}
+
+
 def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
-    """Replay a bounded non-final cleanup step without fabricating accounting."""
+    """Replay cleanup, including the single immutable accounting capture."""
     if len(state["attempts"]) != 1:
         _fail("Cleanup progress reducer requires one Attempt")
     attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    is_capture = payload["step"] == "ACCOUNTING_CAPTURED"
+    finalization = payload["finalization_bindings"]
+    capture_valid = (
+        attempt["state"] == "CLEANING"
+        and attempt["accounting_capture_binding"] == {"kind": "PENDING"}
+        and set(finalization) == _ACCOUNTING_CAPTURE_FINALIZATION_KEYS_V1
+        and finalization["kind"] == "FROZEN"
+        and finalization["control_evidence_set_binding"].get("kind") == "FROZEN"
+        and finalization["quarantine_binding_set_binding"].get("kind") == "FROZEN"
+        and finalization["terminalization_storage_manifest_binding"].get("kind") == "FROZEN"
+        and finalization["output_root_protection"].get("kind") in {"NO_HOLD", "HELD"}
+        and finalization["output_root_protection"]["terminalization_storage_manifest_binding"]
+        == finalization["terminalization_storage_manifest_binding"]
+    )
     if (
         event["event_type"] != "attempt.cleanup_progressed"
         or attempt["state"] not in {"DRAINING", "STOPPING", "CLEANING"}
-        or payload["step"] not in _NONFINAL_CLEANUP_STEPS_V1
-        or payload["finalization_bindings"] != {"kind": "NONE"}
+        or (not is_capture and (
+            payload["step"] not in _NONFINAL_CLEANUP_STEPS_V1 or finalization != {"kind": "NONE"}
+        ))
+        or (is_capture and not capture_valid)
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != attempt["lease_executor_epoch"]
         or event["causation_event_id"] != attempt["last_event_id"]
@@ -1817,8 +1839,21 @@ def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) 
     ):
         _fail("Cleanup progress Event disagrees with Attempt state")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    updated = {**attempt, "revision": attempt["revision"] + 1,
+               "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+    if is_capture:
+        updated.update({
+            "accounting_capture_binding": {
+                "kind": "CAPTURED", "event_id": event["event_id"],
+                "event_sigil": event["event_sigil"], "usage_status": "UNAVAILABLE",
+                "accounting_evidence_set_sigil": payload["cleanup_evidence_sigil"],
+            },
+            "control_evidence_set_binding": finalization["control_evidence_set_binding"],
+            "quarantine_binding_set_binding": finalization["quarantine_binding_set_binding"],
+            "terminalization_storage_manifest_binding": finalization["terminalization_storage_manifest_binding"],
+            "output_root_protection": finalization["output_root_protection"],
+        })
+    reduced["attempts"] = [updated]
     return build_execution_state_v1(reduced)
 
 
@@ -1866,6 +1901,13 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
         or payload["final_fence_floor"] < payload["fencing_generation"]
         or (prior_lease_terminal is not None and evidence_lease_terminal != prior_lease_terminal)
         or (prior_lease_terminal is None and evidence_lease_terminal != {"kind": "NONE"})
+        or attempt["accounting_capture_binding"].get("kind") != "CAPTURED"
+        or evidence["accounting_capture_event_id"] != attempt["accounting_capture_binding"]["event_id"]
+        or evidence["accounting_capture_event_sigil"] != attempt["accounting_capture_binding"]["event_sigil"]
+        or any(evidence[member] != attempt[member] for member in (
+            "control_evidence_set_binding", "quarantine_binding_set_binding",
+            "terminalization_storage_manifest_binding", "output_root_protection",
+        ))
         or any(evidence[member] != attempt[member] for member in copied if member in {
             "result_binding", "attempt_authorization_state", "completion_anchor_binding",
             "worker_session_binding", "first_stop_or_fence_binding",
@@ -1901,6 +1943,104 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
             and deadline["deadline_kind"] in {"ATTEMPT_DEADLINE", "CANCELLATION_GRACE"}
         )
     ]
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_job_budget_settled_v1(
+    state: dict[str, Any], event: dict[str, Any], immutable_attempt: dict[str, Any]
+) -> dict[str, Any]:
+    """Settle one terminal Attempt from its sealed reservation and accounting payload."""
+    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1:
+        _fail("Budget settlement reducer requires one Job and one Attempt")
+    job, attempt, payload, executor = (
+        state["jobs"][0], state["attempts"][0], event["payload"], state["executor"]
+    )
+    validate_execution_attempt_v1(immutable_attempt)
+    reservation = immutable_attempt["budget_reservation"]
+    dimensions = tuple(reservation)
+    if set(payload["reservation"]) != set(dimensions) or set(payload["measured"]) != set(dimensions) or set(payload["charged"]) != set(dimensions):
+        _fail("Budget settlement Event has incomplete dimension accounting")
+    if any(
+        not isinstance(payload[name][dimension], int)
+        or isinstance(payload[name][dimension], bool)
+        or payload[name][dimension] < 0
+        for name in ("reservation", "measured", "charged") for dimension in dimensions
+    ):
+        _fail("Budget settlement Event has invalid dimension accounting")
+    if payload["usage_status"] == "UNAVAILABLE" and payload["charged"] != reservation:
+        _fail("Unavailable budget settlement must charge the full reservation")
+    if payload["usage_status"] == "MEASURED" and payload["charged"] != payload["measured"]:
+        _fail("Measured budget settlement must charge measured usage")
+    if payload["usage_status"] == "PARTIAL" and any(
+        payload["charged"][dimension]
+        not in {payload["measured"][dimension], reservation[dimension]}
+        for dimension in dimensions
+    ):
+        _fail("Partial budget settlement must charge measured usage or the reservation per dimension")
+    if payload["charged"]["attempts"] != 1:
+        _fail("Budget settlement must charge exactly one Attempt")
+    if (
+        any(payload["charged"][dimension] > reservation[dimension] for dimension in dimensions)
+        and attempt["state"] != "POLICY_VIOLATION"
+    ):
+        _fail("Budget overage requires a policy-violation Attempt terminal state")
+    expected_revisions = [
+        {"entity_kind": "JOB", "entity_id": job["job_id"], "preceding_revision": job["revision"], "next_revision": job["revision"] + 1},
+        {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
+    ]
+    if (
+        event["event_type"] != "job.budget_settled"
+        or job["state"] not in {"ACTIVE", "STOPPING"}
+        or attempt["state"] not in _ATTEMPT_TERMINAL_EVENT_STATES_V1.values()
+        or immutable_attempt["attempt_id"] != attempt["attempt_id"]
+        or immutable_attempt["attempt_binding_sigil"] != attempt["attempt_binding_sigil"]
+        or immutable_attempt["job_id"] != job["job_id"]
+        or attempt["job_id"] != job["job_id"]
+        or job["current_attempt_id"] != attempt["attempt_id"]
+        or payload["attempt_id"] != attempt["attempt_id"]
+        or payload["reservation"] != reservation
+        or attempt["budget_settlement_binding"] != {"kind": "PENDING"}
+        or attempt["accounting_capture_binding"]["event_id"] != payload["accounting_capture_event_id"]
+        or attempt["accounting_capture_binding"]["event_sigil"] != payload["accounting_capture_event_sigil"]
+        or attempt["accounting_capture_binding"]["usage_status"] != payload["usage_status"]
+        or attempt["accounting_capture_binding"]["accounting_evidence_set_sigil"] != payload["accounting_evidence_set_sigil"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != expected_revisions
+        or _parse_time(payload["accounting_started_at"]) > _parse_time(payload["accounting_ended_at"])
+    ):
+        _fail("Budget settlement Event disagrees with terminal Attempt")
+    ledger: dict[str, Any] = {
+        name: dict(value)
+        for name, value in job["budget_ledger"].items()
+        if name != "budget_ledger_sigil"
+    }
+    for dimension in dimensions:
+        entry = ledger[dimension]
+        if entry["reserved"] < reservation[dimension]:
+            _fail("Budget settlement reservation exceeds the Job ledger")
+        entry["reserved"] -= reservation[dimension]
+        entry["consumed"] += payload["charged"][dimension]
+        total = entry["reserved"] + entry["consumed"]
+        entry["exhaustion_status"] = "AVAILABLE" if total < entry["limit"] else "EXHAUSTED" if total == entry["limit"] else "EXCEEDED"
+    ledger["budget_ledger_sigil"] = content_sigil(ledger)
+    if payload["resulting_budget_ledger_sigil"] != ledger["budget_ledger_sigil"]:
+        _fail("Budget settlement Event ledger Sigil mismatch")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "budget_ledger": ledger,
+                        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["attempts"] = [{
+        **attempt, "revision": attempt["revision"] + 1,
+        "accounting_capture_binding": attempt["accounting_capture_binding"],
+        "budget_settlement_binding": {"kind": "SETTLED", "event_id": event["event_id"],
+                                      "event_sigil": event["event_sigil"],
+                                      "accounting_capture_event_id": payload["accounting_capture_event_id"],
+                                      "accounting_capture_event_sigil": payload["accounting_capture_event_sigil"],
+                                      "usage_status": payload["usage_status"]},
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
     return build_execution_state_v1(reduced)
 
 
@@ -2524,6 +2664,14 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_cleanup_progressed_v1(current, event)
         elif event["event_type"] in _ATTEMPT_TERMINAL_EVENT_STATES_V1:
             current = _reduce_attempt_terminal_v1(current, event)
+        elif event["event_type"] == "job.budget_settled":
+            immutable_attempt = _find_supplied_v1(
+                supplied_attempts,
+                event["payload"]["attempt_id"],
+                "attempt_id",
+                "Budget settlement",
+            )
+            current = _reduce_job_budget_settled_v1(current, event, immutable_attempt)
         elif event["event_type"] == "lease.released":
             current = _reduce_lease_released_v1(current, event)
         elif event["event_type"] == "lease.expired":
