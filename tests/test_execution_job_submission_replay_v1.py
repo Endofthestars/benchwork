@@ -355,6 +355,10 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert claimed_state["leases"][0]["state"] == "ACTIVE"
     assert claimed_state["attempts"][0]["state"] == "LEASED"
     assert claimed_state["worker_sessions"][0]["capacity_in_use"] == 1
+    starting = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-NINE", "sequence": 9, "event_type": "attempt.starting", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 4, "next_revision": 5}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"backend_start_handle_sigil": SIGIL, "start_request_sigil": SIGIL}, "previous_event_sigil": claimed["event_sigil"]})
+    running = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-TEN", "sequence": 10, "event_type": "attempt.running", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 5, "next_revision": 6}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"process_tree_identity": "PROCESS", "process_tree_evidence_sigil": SIGIL, "side_effect_handle_set_sigil": SIGIL}, "previous_event_sigil": starting["event_sigil"]})
+    running_state = replay_execution_supplied_state_suffix_v1(claimed_state, [starting, running])
+    assert running_state["attempts"][0]["state"] == "RUNNING"
 
     wrong_attempt = deepcopy(attempt)
     wrong_attempt["retry_ordinal"] = 2

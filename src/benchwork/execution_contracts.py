@@ -1077,6 +1077,42 @@ def _reduce_lease_claimed_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_starting_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Advance a leased Attempt only while its exact Lease remains active."""
+    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
+        _fail("Attempt start reducer requires one leased Attempt and active Lease")
+    attempt, lease = state["attempts"][0], state["leases"][0]
+    executor = state["executor"]
+    if (
+        event["event_type"] != "attempt.starting" or attempt["state"] != "LEASED" or lease["state"] != "ACTIVE"
+        or attempt["lease_id"] != lease["lease_id"] or attempt["lease_executor_epoch"] != lease["executor_epoch"]
+        or attempt["public_fence_tuple"] != {"journal_id": event["journal_id"], "executor_epoch": lease["executor_epoch"], "job_id": lease["job_id"], "attempt_id": lease["attempt_id"], "lease_id": lease["lease_id"], "fencing_generation": lease["fencing_generation"]}
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+    ):
+        _fail("Attempt start Event disagrees with active Lease authority")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "STARTING", "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_attempt_running_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Record that an already-started Attempt has entered its running phase."""
+    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
+        _fail("Attempt running reducer requires one starting Attempt and active Lease")
+    attempt, lease = state["attempts"][0], state["leases"][0]
+    executor = state["executor"]
+    if (
+        event["event_type"] != "attempt.running" or attempt["state"] != "STARTING" or lease["state"] != "ACTIVE"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+    ):
+        _fail("Attempt running Event disagrees with starting Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "RUNNING", "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1108,6 +1144,10 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_offered_v1(current, event, lease)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
+        elif event["event_type"] == "attempt.starting":
+            current = _reduce_attempt_starting_v1(current, event)
+        elif event["event_type"] == "attempt.running":
+            current = _reduce_attempt_running_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current
