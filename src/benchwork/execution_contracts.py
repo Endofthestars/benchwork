@@ -3283,6 +3283,60 @@ def load_execution_quarantine_binding_set_v1(raw: str | bytes | bytearray) -> di
     return binding_set
 
 
+def validate_execution_terminalization_supplied_records_v1(
+    *,
+    job_id: str,
+    attempt_id: str,
+    attempt_binding_sigil: str,
+    terminalization_storage_manifest_binding: dict[str, Any],
+    control_evidence_set_binding: dict[str, Any],
+    quarantine_binding_set_binding: dict[str, Any],
+    output_root_protection: dict[str, Any],
+    manifest: dict[str, Any],
+    control_evidence_set: dict[str, Any],
+    quarantine_binding_set: dict[str, Any],
+) -> None:
+    """Compare terminalization's complete caller-supplied immutable records.
+
+    This is intentionally not a Storage resolver or replay authority.  It
+    checks only the exact records the caller already supplied.
+    """
+    validate_execution_storage_root_manifest_v1(manifest)
+    validate_execution_control_evidence_set_v1(control_evidence_set)
+    validate_execution_quarantine_binding_set_v1(quarantine_binding_set)
+    expected_manifest = {
+        "kind": "FROZEN", "storage_root_manifest_id": manifest["manifest_id"],
+        "storage_root_manifest_sigil": manifest["manifest_sigil"],
+    }
+    expected_ces = {
+        "kind": "FROZEN", "control_evidence_set_id": control_evidence_set["control_evidence_set_id"],
+        "control_evidence_set_sigil": control_evidence_set["control_evidence_set_sigil"],
+    }
+    expected_qbs = {
+        "kind": "FROZEN", "quarantine_binding_set_id": quarantine_binding_set["quarantine_binding_set_id"],
+        "quarantine_binding_set_sigil": quarantine_binding_set["quarantine_binding_set_sigil"],
+    }
+    if (
+        terminalization_storage_manifest_binding != expected_manifest
+        or control_evidence_set_binding != expected_ces
+        or quarantine_binding_set_binding != expected_qbs
+        or manifest["root_kind"] != "ATTEMPT_OUTPUT" or manifest["job_id"] != job_id
+        or manifest["attempt_id"] != attempt_id
+        or manifest["owner_binding"]["attempt_binding_sigil"] != attempt_binding_sigil
+        or manifest["owner_binding"]["control_evidence_set_binding"] != expected_ces
+        or control_evidence_set["job_id"] != job_id or control_evidence_set["attempt_id"] != attempt_id
+        or control_evidence_set["attempt_binding_sigil"] != attempt_binding_sigil
+        or quarantine_binding_set["job_id"] != job_id or quarantine_binding_set["attempt_id"] != attempt_id
+        or quarantine_binding_set["attempt_binding_sigil"] != attempt_binding_sigil
+        or quarantine_binding_set["terminalization_storage_manifest_binding"] != expected_manifest
+        or output_root_protection.get("kind") not in {"NO_HOLD", "HELD"}
+        or output_root_protection["terminalization_storage_manifest_binding"] != expected_manifest
+    ):
+        _fail("Terminalization supplied records disagree with frozen Attempt bindings")
+    if output_root_protection["kind"] == "NO_HOLD" and manifest["blob_refs"]:
+        _fail("Terminalization NO_HOLD protection requires an empty output Manifest")
+
+
 def derive_execution_output_storage_observation_set_id_v1(
     observation_set: dict[str, Any],
 ) -> str:

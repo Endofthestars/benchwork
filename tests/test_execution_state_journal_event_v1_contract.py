@@ -58,6 +58,7 @@ from benchwork.execution_contracts import (
     validate_execution_control_evidence_set_v1,
     validate_execution_quarantine_binding_set_v1,
     validate_execution_output_storage_observation_set_v1,
+    validate_execution_terminalization_supplied_records_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -2222,6 +2223,34 @@ def test_terminal_attempt_events_require_the_closed_terminal_evidence_shape() ->
     evidence["transition_cause"]["code"] = "COMPUTATION_FAILED"
     with pytest.raises(Exception, match="completion anchor"):
         build_execution_journal_event_v1(event)
+
+
+def test_terminalization_supplied_records_require_exact_attempt_bindings() -> None:
+    ces = _control_evidence_set()
+    manifest: dict[str, Any] = {
+        "schema_version": "execution-storage-root-manifest/1.0", "manifest_id": "",
+        "root_kind": "ATTEMPT_OUTPUT", "job_id": JOB_ID, "attempt_id": "AT-ONE",
+        "owner_binding": {"kind": "ATTEMPT_OUTPUT", "job_binding_sigil": SIGIL,
+                          "attempt_binding_sigil": SIGIL, "result_binding": {"kind": "NONE"},
+                          "log_set_sigil": SIGIL, "output_set_sigil": SIGIL,
+                          "control_evidence_set_binding": {"kind": "FROZEN", "control_evidence_set_id": ces["control_evidence_set_id"], "control_evidence_set_sigil": ces["control_evidence_set_sigil"]},
+                          "terminal_source_binding": {"kind": "NOT_APPLICABLE"}, "quarantine_plan_sigil": SIGIL},
+        "entries": [], "blob_refs": [], "protection_plan": {"kind": "NONE"}, "created_at": STAMP,
+        "manifest_sigil": "",
+    }
+    manifest["manifest_id"] = derive_execution_storage_root_manifest_id_v1(manifest)
+    manifest["manifest_sigil"] = content_sigil({key: value for key, value in manifest.items() if key != "manifest_sigil"})
+    frozen_manifest = {"kind": "FROZEN", "storage_root_manifest_id": manifest["manifest_id"], "storage_root_manifest_sigil": manifest["manifest_sigil"]}
+    qbs = _quarantine_binding_set()
+    qbs["terminalization_storage_manifest_binding"] = frozen_manifest
+    qbs["quarantine_binding_set_id"] = derive_execution_quarantine_binding_set_id_v1(qbs)
+    qbs["quarantine_binding_set_sigil"] = content_sigil({key: value for key, value in qbs.items() if key != "quarantine_binding_set_sigil"})
+    frozen_ces = {"kind": "FROZEN", "control_evidence_set_id": ces["control_evidence_set_id"], "control_evidence_set_sigil": ces["control_evidence_set_sigil"]}
+    frozen_qbs = {"kind": "FROZEN", "quarantine_binding_set_id": qbs["quarantine_binding_set_id"], "quarantine_binding_set_sigil": qbs["quarantine_binding_set_sigil"]}
+    protection = {"kind": "NO_HOLD", "terminalization_storage_manifest_binding": frozen_manifest}
+    validate_execution_terminalization_supplied_records_v1(job_id=JOB_ID, attempt_id="AT-ONE", attempt_binding_sigil=SIGIL, terminalization_storage_manifest_binding=frozen_manifest, control_evidence_set_binding=frozen_ces, quarantine_binding_set_binding=frozen_qbs, output_root_protection=protection, manifest=manifest, control_evidence_set=ces, quarantine_binding_set=qbs)
+    with pytest.raises(Exception, match="disagree"):
+        validate_execution_terminalization_supplied_records_v1(job_id=JOB_ID, attempt_id="AT-ONE", attempt_binding_sigil=SIGIL, terminalization_storage_manifest_binding=frozen_manifest, control_evidence_set_binding=frozen_ces, quarantine_binding_set_binding=frozen_qbs, output_root_protection={"kind": "NO_HOLD", "terminalization_storage_manifest_binding": {**frozen_manifest, "storage_root_manifest_sigil": SIGIL}}, manifest=manifest, control_evidence_set=ces, quarantine_binding_set=qbs)
 
 
 @pytest.mark.parametrize(
