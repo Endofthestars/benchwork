@@ -850,8 +850,12 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             _fail("Artifact Storage State Transfer Request selects an unknown Attempt")
     for intent in state["open_intents"]:
         source_sigil = intent["source_event"]["event_sigil"]
-        if intent["intent_sigil"] != source_sigil or intent["last_event_sigil"] != source_sigil:
-            _fail("Artifact Storage State Open Intent Sigils disagree with source Event")
+        if (
+            intent["source_event"]["journal_id"] != state["journal_id"]
+            or intent["intent_sigil"] != source_sigil
+            or intent["last_event_sigil"] != source_sigil
+        ):
+            _fail("Artifact Storage State Open Intent disagrees with source Event")
     open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
     if len(set(open_intent_ids)) != len(open_intent_ids):
         _fail("Artifact Storage State open-intent IDs must be globally unique")

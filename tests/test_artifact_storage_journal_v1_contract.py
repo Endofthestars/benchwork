@@ -1100,8 +1100,16 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     wrong_open_sigil["state_sigil"] = content_sigil({
         key: member for key, member in wrong_open_sigil.items() if key != "state_sigil"
     })
-    with pytest.raises(AthanorError, match="Open Intent Sigils disagree"):
+    with pytest.raises(AthanorError, match="Open Intent disagrees"):
         validate_artifact_storage_state_v1(wrong_open_sigil)
+
+    wrong_open_journal = deepcopy(open_ids)
+    wrong_open_journal["open_intents"][0]["source_event"]["journal_id"] = "SJ-OTHER"
+    wrong_open_journal["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_open_journal.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Open Intent disagrees"):
+        validate_artifact_storage_state_v1(wrong_open_journal)
 
     selected_unknown = deepcopy(ordered)
     selected_unknown["transfer_requests"][0]["selected_attempt_id"] = "SA-UNKNOWN"
