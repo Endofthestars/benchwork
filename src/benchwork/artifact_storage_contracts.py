@@ -86,6 +86,140 @@ def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _upper_digest(prefix: str, preimage: list[Any]) -> str:
+    return prefix + content_sigil(preimage).removeprefix("sha256:").upper()
+
+
+def derive_artifact_storage_reference_set_id_v1(reference_set: dict[str, Any]) -> str:
+    """Derive the RFC-0013 deterministic Reference Set identifier."""
+    return _upper_digest("RS-", [
+        "artifact-storage-reference-set-id/1.0", reference_set["source"],
+        reference_set["extractor"], reference_set["edges"], reference_set["validation"],
+    ])
+
+
+def _derive_reference_set_registration_event_id(reference_set: dict[str, Any]) -> str:
+    source = reference_set["source"]
+    if (
+        source["kind"] == "OPERATIONAL_CONTROL_RECORD"
+        and source["schema_version"] == "execution-storage-root-manifest/1.0"
+    ):
+        return _upper_digest("SE-", [
+            "artifact-storage-execution-root-reference-set-registration-event-id/1.0",
+            source["identity"],
+        ])
+    return _upper_digest("SE-", [
+        "artifact-storage-reference-set-registration-event-id/1.0",
+        reference_set["reference_set_id"],
+    ])
+
+
+def validate_artifact_storage_reference_set_v1(reference_set: dict[str, Any]) -> None:
+    """Validate a Reference Set locally without resolving its graph."""
+    validate_instance("artifact-storage-reference-set-1.0.json", reference_set)
+    _check_nfc_and_numbers(reference_set)
+    if reference_set["reference_set_id"] != derive_artifact_storage_reference_set_id_v1(reference_set):
+        _fail("Artifact Storage Reference Set ID mismatch")
+    if reference_set["registration_event_id"] != _derive_reference_set_registration_event_id(reference_set):
+        _fail("Artifact Storage Reference Set registration Event ID mismatch")
+    if reference_set["reference_set_sigil"] != content_sigil(
+        _without(reference_set, "reference_set_sigil")
+    ):
+        _fail("Artifact Storage Reference Set self-Sigil mismatch")
+    edges = reference_set["edges"]
+    edge_keys = [
+        (edge["relationship"], edge["target_kind"], edge["target_identity"], edge["target_sigil"])
+        for edge in edges
+    ]
+    if edge_keys != sorted(edge_keys):
+        _fail("Artifact Storage Reference Set edges are not sorted")
+    evidence = reference_set["validation"]["evidence_sigils"]
+    if evidence != sorted(evidence):
+        _fail("Artifact Storage Reference Set validation evidence is not sorted")
+
+
+def load_artifact_storage_reference_set_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    reference_set = _load_strict_object(raw, "Artifact Storage Reference Set")
+    validate_artifact_storage_reference_set_v1(reference_set)
+    return reference_set
+
+
+def derive_artifact_storage_reference_intent_id_v1(intent: dict[str, Any]) -> str:
+    """Derive the RFC-0013 deterministic Reference Intent identifier."""
+    return _upper_digest("RI-", [
+        "artifact-storage-reference-intent-id/1.0", intent["canonical_event_type"],
+        intent["transition_request_id"],
+    ])
+
+
+def validate_artifact_storage_reference_intent_v1(intent: dict[str, Any]) -> None:
+    """Validate an immutable Reference Intent without resolving its closure."""
+    validate_instance("artifact-storage-reference-intent-1.0.json", intent)
+    _check_nfc_and_numbers(intent)
+    if intent["reference_intent_id"] != derive_artifact_storage_reference_intent_id_v1(intent):
+        _fail("Artifact Storage Reference Intent ID mismatch")
+    if intent["record_sigil"] != content_sigil(_without(intent, "record_sigil")):
+        _fail("Artifact Storage Reference Intent self-Sigil mismatch")
+    references = intent["reference_sets"]
+    reference_ids = [reference["reference_set_id"] for reference in references]
+    if reference_ids != sorted(reference_ids) or len(set(reference_ids)) != len(reference_ids):
+        _fail("Artifact Storage Reference Intent Reference Sets are not uniquely sorted")
+    if intent["blob_sigils"] != sorted(intent["blob_sigils"]):
+        _fail("Artifact Storage Reference Intent Blob Sigils are not sorted")
+
+
+def load_artifact_storage_reference_intent_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    intent = _load_strict_object(raw, "Artifact Storage Reference Intent")
+    validate_artifact_storage_reference_intent_v1(intent)
+    return intent
+
+
+def validate_artifact_storage_state_supplied_control_records_v1(
+    state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
+    reference_intents: list[dict[str, Any]],
+) -> None:
+    """Compare State control-record projections with exact supplied documents.
+
+    This verifies supplied immutable bytes only; callers still own durable
+    resolution, graph closure, Storage replay, and Chronicle authority.
+    """
+    validate_artifact_storage_state_v1(state)
+    set_pairs: dict[str, tuple[str, str]] = {}
+    for reference_set in reference_sets:
+        validate_artifact_storage_reference_set_v1(reference_set)
+        if reference_set["reference_set_id"] in set_pairs:
+            _fail("Artifact Storage supplied Reference Sets have duplicate IDs")
+        set_pairs[reference_set["reference_set_id"]] = (
+            reference_set["reference_set_sigil"], reference_set["source"]["identity"],
+        )
+    for projection in state["reference_sets"]:
+        expected = set_pairs.get(projection["reference_set_id"])
+        if expected != (projection["reference_set_sigil"], projection["source_identity"]):
+            _fail("Artifact Storage State Reference Set projection lacks matching supplied record")
+    projected_set_ids = {projection["reference_set_id"] for projection in state["reference_sets"]}
+    if set(set_pairs) != projected_set_ids:
+        _fail("Artifact Storage supplied Reference Sets do not exactly match State projections")
+    intent_pairs: dict[str, str] = {}
+    for intent in reference_intents:
+        validate_artifact_storage_reference_intent_v1(intent)
+        if intent["reference_intent_id"] in intent_pairs:
+            _fail("Artifact Storage supplied Reference Intents have duplicate IDs")
+        intent_pairs[intent["reference_intent_id"]] = intent["record_sigil"]
+    for projection in state["canonical_reference_intents"]:
+        expected_intent_sigil = intent_pairs.get(projection["reference_intent_id"])
+        if expected_intent_sigil != projection["record_sigil"]:
+            _fail("Artifact Storage State Reference Intent projection lacks matching supplied record")
+    projected_intent_ids = {
+        projection["reference_intent_id"] for projection in state["canonical_reference_intents"]
+    }
+    if set(intent_pairs) != projected_intent_ids:
+        _fail("Artifact Storage supplied Reference Intents do not exactly match State projections")
+
+
 def validate_artifact_storage_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate a closed, self-authenticating Storage Journal Event locally."""
     validate_instance("artifact-storage-journal-event-1.0.json", event)

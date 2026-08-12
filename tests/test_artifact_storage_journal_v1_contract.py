@@ -5,8 +5,12 @@ import pytest
 
 from benchwork.athanor import AthanorError, content_sigil
 from benchwork.artifact_storage_contracts import (
+    derive_artifact_storage_reference_intent_id_v1,
+    derive_artifact_storage_reference_set_id_v1,
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
+    load_artifact_storage_reference_intent_v1,
+    load_artifact_storage_reference_set_v1,
     load_artifact_storage_state_v1,
     require_artifact_storage_journal_replay_authority_v1,
     require_artifact_storage_runtime_authority_v1,
@@ -17,6 +21,9 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_head_supplied_state_v1,
     validate_artifact_storage_state_v1,
+    validate_artifact_storage_reference_intent_v1,
+    validate_artifact_storage_reference_set_v1,
+    validate_artifact_storage_state_supplied_control_records_v1,
 )
 
 
@@ -129,6 +136,29 @@ def _state() -> dict[str, object]:
     return state
 
 
+def _reference_set() -> dict[str, object]:
+    reference_set: dict[str, object] = {
+        "schema_version": "artifact-storage-reference-set/1.0", "reference_set_id": "",
+        "source": {"kind": "CANONICAL_OBJECT", "identity": "SOURCE",
+                   "schema_version": "artifact/1.0", "sigil": SIGIL},
+        "extractor": {"extractor_id": "EXTRACTOR", "extractor_version": "1.0",
+                      "extractor_sigil": SIGIL}, "edges": [],
+        "validation": {"validator_id": "VALIDATOR", "validator_version": "1.0",
+                       "validator_sigil": SIGIL, "source_validation_sigil": SIGIL,
+                       "evidence_sigils": [SIGIL]}, "registration_event_id": "",
+        "created_at": STAMP, "reference_set_sigil": "",
+    }
+    reference_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(reference_set)
+    reference_set["registration_event_id"] = "SE-" + content_sigil([
+        "artifact-storage-reference-set-registration-event-id/1.0",
+        reference_set["reference_set_id"],
+    ]).removeprefix("sha256:").upper()
+    reference_set["reference_set_sigil"] = content_sigil({
+        key: member for key, member in reference_set.items() if key != "reference_set_sigil"
+    })
+    return reference_set
+
+
 def test_storage_journal_event_checks_self_sigil_order_and_strict_loading() -> None:
     event = _event()
     validate_artifact_storage_journal_event_v1(event)
@@ -148,6 +178,100 @@ def test_storage_journal_event_checks_self_sigil_order_and_strict_loading() -> N
     )
     with pytest.raises(AthanorError, match="duplicate JSON key"):
         load_artifact_storage_journal_event_v1(duplicate)
+
+
+def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
+    reference_set = _reference_set()
+    validate_artifact_storage_reference_set_v1(reference_set)
+    assert load_artifact_storage_reference_set_v1(json.dumps(reference_set)) == reference_set
+
+    stale_set = deepcopy(reference_set)
+    stale_set["reference_set_id"] = "RS-" + "A" * 64
+    stale_set["reference_set_sigil"] = content_sigil({
+        key: member for key, member in stale_set.items() if key != "reference_set_sigil"
+    })
+    with pytest.raises(AthanorError, match="Reference Set ID mismatch"):
+        validate_artifact_storage_reference_set_v1(stale_set)
+
+    execution_root_set = deepcopy(reference_set)
+    execution_root_set["source"] = {
+        "kind": "OPERATIONAL_CONTROL_RECORD", "identity": "ESM-ONE",
+        "schema_version": "execution-storage-root-manifest/1.0", "sigil": SIGIL,
+    }
+    execution_root_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(
+        execution_root_set
+    )
+    execution_root_set["registration_event_id"] = "SE-" + content_sigil([
+        "artifact-storage-execution-root-reference-set-registration-event-id/1.0", "ESM-ONE",
+    ]).removeprefix("sha256:").upper()
+    execution_root_set["reference_set_sigil"] = content_sigil({
+        key: member for key, member in execution_root_set.items() if key != "reference_set_sigil"
+    })
+    validate_artifact_storage_reference_set_v1(execution_root_set)
+
+    intent = {
+        "schema_version": "artifact-storage-reference-intent/1.0", "reference_intent_id": "",
+        "transition_request_id": "REQUEST", "transition_request_sigil": SIGIL,
+        "canonical_event_type": "patch.proposed",
+        "expected_chronicle_head": {"schema_version": "chronicle-head/1.1", "event_count": 0,
+                                    "terminal_receipt_sigil": None},
+        "reference_sets": [{"reference_set_id": reference_set["reference_set_id"],
+                            "reference_set_sigil": reference_set["reference_set_sigil"]}],
+        "blob_sigils": [], "actor_id": "ACTOR", "authorization_sigil": SIGIL,
+        "idempotency_key_sigil": SIGIL, "requested_at": STAMP, "record_sigil": "",
+    }
+    intent["reference_intent_id"] = derive_artifact_storage_reference_intent_id_v1(intent)
+    intent["record_sigil"] = content_sigil({
+        key: member for key, member in intent.items() if key != "record_sigil"
+    })
+    validate_artifact_storage_reference_intent_v1(intent)
+    assert load_artifact_storage_reference_intent_v1(json.dumps(intent)) == intent
+
+    stale_intent = deepcopy(intent)
+    stale_intent["reference_intent_id"] = "RI-" + "A" * 64
+    stale_intent["record_sigil"] = content_sigil({
+        key: member for key, member in stale_intent.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="Reference Intent ID mismatch"):
+        validate_artifact_storage_reference_intent_v1(stale_intent)
+
+    state = _state()
+    state["reference_sets"] = [{
+        "reference_set_id": reference_set["reference_set_id"],
+        "reference_set_sigil": reference_set["reference_set_sigil"], "source_identity": "SOURCE",
+        "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["canonical_reference_intents"] = [{
+        "reference_intent_id": intent["reference_intent_id"], "record_sigil": intent["record_sigil"],
+        "state": "OPEN", "chronicle_commit": None, "release_kind": None,
+        "release_authority_sigil": None, "release_reason": None, "revision": 1,
+        "last_event_sigil": SIGIL,
+    }]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_control_records_v1(
+        state, reference_sets=[reference_set], reference_intents=[intent]
+    )
+
+    missing_set = deepcopy(state)
+    with pytest.raises(AthanorError, match="Reference Set projection lacks"):
+        validate_artifact_storage_state_supplied_control_records_v1(
+            missing_set, reference_sets=[], reference_intents=[intent]
+        )
+    wrong_source = deepcopy(state)
+    wrong_source["reference_sets"][0]["source_identity"] = "OTHER"  # type: ignore[index]
+    wrong_source["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_source.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Reference Set projection lacks"):
+        validate_artifact_storage_state_supplied_control_records_v1(
+            wrong_source, reference_sets=[reference_set], reference_intents=[intent]
+        )
+    with pytest.raises(AthanorError, match="Reference Intent projection lacks"):
+        validate_artifact_storage_state_supplied_control_records_v1(
+            state, reference_sets=[reference_set], reference_intents=[]
+        )
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
