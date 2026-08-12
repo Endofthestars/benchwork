@@ -699,11 +699,14 @@ def validate_execution_journal_prefix_wire_v1(
     journal_id = events[0].get("journal_id")
     previous_sigil: str | None = None
     previous_recorded_at: datetime | None = None
+    event_ids: set[str] = set()
     epoch_build_sigils: dict[tuple[str, int], str] = {}
     for expected_sequence, event in enumerate(events, 1):
         validate_execution_journal_event_v1(event)
         if event["journal_id"] != journal_id:
             _fail("Execution Journal prefix contains multiple journal identities")
+        if event["event_id"] in event_ids:
+            _fail("Execution Journal prefix contains a duplicate Event identity")
         if event["sequence"] != expected_sequence:
             _fail("Execution Journal prefix has a sequence gap")
         if event["previous_event_sigil"] != previous_sigil:
@@ -717,6 +720,7 @@ def validate_execution_journal_prefix_wire_v1(
             _fail("Execution Journal prefix has conflicting Executor build Sigils")
         previous_sigil = event["event_sigil"]
         previous_recorded_at = recorded_at
+        event_ids.add(event["event_id"])
     if head is not None:
         validate_execution_journal_head_v1(head)
         last = events[-1]

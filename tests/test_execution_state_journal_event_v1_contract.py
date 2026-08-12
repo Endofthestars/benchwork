@@ -929,6 +929,19 @@ def test_recovery_start_binds_its_started_action_set_and_prefix() -> None:
         )
 
 
+def test_execution_journal_prefix_rejects_resealed_duplicate_event_identity() -> None:
+    initial = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    clock_uncertain = _clock_uncertain_event(initial)
+    clock_uncertain["event_id"] = initial["event_id"]
+    clock_uncertain["event_sigil"] = content_sigil({
+        key: member for key, member in clock_uncertain.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="duplicate Event identity"):
+        validate_execution_journal_prefix_wire_v1([initial, clock_uncertain])
+
+
 def test_recovery_phase_advance_binds_state_and_sealed_action_sets() -> None:
     initial = json.loads(
         (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
@@ -1354,7 +1367,7 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
         replay_execution_journal_prefix_v1([wrong_first_kind])
     with pytest.raises(Exception, match="only the initial one-Event prefix"):
         replay_execution_initial_prefix_v1([event, event])
-    with pytest.raises(Exception, match="sequence gap"):
+    with pytest.raises(Exception, match="duplicate Event identity|sequence gap"):
         replay_execution_journal_prefix_v1([event, event])
 
     wrong_head = deepcopy(head)
