@@ -199,8 +199,8 @@
     "profile_version": "1.0",
     "algorithm_sigil": "sha256:2bec4db5be71e36d9b5019b30e1d58a4990d2cc3ae6a8f0c124311195aca964f",
     "outcome_schema_sigil": "sha256:6dd9b5ca722395466355680484d763d6a2451f222d9d944235ef227bd93d41e0",
-    "imported_schema_set_sigil": "sha256:a7c3629cb3616920151f3f8172741f89882de9192206fbb5f43942121b790c20"
+    "imported_schema_set_sigil": "sha256:0de5e4a1a97e791accf2cc5ba76d93ef86b846378bae75f06f60dedc13a8502b"
   },
   "terminal_recorded_at": "2026-08-06T00:00:03Z",
-  "outcome_sigil": "sha256:fa8e095959189655e682c32fb0843cf4a70c63d34e00ced5d077cf645c94cfe8"
+  "outcome_sigil": "sha256:bf25070f72a4a27b3da3a9a10e64c5d5e5f15c15c056290014666931334b4510"
 }
