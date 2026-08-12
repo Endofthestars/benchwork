@@ -19,73 +19,169 @@ from .schema_validation import validate_instance
 
 
 EXECUTION_EVENT_TYPES_V1 = (
-    "executor.epoch_started", "executor.clock_uncertain", "executor.clock_restored",
-    "execution.heartbeat_collision_authority_closed", "recovery.started",
-    "recovery.action_set_rebased", "recovery.phase_advanced", "recovery.completed",
-    "worker.definition_registered", "worker.enabled", "worker.draining",
-    "worker.quarantined", "worker.retired", "worker_session.registered",
-    "worker_session.ready", "worker_session.draining", "worker_session.offline",
-    "worker_session.quarantined", "worker_session.closed",
-    "worker_session.heartbeat_accepted", "worker_session.message_rejected",
-    "job.submitted", "job.queued", "job.attempt_allocated", "job.budget_settled",
-    "job.retry_scheduled", "job.retry_ready", "job.stop_latched",
-    "job.cancellation_observed", "job.assurance_evaluated", "job.succeeded",
-    "job.failed", "job.cancelled", "job.timed_out", "job.policy_violated",
-    "storage_root.hold_release_observed", "job.message_rejected",
-    "attempt.authorization_bound", "attempt.preflight_started",
-    "attempt.preflight_progressed", "attempt.preflight_passed", "attempt.starting",
-    "attempt.running", "attempt.output_staging_preallocated",
-    "attempt.result_ingress_received", "attempt.result_accepted",
-    "attempt.result_rejected", "attempt.draining", "attempt.stop_latched",
-    "attempt.stop_progressed", "attempt.cleaning", "attempt.cleanup_progressed",
-    "attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out",
-    "attempt.policy_violated", "attempt.lease_expired", "attempt.lost",
-    "attempt.fenced", "attempt.rejected", "attempt.assurance_evaluated",
-    "lease.offered", "lease.claimed", "lease.heartbeat_accepted", "lease.renewed",
-    "lease.released", "lease.revoked", "lease.expired", "lease.fenced",
-    "lease.tombstone_republished", "lease.message_rejected", "log.chunk_committed",
-    "log.chunk_duplicate_observed", "log.chunk_rejected", "log.truncated",
-    "log.eof_accepted", "log.eof_rejected", "log.closed",
-    "log.closure_recovery_closed", "log.intake_recovery_terminalized",
+    "executor.epoch_started",
+    "executor.clock_uncertain",
+    "executor.clock_restored",
+    "execution.heartbeat_collision_authority_closed",
+    "recovery.started",
+    "recovery.action_set_rebased",
+    "recovery.phase_advanced",
+    "recovery.completed",
+    "worker.definition_registered",
+    "worker.enabled",
+    "worker.draining",
+    "worker.quarantined",
+    "worker.retired",
+    "worker_session.registered",
+    "worker_session.ready",
+    "worker_session.draining",
+    "worker_session.offline",
+    "worker_session.quarantined",
+    "worker_session.closed",
+    "worker_session.heartbeat_accepted",
+    "worker_session.message_rejected",
+    "job.submitted",
+    "job.queued",
+    "job.attempt_allocated",
+    "job.budget_settled",
+    "job.retry_scheduled",
+    "job.retry_ready",
+    "job.stop_latched",
+    "job.cancellation_observed",
+    "job.assurance_evaluated",
+    "job.succeeded",
+    "job.failed",
+    "job.cancelled",
+    "job.timed_out",
+    "job.policy_violated",
+    "storage_root.hold_release_observed",
+    "job.message_rejected",
+    "attempt.authorization_bound",
+    "attempt.preflight_started",
+    "attempt.preflight_progressed",
+    "attempt.preflight_passed",
+    "attempt.starting",
+    "attempt.running",
+    "attempt.output_staging_preallocated",
+    "attempt.result_ingress_received",
+    "attempt.result_accepted",
+    "attempt.result_rejected",
+    "attempt.draining",
+    "attempt.stop_latched",
+    "attempt.stop_progressed",
+    "attempt.cleaning",
+    "attempt.cleanup_progressed",
+    "attempt.succeeded",
+    "attempt.failed",
+    "attempt.cancelled",
+    "attempt.timed_out",
+    "attempt.policy_violated",
+    "attempt.lease_expired",
+    "attempt.lost",
+    "attempt.fenced",
+    "attempt.rejected",
+    "attempt.assurance_evaluated",
+    "lease.offered",
+    "lease.claimed",
+    "lease.heartbeat_accepted",
+    "lease.renewed",
+    "lease.released",
+    "lease.revoked",
+    "lease.expired",
+    "lease.fenced",
+    "lease.tombstone_republished",
+    "lease.message_rejected",
+    "log.chunk_committed",
+    "log.chunk_duplicate_observed",
+    "log.chunk_rejected",
+    "log.truncated",
+    "log.eof_accepted",
+    "log.eof_rejected",
+    "log.closed",
+    "log.closure_recovery_closed",
+    "log.intake_recovery_terminalized",
 )
 
 IDEMPOTENCY_OPERATION_KINDS_V1 = (
-    "START_JOB", "CANCEL_JOB", "REGISTER_WORKER_SESSION", "CLAIM_LEASE",
-    "RENEW_LEASE", "RELEASE_LEASE", "PREALLOCATE_OUTPUT_STAGING",
-    "RECEIVE_RESULT_INGRESS", "SUBMIT_RESULT", "APPEND_LOG_CHUNK",
+    "START_JOB",
+    "CANCEL_JOB",
+    "REGISTER_WORKER_SESSION",
+    "CLAIM_LEASE",
+    "RENEW_LEASE",
+    "RELEASE_LEASE",
+    "PREALLOCATE_OUTPUT_STAGING",
+    "RECEIVE_RESULT_INGRESS",
+    "SUBMIT_RESULT",
+    "APPEND_LOG_CHUNK",
     "CLOSE_LOG_STREAM",
 )
 _ENTITY_KIND_ORDER = (
-    "EXECUTOR", "RECOVERY", "WORKER", "WORKER_SESSION", "JOB", "ATTEMPT", "LEASE", "LOG_STREAM",
+    "EXECUTOR",
+    "RECOVERY",
+    "WORKER",
+    "WORKER_SESSION",
+    "JOB",
+    "ATTEMPT",
+    "LEASE",
+    "LOG_STREAM",
 )
 _ENTITY_KIND_RANK = {value: rank for rank, value in enumerate(_ENTITY_KIND_ORDER)}
 _RECOVERY_ACTION_KIND_ORDER = (
-    "COMMIT_DUE_EVENT", "RESTORE_CLOCK", "FENCE_LEASE", "REPUBLISH_TOMBSTONE",
-    "OFFLINE_SESSION", "TERMINATE_PROCESS_TREE", "REVOKE_HANDLES", "CLOSE_SESSION",
-    "CLOSE_LOG", "VERIFY_OUTPUT_STORAGE", "VERIFY_TERMINAL_SOURCE",
-    "BIND_DURABLE_ATTEMPT_AUTHORIZATION", "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD",
-    "RELEASE_DUE_EXECUTION_HOLD", "QUARANTINE_RESOURCE", "ADVANCE_ATTEMPT",
-    "CLEAN_RESOURCE", "COLLECT_ACCOUNTING", "SETTLE_BUDGET",
-    "EVALUATE_ATTEMPT_ASSURANCE", "EVALUATE_JOB_ASSURANCE", "ADVANCE_JOB",
+    "COMMIT_DUE_EVENT",
+    "RESTORE_CLOCK",
+    "FENCE_LEASE",
+    "REPUBLISH_TOMBSTONE",
+    "OFFLINE_SESSION",
+    "TERMINATE_PROCESS_TREE",
+    "REVOKE_HANDLES",
+    "CLOSE_SESSION",
+    "CLOSE_LOG",
+    "VERIFY_OUTPUT_STORAGE",
+    "VERIFY_TERMINAL_SOURCE",
+    "BIND_DURABLE_ATTEMPT_AUTHORIZATION",
+    "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD",
+    "RELEASE_DUE_EXECUTION_HOLD",
+    "QUARANTINE_RESOURCE",
+    "ADVANCE_ATTEMPT",
+    "CLEAN_RESOURCE",
+    "COLLECT_ACCOUNTING",
+    "SETTLE_BUDGET",
+    "EVALUATE_ATTEMPT_ASSURANCE",
+    "EVALUATE_JOB_ASSURANCE",
+    "ADVANCE_JOB",
 )
-_RECOVERY_ACTION_KIND_RANK = {
-    value: rank for rank, value in enumerate(_RECOVERY_ACTION_KIND_ORDER)
-}
+_RECOVERY_ACTION_KIND_RANK = {value: rank for rank, value in enumerate(_RECOVERY_ACTION_KIND_ORDER)}
 _RECOVERY_PHASE_KINDS = {
     "STARTED": {"COMMIT_DUE_EVENT"},
     "FENCING": {
-        "FENCE_LEASE", "REPUBLISH_TOMBSTONE", "OFFLINE_SESSION",
-        "BIND_DURABLE_ATTEMPT_AUTHORIZATION", "ADVANCE_ATTEMPT", "ADVANCE_JOB",
+        "FENCE_LEASE",
+        "REPUBLISH_TOMBSTONE",
+        "OFFLINE_SESSION",
+        "BIND_DURABLE_ATTEMPT_AUTHORIZATION",
+        "ADVANCE_ATTEMPT",
+        "ADVANCE_JOB",
     },
     "RECONCILING": {
-        "TERMINATE_PROCESS_TREE", "REVOKE_HANDLES", "CLOSE_SESSION", "CLOSE_LOG",
-        "VERIFY_OUTPUT_STORAGE", "VERIFY_TERMINAL_SOURCE", "QUARANTINE_RESOURCE",
-        "ADVANCE_ATTEMPT", "CLEAN_RESOURCE", "COLLECT_ACCOUNTING",
+        "TERMINATE_PROCESS_TREE",
+        "REVOKE_HANDLES",
+        "CLOSE_SESSION",
+        "CLOSE_LOG",
+        "VERIFY_OUTPUT_STORAGE",
+        "VERIFY_TERMINAL_SOURCE",
+        "QUARANTINE_RESOURCE",
+        "ADVANCE_ATTEMPT",
+        "CLEAN_RESOURCE",
+        "COLLECT_ACCOUNTING",
     },
     "FINALIZING": {
-        "RESTORE_CLOCK", "ADVANCE_ATTEMPT", "SETTLE_BUDGET",
-        "EVALUATE_ATTEMPT_ASSURANCE", "EVALUATE_JOB_ASSURANCE", "ADVANCE_JOB",
-        "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD", "RELEASE_DUE_EXECUTION_HOLD",
+        "RESTORE_CLOCK",
+        "ADVANCE_ATTEMPT",
+        "SETTLE_BUDGET",
+        "EVALUATE_ATTEMPT_ASSURANCE",
+        "EVALUATE_JOB_ASSURANCE",
+        "ADVANCE_JOB",
+        "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD",
+        "RELEASE_DUE_EXECUTION_HOLD",
     },
 }
 _RECOVERY_NEXT_PHASE = {
@@ -94,26 +190,60 @@ _RECOVERY_NEXT_PHASE = {
     "RECONCILING": "FINALIZING",
 }
 _ATTEMPT_TERMINAL_EVENT_TYPES = {
-    "attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out",
-    "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced",
+    "attempt.succeeded",
+    "attempt.failed",
+    "attempt.cancelled",
+    "attempt.timed_out",
+    "attempt.policy_violated",
+    "attempt.lease_expired",
+    "attempt.lost",
+    "attempt.fenced",
     "attempt.rejected",
 }
 _CONTROL_DIMENSION_ORDER = (
-    "IDENTITY_AUTHORIZATION", "FILESYSTEM", "NETWORK", "PROCESS_EXECUTABLE", "RESOURCE",
-    "ENVIRONMENT_CREDENTIAL", "LOG_OUTPUT_CAPTURE", "RUNTIME_INPUT_OUTPUT_IDENTITY",
-    "CANCELLATION_FENCING", "TERMINATION_CLEANUP",
+    "IDENTITY_AUTHORIZATION",
+    "FILESYSTEM",
+    "NETWORK",
+    "PROCESS_EXECUTABLE",
+    "RESOURCE",
+    "ENVIRONMENT_CREDENTIAL",
+    "LOG_OUTPUT_CAPTURE",
+    "RUNTIME_INPUT_OUTPUT_IDENTITY",
+    "CANCELLATION_FENCING",
+    "TERMINATION_CLEANUP",
 )
 _CONTROL_PHASE_ORDER = ("PREFLIGHT", "RUNTIME", "TERMINATION", "CLEANUP")
 _CONTROL_PHASE_RANK = {value: rank for rank, value in enumerate(_CONTROL_PHASE_ORDER)}
 _CONTROL_EVIDENCE_KIND_ORDER = (
-    "TASK_BINDING", "CAPABILITY_BINDING", "SNAPSHOT_BINDING", "WARD_DECISION",
-    "APPROVAL_RECEIPT", "BACKEND_CONFIGURATION", "HOST_IDENTITY", "POLICY_RESOLUTION",
-    "BASE_IDENTITY", "INPUT_IDENTITY", "MATERIALIZATION_IDENTITY", "ENVIRONMENT_CONSTRUCTION",
-    "FILESYSTEM_POLICY", "NETWORK_POLICY", "EXECUTABLE_SELECTION", "PROCESS_TREE",
-    "WALL_TIME_ENFORCEMENT", "RESOURCE_ACCOUNTING", "CREDENTIAL_NONINHERITANCE",
-    "LOG_CAPTURE", "OUTPUT_VALIDATION", "STORAGE_OBSERVATION", "FENCE_TOMBSTONE",
-    "TERMINATION", "HANDLE_REVOCATION", "CLEANUP", "QUARANTINE",
-    "TERMINAL_SOURCE_VERIFICATION", "CONFORMANCE_FIXTURE",
+    "TASK_BINDING",
+    "CAPABILITY_BINDING",
+    "SNAPSHOT_BINDING",
+    "WARD_DECISION",
+    "APPROVAL_RECEIPT",
+    "BACKEND_CONFIGURATION",
+    "HOST_IDENTITY",
+    "POLICY_RESOLUTION",
+    "BASE_IDENTITY",
+    "INPUT_IDENTITY",
+    "MATERIALIZATION_IDENTITY",
+    "ENVIRONMENT_CONSTRUCTION",
+    "FILESYSTEM_POLICY",
+    "NETWORK_POLICY",
+    "EXECUTABLE_SELECTION",
+    "PROCESS_TREE",
+    "WALL_TIME_ENFORCEMENT",
+    "RESOURCE_ACCOUNTING",
+    "CREDENTIAL_NONINHERITANCE",
+    "LOG_CAPTURE",
+    "OUTPUT_VALIDATION",
+    "STORAGE_OBSERVATION",
+    "FENCE_TOMBSTONE",
+    "TERMINATION",
+    "HANDLE_REVOCATION",
+    "CLEANUP",
+    "QUARANTINE",
+    "TERMINAL_SOURCE_VERIFICATION",
+    "CONFORMANCE_FIXTURE",
 )
 _CONTROL_EVIDENCE_KIND_RANK = {
     value: rank for rank, value in enumerate(_CONTROL_EVIDENCE_KIND_ORDER)
@@ -265,17 +395,17 @@ def _unsigned_ascii(value: str, label: str) -> bytes:
 
 def validate_execution_budget_ledger_v1(ledger: dict[str, Any]) -> None:
     """Validate RFC-0012 budget arithmetic and its local self-Sigil."""
-    if ledger["budget_ledger_sigil"] != content_sigil(
-        _without(ledger, "budget_ledger_sigil")
-    ):
+    if ledger["budget_ledger_sigil"] != content_sigil(_without(ledger, "budget_ledger_sigil")):
         _fail("Execution budget ledger self-Sigil mismatch")
     for name, dimension in ledger.items():
         if name == "budget_ledger_sigil":
             continue
         total = dimension["consumed"] + dimension["reserved"]
         expected_status = (
-            "AVAILABLE" if total < dimension["limit"]
-            else "EXHAUSTED" if total == dimension["limit"]
+            "AVAILABLE"
+            if total < dimension["limit"]
+            else "EXHAUSTED"
+            if total == dimension["limit"]
             else "EXCEEDED"
         )
         if dimension["exhaustion_status"] != expected_status:
@@ -327,7 +457,9 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             _fail("duplicate Worker projection identity")
         workers_by_id[worker_id] = worker
         session_ids = worker["worker_session_ids"]
-        if session_ids != sorted(session_ids, key=lambda value: _unsigned_ascii(value, "Worker session ID")):
+        if session_ids != sorted(
+            session_ids, key=lambda value: _unsigned_ascii(value, "Worker session ID")
+        ):
             _fail("Worker worker_session_ids are not unsigned-ASCII sorted")
     for job in state["jobs"]:
         validate_execution_budget_ledger_v1(job["budget_ledger"])
@@ -419,11 +551,13 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     for deadline in state["deadlines"]:
         if deadline["fixed_priority"] != _DEADLINE_PRIORITY[deadline["deadline_kind"]]:
             _fail("Deadline fixed priority disagrees with deadline kind")
-        deadline_keys.append((
-            _parse_time(deadline["due_at"]),
-            deadline["fixed_priority"],
-            _unsigned_ascii(deadline["entity_id"], "Deadline entity ID"),
-        ))
+        deadline_keys.append(
+            (
+                _parse_time(deadline["due_at"]),
+                deadline["fixed_priority"],
+                _unsigned_ascii(deadline["entity_id"], "Deadline entity ID"),
+            )
+        )
     if deadline_keys != sorted(deadline_keys):
         _fail("Deadlines are not sorted by canonical deadline key")
     if len(deadline_keys) != len(set(deadline_keys)):
@@ -514,8 +648,15 @@ def validate_execution_initial_state_supplied_facts_v1(
     if executor != expected_executor:
         _fail("ISR3 State executor projection disagrees with supplied Event")
     arrays = (
-        "recoveries", "workers", "worker_sessions", "jobs", "attempts",
-        "leases", "log_streams", "deadlines", "idempotency_records",
+        "recoveries",
+        "workers",
+        "worker_sessions",
+        "jobs",
+        "attempts",
+        "leases",
+        "log_streams",
+        "deadlines",
+        "idempotency_records",
     )
     if any(state[member] for member in arrays):
         _fail("ISR3 State contains a noninitial projection member")
@@ -539,35 +680,190 @@ def replay_execution_initial_prefix_v1(
         _fail("Execution Journal initial replay requires sequence-one executor epoch start")
     if event["previous_event_sigil"] is not None:
         _fail("Execution Journal initial replay requires a null predecessor")
-    state = build_execution_state_v1({
-        "schema_version": "execution-state/1.0",
-        "limit_profile": "EXECUTION_JOURNAL_V1_FIXED_LIMITS",
-        "journal_binding": {
-            "journal_id": event["journal_id"],
-            "through_sequence": event["sequence"],
-            "through_event_id": event["event_id"],
-            "through_event_sigil": event["event_sigil"],
-        },
-        "executor": {
-            "executor_instance_id": event["executor_instance_id"],
-            "executor_epoch": event["executor_epoch"],
-            "executor_build_binding": event["payload"]["executor_build_binding"],
-            "revision": 0,
-            "clock_state": "TRUSTED",
-            "last_trusted_utc": event["recorded_at"],
-            "clock_uncertain_event_id": None,
-            "active_recovery_id": None,
-            "authority_gates": [],
-            "last_event_id": event["event_id"],
-            "last_event_sigil": event["event_sigil"],
-        },
-        "recoveries": [], "workers": [], "worker_sessions": [], "jobs": [],
-        "attempts": [], "leases": [], "log_streams": [], "deadlines": [],
-        "idempotency_records": [],
-    })
+    state = build_execution_state_v1(
+        {
+            "schema_version": "execution-state/1.0",
+            "limit_profile": "EXECUTION_JOURNAL_V1_FIXED_LIMITS",
+            "journal_binding": {
+                "journal_id": event["journal_id"],
+                "through_sequence": event["sequence"],
+                "through_event_id": event["event_id"],
+                "through_event_sigil": event["event_sigil"],
+            },
+            "executor": {
+                "executor_instance_id": event["executor_instance_id"],
+                "executor_epoch": event["executor_epoch"],
+                "executor_build_binding": event["payload"]["executor_build_binding"],
+                "revision": 0,
+                "clock_state": "TRUSTED",
+                "last_trusted_utc": event["recorded_at"],
+                "clock_uncertain_event_id": None,
+                "active_recovery_id": None,
+                "authority_gates": [],
+                "last_event_id": event["event_id"],
+                "last_event_sigil": event["event_sigil"],
+            },
+            "recoveries": [],
+            "workers": [],
+            "worker_sessions": [],
+            "jobs": [],
+            "attempts": [],
+            "leases": [],
+            "log_streams": [],
+            "deadlines": [],
+            "idempotency_records": [],
+        }
+    )
     if head is not None:
         validate_execution_initial_state_supplied_facts_v1(event, state, head)
     return state
+
+
+def validate_execution_job_v1(job: dict[str, Any]) -> None:
+    """Validate one immutable Job wire without resolving its external bindings."""
+    validate_instance("execution-job-1.0.json", job)
+    _check_nfc(job)
+    if job["job_binding_sigil"] != content_sigil(_without(job, "job_binding_sigil")):
+        _fail("Execution Job self-Sigil mismatch")
+    evidence = job["admission_chronicle_head_evidence"]
+    if (
+        evidence["job_id"] != job["job_id"]
+        or evidence["start_request_sigil"] != job["start_request_sigil"]
+        or evidence["observed_chronicle_head"] != job["admission_chronicle_head"]
+        or evidence["evidence_sigil"] != content_sigil(_without(evidence, "evidence_sigil"))
+    ):
+        _fail("Execution Job admission evidence disagrees with Job binding")
+
+
+def _initial_budget_ledger_v1(job_budget: dict[str, Any]) -> dict[str, Any]:
+    ledger: dict[str, Any] = {}
+    for dimension, limit in job_budget.items():
+        ledger[dimension] = {
+            "limit": limit,
+            "reserved": 0,
+            "consumed": 0,
+            "exhaustion_status": "EXHAUSTED" if limit == 0 else "AVAILABLE",
+        }
+    ledger["budget_ledger_sigil"] = content_sigil(ledger)
+    return ledger
+
+
+def _reduce_job_submitted_v1(
+    state: dict[str, Any], event: dict[str, Any], job: dict[str, Any]
+) -> dict[str, Any]:
+    """Reduce the supplied immutable Job's one-way submission projection."""
+    validate_execution_job_v1(job)
+    executor = state["executor"]
+    if event["event_type"] != "job.submitted":
+        _fail("internal reducer dispatch does not match Job submission")
+    if (
+        event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or executor["clock_state"] != "TRUSTED"
+        or executor["authority_gates"]
+        or any(
+            state[member]
+            for member in (
+                "recoveries",
+                "workers",
+                "worker_sessions",
+                "jobs",
+                "attempts",
+                "leases",
+                "log_streams",
+                "deadlines",
+                "idempotency_records",
+            )
+        )
+    ):
+        _fail("Job submission requires the ungated initial execution projection")
+    payload = event["payload"]
+    copied = (
+        "job_binding_sigil",
+        "start_request_sigil",
+        "submission_idempotency_key_sigil",
+        "admission_chronicle_head",
+        "admission_chronicle_head_evidence",
+        "deadline_due_at",
+        "job_budget",
+        "job_storage_roots",
+    )
+    if any(payload[member] != job[member] for member in copied):
+        _fail("Job submission Event does not exactly copy its supplied Job")
+    expected_revisions = [
+        {
+            "entity_kind": "JOB",
+            "entity_id": job["job_id"],
+            "preceding_revision": None,
+            "next_revision": 0,
+        }
+    ]
+    if event["entity_revisions"] != expected_revisions:
+        _fail("Job submission Event has invalid Job creation revision")
+    if event["idempotency_key_sigil"] != job["submission_idempotency_key_sigil"]:
+        _fail("Job submission Event idempotency key disagrees with Job")
+    ledger = _initial_budget_ledger_v1(job["job_budget"])
+    if event["recorded_at"] != job["submitted_at"]:
+        _fail("Job submission recorded_at disagrees with Job submitted_at")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["jobs"] = [
+        {
+            "job_id": job["job_id"],
+            "revision": 0,
+            "state": "SUBMITTED",
+            "job_binding_sigil": job["job_binding_sigil"],
+            "job_storage_roots": job["job_storage_roots"],
+            "attempt_ids": [],
+            "current_attempt_id": None,
+            "fencing_counter": 0,
+            "fence_floor": 0,
+            "budget_ledger": ledger,
+            "deadline_due_at": job["deadline_due_at"],
+            "retry_eligible_due_at": None,
+            "queue_key": None,
+            "attempt_summaries": [],
+            "selected_attempt_binding": None,
+            "completion_anchor_binding": None,
+            "first_stop_or_fence_binding": {"kind": "NONE"},
+            "final_fence_binding": None,
+            "storage_observation_binding": None,
+            "terminal_source_binding": None,
+            "output_hold_release_schedules": [],
+            "job_assurance_binding": {"kind": "PENDING"},
+            "terminal_event_binding": {"kind": "NONE"},
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["deadlines"] = [
+        {
+            "deadline_kind": "JOB_DEADLINE",
+            "due_at": job["deadline_due_at"],
+            "fixed_priority": _DEADLINE_PRIORITY["JOB_DEADLINE"],
+            "entity_id": job["job_id"],
+            "source_event_id": event["event_id"],
+            "source_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["idempotency_records"] = [
+        {
+            "operation_kind": "START_JOB",
+            "scope_id": job["task_id"],
+            "idempotency_key_sigil": job["submission_idempotency_key_sigil"],
+            "request_sigil": job["start_request_sigil"],
+            "disposition_event_id": event["event_id"],
+            "disposition_event_sigil": event["event_sigil"],
+        }
+    ]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
 
 
 def _reduce_executor_clock_uncertain_after_initial_v1(
@@ -580,16 +876,21 @@ def _reduce_executor_clock_uncertain_after_initial_v1(
     if (
         event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
     ):
         _fail("Clock uncertainty Event disagrees with replayed Executor identity")
     if executor["clock_state"] != "TRUSTED" or executor["authority_gates"]:
         _fail("Clock uncertainty Event requires an ungated trusted Executor")
     revision = event["entity_revisions"]
-    expected_revision = [{
-        "entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
-        "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1,
-    }]
+    expected_revision = [
+        {
+            "entity_kind": "EXECUTOR",
+            "entity_id": executor["executor_instance_id"],
+            "preceding_revision": executor["revision"],
+            "next_revision": executor["revision"] + 1,
+        }
+    ]
     if revision != expected_revision:
         _fail("Clock uncertainty Event has invalid Executor revision effect")
     payload = event["payload"]
@@ -597,23 +898,37 @@ def _reduce_executor_clock_uncertain_after_initial_v1(
         _fail("Clock uncertainty Event disagrees with replayed trusted-time anchor")
     if payload["affected_lease_ids"]:
         _fail("Clock uncertainty reducer requires no live Lease authority")
-    if any(state[member] for member in (
-        "workers", "worker_sessions", "jobs", "attempts", "leases", "log_streams",
-        "deadlines", "idempotency_records", "recoveries",
-    )):
+    if any(
+        state[member]
+        for member in (
+            "workers",
+            "worker_sessions",
+            "jobs",
+            "attempts",
+            "leases",
+            "log_streams",
+            "deadlines",
+            "idempotency_records",
+            "recoveries",
+        )
+    ):
         _fail("Clock uncertainty reducer requires the initial empty projections")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced_executor = {**executor,
+    reduced_executor = {
+        **executor,
         "revision": executor["revision"] + 1,
         "clock_state": "UNCERTAIN",
         "clock_uncertain_event_id": event["event_id"],
         "authority_gates": ["CLOCK_UNCERTAIN"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
     }
     reduced["executor"] = reduced_executor
     reduced["journal_binding"] = {
-        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
-        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
     }
     return build_execution_state_v1(reduced)
 
@@ -628,7 +943,8 @@ def _reduce_recovery_started_after_clock_uncertain_v1(
     if (
         event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
     ):
         _fail("Recovery start Event disagrees with replayed Executor identity")
     if (
@@ -649,50 +965,80 @@ def _reduce_recovery_started_after_clock_uncertain_v1(
         or payload["prior_recovery_id"] is not None
     ):
         _fail("Recovery start payload disagrees with clock-gated prefix")
-    if any(payload[member] for member in (
-        "nonterminal_job_ids", "nonterminal_attempt_ids", "nonterminal_lease_ids",
-        "nonterminal_worker_session_ids",
-    )):
+    if any(
+        payload[member]
+        for member in (
+            "nonterminal_job_ids",
+            "nonterminal_attempt_ids",
+            "nonterminal_lease_ids",
+            "nonterminal_worker_session_ids",
+        )
+    ):
         _fail("Recovery start reducer requires empty nonterminal projections")
-    if any(state[member] for member in (
-        "workers", "worker_sessions", "jobs", "attempts", "leases", "log_streams",
-        "deadlines", "idempotency_records",
-    )):
+    if any(
+        state[member]
+        for member in (
+            "workers",
+            "worker_sessions",
+            "jobs",
+            "attempts",
+            "leases",
+            "log_streams",
+            "deadlines",
+            "idempotency_records",
+        )
+    ):
         _fail("Recovery start reducer requires the initial empty projections")
     expected_revisions = [
         {
-            "entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
-            "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1,
+            "entity_kind": "EXECUTOR",
+            "entity_id": executor["executor_instance_id"],
+            "preceding_revision": executor["revision"],
+            "next_revision": executor["revision"] + 1,
         },
         {
-            "entity_kind": "RECOVERY", "entity_id": payload["recovery_id"],
-            "preceding_revision": None, "next_revision": 0,
+            "entity_kind": "RECOVERY",
+            "entity_id": payload["recovery_id"],
+            "preceding_revision": None,
+            "next_revision": 0,
         },
     ]
     if event["entity_revisions"] != expected_revisions:
         _fail("Recovery start Event has invalid revision effects")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
     reduced["executor"] = {
-        **executor, "revision": executor["revision"] + 1,
+        **executor,
+        "revision": executor["revision"] + 1,
         "active_recovery_id": payload["recovery_id"],
         "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
     }
-    reduced["recoveries"] = [{
-        "recovery_id": payload["recovery_id"], "revision": 0, "state": "STARTED",
-        "prior_recovery_id": None, "started_event_sigil": event["event_sigil"],
-        "current_action_set_sigil": payload["initial_action_set_sigil"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    }]
+    reduced["recoveries"] = [
+        {
+            "recovery_id": payload["recovery_id"],
+            "revision": 0,
+            "state": "STARTED",
+            "prior_recovery_id": None,
+            "started_event_sigil": event["event_sigil"],
+            "current_action_set_sigil": payload["initial_action_set_sigil"],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
     reduced["journal_binding"] = {
-        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
-        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
     }
     return build_execution_state_v1(reduced)
 
 
 def validate_execution_journal_prefix_wire_v1(
-    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+    events: list[dict[str, Any]],
+    *,
+    head: dict[str, Any] | None = None,
 ) -> None:
     """Validate a caller-supplied Journal chain without reducing its State.
 
@@ -744,8 +1090,11 @@ def validate_execution_journal_prefix_wire_v1(
 
 
 def replay_execution_journal_prefix_v1(
-    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+    events: list[dict[str, Any]],
+    *,
+    head: dict[str, Any] | None = None,
     recovery_action_sets: list[dict[str, Any]] | None = None,
+    supplied_jobs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
 
@@ -758,14 +1107,26 @@ def replay_execution_journal_prefix_v1(
     if not events:
         _fail("Execution Journal replay requires a nonempty prefix")
     if recovery_action_sets is not None:
+        if supplied_jobs is not None:
+            _fail("Execution Journal replay cannot combine Recovery action sets and supplied Jobs")
         empty_recovery_types = [
-            "executor.epoch_started", "executor.clock_uncertain", "recovery.started",
-            "recovery.phase_advanced", "recovery.phase_advanced", "recovery.phase_advanced",
+            "executor.epoch_started",
+            "executor.clock_uncertain",
+            "recovery.started",
+            "recovery.phase_advanced",
+            "recovery.phase_advanced",
+            "recovery.phase_advanced",
         ]
-        if [event.get("event_type") if isinstance(event, dict) else None for event in events] != empty_recovery_types:
-            _fail("Execution Journal recovery action sets are only supported for the empty Recovery path")
+        if [
+            event.get("event_type") if isinstance(event, dict) else None for event in events
+        ] != empty_recovery_types:
+            _fail(
+                "Execution Journal recovery action sets are only supported for the empty Recovery path"
+            )
         return replay_execution_empty_recovery_phase_prefix_v1(
-            events, recovery_action_sets, head=head,
+            events,
+            recovery_action_sets,
+            head=head,
         )
     validate_execution_journal_prefix_wire_v1(events, head=head)
     initial_state = replay_execution_initial_prefix_v1([events[0]])
@@ -773,6 +1134,20 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
+    if len(events) == 2 and events[1]["event_type"] == "job.submitted":
+        if supplied_jobs is None or len(supplied_jobs) != 1:
+            _fail("Job submission replay requires exactly one supplied Job")
+        state = _reduce_job_submitted_v1(initial_state, events[1], supplied_jobs[0])
+        if head is not None and (
+            head["journal_id"] != state["journal_binding"]["journal_id"]
+            or head["last_sequence"] != events[1]["sequence"]
+            or head["last_event_id"] != events[1]["event_id"]
+            or head["last_event_sigil"] != events[1]["event_sigil"]
+        ):
+            _fail("Execution Journal Head disagrees with replay prefix")
+        return state
+    if supplied_jobs is not None:
+        _fail("supplied Jobs are unsupported for this Execution Journal replay prefix")
     if len(events) >= 2 and events[1]["event_type"] == "executor.clock_uncertain":
         state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
         if len(events) == 3 and events[2]["event_type"] == "recovery.started":
@@ -793,7 +1168,9 @@ def replay_execution_journal_prefix_v1(
 
 
 def _reduce_empty_recovery_phase_advance_v1(
-    state: dict[str, Any], event: dict[str, Any], completed_action_set: dict[str, Any],
+    state: dict[str, Any],
+    event: dict[str, Any],
+    completed_action_set: dict[str, Any],
     next_action_set: dict[str, Any],
 ) -> dict[str, Any]:
     """Reduce one action-free Recovery phase transition.
@@ -804,7 +1181,10 @@ def _reduce_empty_recovery_phase_advance_v1(
     Recovery action.
     """
     validate_execution_recovery_phase_advance_supplied_action_sets_v1(
-        state, event, completed_action_set, next_action_set,
+        state,
+        event,
+        completed_action_set,
+        next_action_set,
     )
     executor = state["executor"]
     recovery_id = executor["active_recovery_id"]
@@ -814,7 +1194,8 @@ def _reduce_empty_recovery_phase_advance_v1(
     if (
         event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
-        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
         or completed_action_set["actions"]
         or next_action_set["actions"]
         or event["payload"]["completed_entity_ids"]
@@ -822,23 +1203,29 @@ def _reduce_empty_recovery_phase_advance_v1(
     ):
         _fail("empty Recovery phase reducer received operational action effects")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["recoveries"] = [{
-        **recovery,
-        "revision": recovery["revision"] + 1,
-        "state": event["payload"]["to_phase"],
-        "current_action_set_sigil": next_action_set["action_set_sigil"],
-        "last_event_id": event["event_id"],
-        "last_event_sigil": event["event_sigil"],
-    }]
+    reduced["recoveries"] = [
+        {
+            **recovery,
+            "revision": recovery["revision"] + 1,
+            "state": event["payload"]["to_phase"],
+            "current_action_set_sigil": next_action_set["action_set_sigil"],
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+    ]
     reduced["journal_binding"] = {
-        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
-        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
     }
     return build_execution_state_v1(reduced)
 
 
 def replay_execution_empty_recovery_phase_prefix_v1(
-    events: list[dict[str, Any]], recovery_action_sets: list[dict[str, Any]], *,
+    events: list[dict[str, Any]],
+    recovery_action_sets: list[dict[str, Any]],
+    *,
     head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reduce the action-free ``STARTED -> FINALIZING`` Recovery control path.
@@ -854,8 +1241,12 @@ def replay_execution_empty_recovery_phase_prefix_v1(
         _fail("empty Recovery phase replay requires six Events and four action sets")
     validate_execution_journal_prefix_wire_v1(events, head=head)
     if [event["event_type"] for event in events] != [
-        "executor.epoch_started", "executor.clock_uncertain", "recovery.started",
-        "recovery.phase_advanced", "recovery.phase_advanced", "recovery.phase_advanced",
+        "executor.epoch_started",
+        "executor.clock_uncertain",
+        "recovery.started",
+        "recovery.phase_advanced",
+        "recovery.phase_advanced",
+        "recovery.phase_advanced",
     ]:
         _fail("empty Recovery phase replay has an unsupported Event sequence")
     for action_set in recovery_action_sets:
@@ -865,7 +1256,9 @@ def replay_execution_empty_recovery_phase_prefix_v1(
     state = replay_execution_journal_prefix_v1(events[:3])
     started_set = recovery_action_sets[0]
     validate_execution_recovery_start_supplied_action_set_v1(
-        events[2], started_set, events[:2],
+        events[2],
+        started_set,
+        events[:2],
     )
     if state["recoveries"][0]["current_action_set_sigil"] != started_set["action_set_sigil"]:
         _fail("empty Recovery phase replay start State disagrees with action set")
@@ -873,13 +1266,18 @@ def replay_execution_empty_recovery_phase_prefix_v1(
         completed_set = recovery_action_sets[index - 1]
         next_set = recovery_action_sets[index]
         validate_execution_recovery_action_set_supplied_prefix_v1(
-            completed_set, events[: index + 1],
+            completed_set,
+            events[: index + 1],
         )
         validate_execution_recovery_action_set_supplied_prefix_v1(
-            next_set, events[: index + 2],
+            next_set,
+            events[: index + 2],
         )
         state = _reduce_empty_recovery_phase_advance_v1(
-            state, event, completed_set, next_set,
+            state,
+            event,
+            completed_set,
+            next_set,
         )
     return state
 
@@ -888,9 +1286,7 @@ def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> Non
     """Validate a frozen Recovery action set without deriving or executing it."""
     validate_instance("execution-recovery-action-set-1.0.json", action_set)
     _check_nfc(action_set)
-    if action_set["action_set_sigil"] != content_sigil(
-        _without(action_set, "action_set_sigil")
-    ):
+    if action_set["action_set_sigil"] != content_sigil(_without(action_set, "action_set_sigil")):
         _fail("Execution Recovery action-set self-Sigil mismatch")
     actions = action_set["actions"]
     if action_set["derived_through_sequence"] < 1:
@@ -903,11 +1299,15 @@ def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> Non
     ordering_keys: list[tuple[Any, ...]] = []
     for action in actions:
         _validate_execution_recovery_action_phase_v1(action_set["phase"], action)
-        if action["target_sequence"] != action_set["derived_through_sequence"] + 2 + action["ordinal"]:
+        if (
+            action["target_sequence"]
+            != action_set["derived_through_sequence"] + 2 + action["ordinal"]
+        ):
             _fail("Execution Recovery action target sequence disagrees with ordinal")
         prerequisites = action["prerequisite_event_ids"]
         if prerequisites != sorted(
-            prerequisites, key=lambda value: _unsigned_ascii(value, "Recovery prerequisite Event ID")
+            prerequisites,
+            key=lambda value: _unsigned_ascii(value, "Recovery prerequisite Event ID"),
         ):
             _fail("Execution Recovery prerequisite Event IDs are not unsigned-ASCII sorted")
         logical_action = _canonical_execution_recovery_logical_action_v1(action)
@@ -943,22 +1343,26 @@ def _execution_recovery_action_ordering_key_v1(
     if kind == "COMMIT_DUE_EVENT":
         parameters = action["parameters"]
         return (
-            action_kind_rank, _parse_time(parameters["due_at"]),
+            action_kind_rank,
+            _parse_time(parameters["due_at"]),
             _DEADLINE_PRIORITY[parameters["deadline_kind"]],
             _unsigned_ascii(parameters["deadline_entity_id"], "Recovery deadline entity ID"),
             _unsigned_ascii(action["target_event_type"], "Recovery target Event type"),
         )
     return (
-        action_kind_rank, _ENTITY_KIND_RANK[action["entity_kind"]],
+        action_kind_rank,
+        _ENTITY_KIND_RANK[action["entity_kind"]],
         _unsigned_ascii(action["entity_id"], "Recovery entity ID"),
-        _unsigned_ascii(action["target_event_type"], "Recovery target Event type"), logical_action,
+        _unsigned_ascii(action["target_event_type"], "Recovery target Event type"),
+        logical_action,
     )
 
 
 def _canonical_execution_recovery_logical_action_v1(action: dict[str, Any]) -> bytes:
     """Return RFC-0012's reservation-independent logical-action bytes."""
     logical = {
-        key: deepcopy(value) for key, value in action.items()
+        key: deepcopy(value)
+        for key, value in action.items()
         if key not in {"ordinal", "target_event_id", "target_sequence"}
     }
 
@@ -984,7 +1388,8 @@ def load_execution_recovery_action_set_v1(raw: str | bytes | bytearray) -> dict[
 
 
 def validate_execution_recovery_action_set_supplied_prefix_v1(
-    action_set: dict[str, Any], events: list[dict[str, Any]],
+    action_set: dict[str, Any],
+    events: list[dict[str, Any]],
 ) -> None:
     """Anchor one sealed action set to a caller-supplied verified prefix.
 
@@ -1006,7 +1411,9 @@ def validate_execution_recovery_action_set_supplied_prefix_v1(
 
 
 def validate_execution_recovery_start_supplied_action_set_v1(
-    event: dict[str, Any], action_set: dict[str, Any], prefix: list[dict[str, Any]],
+    event: dict[str, Any],
+    action_set: dict[str, Any],
+    prefix: list[dict[str, Any]],
 ) -> None:
     """Compare a Recovery start with its sealed STARTED set and supplied prefix.
 
@@ -1034,7 +1441,9 @@ def validate_execution_recovery_start_supplied_action_set_v1(
 
 
 def validate_execution_recovery_phase_advance_supplied_action_sets_v1(
-    state: dict[str, Any], event: dict[str, Any], completed_action_set: dict[str, Any],
+    state: dict[str, Any],
+    event: dict[str, Any],
+    completed_action_set: dict[str, Any],
     next_action_set: dict[str, Any],
 ) -> None:
     """Check one Recovery phase event against supplied before/after action sets.
@@ -1051,13 +1460,19 @@ def validate_execution_recovery_phase_advance_supplied_action_sets_v1(
     active_recovery_id = state["executor"]["active_recovery_id"]
     if active_recovery_id is None:
         _fail("Execution Recovery phase advance requires an active Recovery")
-    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    recovery = next(
+        item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id
+    )
     payload = event["payload"]
     expected_next = _RECOVERY_NEXT_PHASE.get(recovery["state"])
-    expected_revision = [{
-        "entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
-        "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1,
-    }]
+    expected_revision = [
+        {
+            "entity_kind": "RECOVERY",
+            "entity_id": recovery["recovery_id"],
+            "preceding_revision": recovery["revision"],
+            "next_revision": recovery["revision"] + 1,
+        }
+    ]
     if (
         event["event_type"] != "recovery.phase_advanced"
         or event["recovery_action_binding"] is not None
@@ -1081,7 +1496,9 @@ def validate_execution_recovery_phase_advance_supplied_action_sets_v1(
 
 
 def validate_execution_recovery_rebase_supplied_action_sets_v1(
-    state: dict[str, Any], event: dict[str, Any], prior_action_set: dict[str, Any],
+    state: dict[str, Any],
+    event: dict[str, Any],
+    prior_action_set: dict[str, Any],
     replacement_action_set: dict[str, Any],
 ) -> None:
     """Check one Recovery rebase against supplied State and sealed action sets.
@@ -1097,12 +1514,18 @@ def validate_execution_recovery_rebase_supplied_action_sets_v1(
     active_recovery_id = state["executor"]["active_recovery_id"]
     if active_recovery_id is None:
         _fail("Execution Recovery rebase requires an active Recovery")
-    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    recovery = next(
+        item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id
+    )
     payload = event["payload"]
-    expected_revision = [{
-        "entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
-        "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1,
-    }]
+    expected_revision = [
+        {
+            "entity_kind": "RECOVERY",
+            "entity_id": recovery["recovery_id"],
+            "preceding_revision": recovery["revision"],
+            "next_revision": recovery["revision"] + 1,
+        }
+    ]
     if (
         event["event_type"] != "recovery.action_set_rebased"
         or event["recovery_action_binding"] is not None
@@ -1119,14 +1542,17 @@ def validate_execution_recovery_rebase_supplied_action_sets_v1(
         or payload["replacement_action_set_sigil"] != replacement_action_set["action_set_sigil"]
         or replacement_action_set["recovery_id"] != recovery["recovery_id"]
         or replacement_action_set["phase"] != recovery["state"]
-        or replacement_action_set["supersedes_action_set_sigil"] != prior_action_set["action_set_sigil"]
+        or replacement_action_set["supersedes_action_set_sigil"]
+        != prior_action_set["action_set_sigil"]
         or payload["new_epoch"] != event["executor_epoch"]
     ):
         _fail("Execution Recovery rebase disagrees with supplied State or action sets")
 
 
 def validate_execution_recovery_completion_supplied_action_set_v1(
-    state: dict[str, Any], event: dict[str, Any], finalizing_action_set: dict[str, Any],
+    state: dict[str, Any],
+    event: dict[str, Any],
+    finalizing_action_set: dict[str, Any],
 ) -> None:
     """Check a Recovery completion Event against supplied pre-completion facts.
 
@@ -1140,14 +1566,24 @@ def validate_execution_recovery_completion_supplied_action_set_v1(
     active_recovery_id = state["executor"]["active_recovery_id"]
     if active_recovery_id is None:
         _fail("Execution Recovery completion requires an active Recovery")
-    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    recovery = next(
+        item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id
+    )
     executor = state["executor"]
     payload = event["payload"]
     expected_revisions = [
-        {"entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
-         "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1},
-        {"entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
-         "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1},
+        {
+            "entity_kind": "EXECUTOR",
+            "entity_id": executor["executor_instance_id"],
+            "preceding_revision": executor["revision"],
+            "next_revision": executor["revision"] + 1,
+        },
+        {
+            "entity_kind": "RECOVERY",
+            "entity_id": recovery["recovery_id"],
+            "preceding_revision": recovery["revision"],
+            "next_revision": recovery["revision"] + 1,
+        },
     ]
     if (
         event["event_type"] != "recovery.completed"
@@ -1171,7 +1607,8 @@ def validate_execution_recovery_completion_supplied_action_set_v1(
 
 
 def validate_execution_state_supplied_recovery_action_set_v1(
-    state: dict[str, Any], action_set: dict[str, Any],
+    state: dict[str, Any],
+    action_set: dict[str, Any],
 ) -> None:
     """Compare an active Recovery projection with one supplied sealed action set.
 
@@ -1195,7 +1632,8 @@ def validate_execution_state_supplied_recovery_action_set_v1(
 
 
 def validate_execution_recovery_action_supplied_event_v1(
-    action_set: dict[str, Any], event: dict[str, Any],
+    action_set: dict[str, Any],
+    event: dict[str, Any],
 ) -> None:
     """Compare one caller-supplied Event with its frozen Recovery action.
 
@@ -1225,7 +1663,8 @@ def validate_execution_recovery_action_supplied_event_v1(
     ):
         _fail("Recovery action Event envelope disagrees with supplied action")
     expected_revision = {
-        "entity_kind": action["entity_kind"], "entity_id": action["entity_id"],
+        "entity_kind": action["entity_kind"],
+        "entity_id": action["entity_id"],
         "preceding_revision": action["expected_revision"],
         "next_revision": action["expected_revision"] + 1,
     }
@@ -1235,10 +1674,18 @@ def validate_execution_recovery_action_supplied_event_v1(
 
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
-    digest = content_sigil([
-        "execution-result-ingress-receipt-id/1.0", owner["job_id"],
-        owner["attempt_id"], receipt["result_sigil"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-result-ingress-receipt-id/1.0",
+                owner["job_id"],
+                owner["attempt_id"],
+                receipt["result_sigil"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return "OIR-" + digest
 
 
@@ -1249,24 +1696,36 @@ def validate_execution_result_ingress_receipt_v1(receipt: dict[str, Any]) -> Non
     if receipt["receiver_identity"]["executor_epoch"] != receipt["owner_binding"]["executor_epoch"]:
         _fail("Result ingress receiver epoch disagrees with owner binding")
     observation = receipt["result_observation_binding"]
-    if observation["observation_evidence_subject_sigil"] != derive_observation_evidence_subject_sigil_v1(
-        receipt["owner_binding"], observation
-    ):
+    if observation[
+        "observation_evidence_subject_sigil"
+    ] != derive_observation_evidence_subject_sigil_v1(receipt["owner_binding"], observation):
         _fail("Result ingress receipt observation subject Sigil mismatch")
     if receipt["ingress_receipt_id"] != derive_result_ingress_receipt_id_v1(receipt):
         _fail("Result ingress receipt ID mismatch")
     verification = receipt["credential_verification"]
-    expected_verification = content_sigil([
-        "execution-result-ingress-credential-verification/1.0",
-        receipt["owner_binding"], receipt["result_sigil"], receipt["received_at"],
-        receipt["control_channel_identity_sigil"], verification["lease_credential_digest"],
-        verification["verification_profile_sigil"], verification["verified_at"],
-    ])
+    expected_verification = content_sigil(
+        [
+            "execution-result-ingress-credential-verification/1.0",
+            receipt["owner_binding"],
+            receipt["result_sigil"],
+            receipt["received_at"],
+            receipt["control_channel_identity_sigil"],
+            verification["lease_credential_digest"],
+            verification["verification_profile_sigil"],
+            verification["verified_at"],
+        ]
+    )
     if verification["verification_sigil"] != expected_verification:
         _fail("Result ingress credential verification Sigil mismatch")
-    if not (_parse_time(receipt["received_at"]) <= _parse_time(verification["verified_at"]) <= _parse_time(receipt["created_at"])):
+    if not (
+        _parse_time(receipt["received_at"])
+        <= _parse_time(verification["verified_at"])
+        <= _parse_time(receipt["created_at"])
+    ):
         _fail("Result ingress receipt time order mismatch")
-    if receipt["ingress_receipt_sigil"] != content_sigil(_without(receipt, "ingress_receipt_sigil")):
+    if receipt["ingress_receipt_sigil"] != content_sigil(
+        _without(receipt, "ingress_receipt_sigil")
+    ):
         _fail("Result ingress receipt self-Sigil mismatch")
 
 
@@ -1316,7 +1775,9 @@ def validate_execution_result_ingress_index_v1(index: dict[str, Any]) -> None:
         "ingress_receipt_id": receipt["ingress_receipt_id"],
         "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
         "result_sigil": receipt["result_sigil"],
-        "observation_evidence_subject_sigil": receipt["result_observation_binding"]["observation_evidence_subject_sigil"],
+        "observation_evidence_subject_sigil": receipt["result_observation_binding"][
+            "observation_evidence_subject_sigil"
+        ],
         "received_at": receipt["received_at"],
     }
     if payload != expected_payload:
@@ -1332,15 +1793,20 @@ def validate_execution_result_ingress_index_v1(index: dict[str, Any]) -> None:
     if (
         candidate["executor_instance_id"] != receipt["receiver_identity"]["executor_instance_id"]
         or candidate["executor_epoch"] != owner["executor_epoch"]
-        or ("ATTEMPT", owner["attempt_id"]) not in {
+        or ("ATTEMPT", owner["attempt_id"])
+        not in {
             (revision["entity_kind"], revision["entity_id"])
             for revision in candidate["entity_revisions"]
         }
     ):
         _fail("Result ingress candidate Event disagrees with Receipt owner")
-    expected_key = content_sigil([
-        "execution-result-ingress-key/1.0", owner["attempt_id"], receipt["result_sigil"],
-    ])
+    expected_key = content_sigil(
+        [
+            "execution-result-ingress-key/1.0",
+            owner["attempt_id"],
+            receipt["result_sigil"],
+        ]
+    )
     if index["idempotency_key_sigil"] != expected_key:
         _fail("Result ingress Index idempotency key disagrees with Receipt")
     status = index["status"]
@@ -1356,7 +1822,8 @@ def validate_execution_result_ingress_index_v1(index: dict[str, Any]) -> None:
     elif status["kind"] == "COMMITTED":
         event_ref = status["actual_event_ref"]
         if event_ref != {
-            "journal_id": candidate["journal_id"], "event_id": candidate["event_id"],
+            "journal_id": candidate["journal_id"],
+            "event_id": candidate["event_id"],
             "sequence": candidate["sequence"],
             "event_sigil": candidate["event_sigil"],
         }:
@@ -1373,10 +1840,19 @@ def load_execution_result_ingress_index_v1(raw: str | bytes | bytearray) -> dict
 
 def derive_execution_storage_root_manifest_id_v1(manifest: dict[str, Any]) -> str:
     """Derive an ESM-ID from its immutable owner tuple."""
-    digest = content_sigil([
-        "execution-storage-root-manifest-id/1.0", manifest["root_kind"],
-        manifest["job_id"], manifest["attempt_id"], manifest["owner_binding"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-storage-root-manifest-id/1.0",
+                manifest["root_kind"],
+                manifest["job_id"],
+                manifest["attempt_id"],
+                manifest["owner_binding"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return f"ESM-{digest}"
 
 
@@ -1401,10 +1877,15 @@ def validate_execution_storage_root_manifest_v1(manifest: dict[str, Any]) -> Non
             _fail("Execution Storage Root Manifest entry self-Sigil mismatch")
         subject = entry["subject"]
         if subject["kind"] != "ATTEMPT_OUTPUT":
-            expected_subject_id = content_sigil([
-                "execution-storage-subject-id/1.0", manifest["root_kind"],
-                manifest["job_id"], manifest["attempt_id"], subject,
-            ])
+            expected_subject_id = content_sigil(
+                [
+                    "execution-storage-subject-id/1.0",
+                    manifest["root_kind"],
+                    manifest["job_id"],
+                    manifest["attempt_id"],
+                    subject,
+                ]
+            )
             if entry["storage_subject_id"] != expected_subject_id:
                 _fail("Execution Storage Root Manifest storage subject ID mismatch")
         origin_kind = entry["storage_origin"]["kind"]
@@ -1446,10 +1927,16 @@ def derive_execution_root_hold_release_authorization_id_v1(
     authorization: dict[str, Any],
 ) -> str:
     """Derive the immutable EHR-ID from the held execution root."""
-    digest = content_sigil([
-        "execution-root-hold-release-authorization-id/1.0",
-        authorization["storage_root"]["hold_id"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-root-hold-release-authorization-id/1.0",
+                authorization["storage_root"]["hold_id"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return f"EHR-{digest}"
 
 
@@ -1459,7 +1946,9 @@ def validate_execution_root_hold_release_authorization_v1(
     """Validate an EHR's local bindings without authorizing a Storage release."""
     validate_instance("execution-root-hold-release-authorization-1.0.json", authorization)
     _check_nfc(authorization)
-    if authorization["release_authorization_id"] != derive_execution_root_hold_release_authorization_id_v1(authorization):
+    if authorization[
+        "release_authorization_id"
+    ] != derive_execution_root_hold_release_authorization_id_v1(authorization):
         _fail("Execution Root Hold Release Authorization ID mismatch")
     if authorization["release_authorization_sigil"] != content_sigil(
         _without(authorization, "release_authorization_sigil")
@@ -1492,10 +1981,18 @@ def load_execution_root_hold_release_authorization_v1(
 
 def derive_execution_control_evidence_set_id_v1(evidence_set: dict[str, Any]) -> str:
     """Derive the immutable CES-ID from its Attempt owner binding."""
-    digest = content_sigil([
-        "execution-control-evidence-set-id/1.0", evidence_set["job_id"],
-        evidence_set["attempt_id"], evidence_set["attempt_binding_sigil"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-control-evidence-set-id/1.0",
+                evidence_set["job_id"],
+                evidence_set["attempt_id"],
+                evidence_set["attempt_binding_sigil"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return f"CES-{digest}"
 
 
@@ -1503,7 +2000,9 @@ def validate_execution_control_evidence_set_v1(evidence_set: dict[str, Any]) -> 
     """Validate a frozen CES locally without resolving its evidence records."""
     validate_instance("execution-control-evidence-set-1.0.json", evidence_set)
     _check_nfc(evidence_set)
-    if evidence_set["control_evidence_set_id"] != derive_execution_control_evidence_set_id_v1(evidence_set):
+    if evidence_set["control_evidence_set_id"] != derive_execution_control_evidence_set_id_v1(
+        evidence_set
+    ):
         _fail("Execution Control Evidence Set ID mismatch")
     if evidence_set["control_evidence_set_sigil"] != content_sigil(
         _without(evidence_set, "control_evidence_set_sigil")
@@ -1525,12 +2024,20 @@ def load_execution_control_evidence_set_v1(raw: str | bytes | bytearray) -> dict
 
 def derive_execution_quarantine_binding_set_id_v1(binding_set: dict[str, Any]) -> str:
     """Derive the immutable QBS-ID from frozen Attempt and storage inputs."""
-    digest = content_sigil([
-        "execution-quarantine-binding-set-id/1.0", binding_set["job_id"],
-        binding_set["attempt_id"], binding_set["attempt_binding_sigil"],
-        binding_set["quarantine_plan_sigil"],
-        binding_set["terminalization_storage_manifest_binding"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-quarantine-binding-set-id/1.0",
+                binding_set["job_id"],
+                binding_set["attempt_id"],
+                binding_set["attempt_binding_sigil"],
+                binding_set["quarantine_plan_sigil"],
+                binding_set["terminalization_storage_manifest_binding"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return f"QBS-{digest}"
 
 
@@ -1538,7 +2045,9 @@ def validate_execution_quarantine_binding_set_v1(binding_set: dict[str, Any]) ->
     """Validate a frozen QBS locally without resolving the Storage projection."""
     validate_instance("execution-quarantine-binding-set-1.0.json", binding_set)
     _check_nfc(binding_set)
-    if binding_set["quarantine_binding_set_id"] != derive_execution_quarantine_binding_set_id_v1(binding_set):
+    if binding_set["quarantine_binding_set_id"] != derive_execution_quarantine_binding_set_id_v1(
+        binding_set
+    ):
         _fail("Execution Quarantine Binding Set ID mismatch")
     if binding_set["quarantine_binding_set_sigil"] != content_sigil(
         _without(binding_set, "quarantine_binding_set_sigil")
@@ -1577,16 +2086,26 @@ def derive_execution_output_storage_observation_set_id_v1(
     observation_set: dict[str, Any],
 ) -> str:
     """Derive the immutable OS-ID from its terminal Attempt inputs."""
-    digest = content_sigil([
-        "execution-output-storage-observation-set-id/1.0",
-        observation_set["job_id"], observation_set["attempt_id"],
-        observation_set["attempt_binding_sigil"], observation_set["result_binding"],
-        observation_set["log_closure_sigil"], observation_set["output_closure_sigil"],
-        observation_set["control_evidence_set_binding"],
-        observation_set["quarantine_binding_set_binding"],
-        observation_set["terminalization_storage_manifest_binding"],
-        observation_set["output_root_protection"], observation_set["terminal_source_binding"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-output-storage-observation-set-id/1.0",
+                observation_set["job_id"],
+                observation_set["attempt_id"],
+                observation_set["attempt_binding_sigil"],
+                observation_set["result_binding"],
+                observation_set["log_closure_sigil"],
+                observation_set["output_closure_sigil"],
+                observation_set["control_evidence_set_binding"],
+                observation_set["quarantine_binding_set_binding"],
+                observation_set["terminalization_storage_manifest_binding"],
+                observation_set["output_root_protection"],
+                observation_set["terminal_source_binding"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return f"OS-{digest}"
 
 
@@ -1602,7 +2121,9 @@ def _observation_member_blob_refs_v1(member: dict[str, Any]) -> list[str]:
 
 
 def _validate_observation_storage_v1(
-    storage: dict[str, Any], blob_sigil: str, size_bytes: int,
+    storage: dict[str, Any],
+    blob_sigil: str,
+    size_bytes: int,
     storage_event: dict[str, Any],
 ) -> None:
     kind = storage["kind"]
@@ -1614,7 +2135,9 @@ def _validate_observation_storage_v1(
         if storage["terminal_storage_status"] != storage["availability"]:
             _fail("Output Storage Observation BLOB terminal status disagrees with availability")
         integrity = storage["integrity_event_sigils"]
-        if integrity != sorted(integrity, key=lambda value: _unsigned_ascii(value, "integrity Event Sigil")):
+        if integrity != sorted(
+            integrity, key=lambda value: _unsigned_ascii(value, "integrity Event Sigil")
+        ):
             _fail("Output Storage Observation integrity Event Sigils are not unsigned-ASCII sorted")
         available_at = storage["availability_as_of"]
         if (
@@ -1644,7 +2167,9 @@ def validate_execution_output_storage_observation_set_v1(
     """Validate an OS document locally, never resolving Storage or Execution history."""
     validate_instance("execution-output-storage-observation-set-1.0.json", observation_set)
     _check_nfc(observation_set)
-    if observation_set["observation_set_id"] != derive_execution_output_storage_observation_set_id_v1(observation_set):
+    if observation_set[
+        "observation_set_id"
+    ] != derive_execution_output_storage_observation_set_id_v1(observation_set):
         _fail("Execution Output Storage Observation Set ID mismatch")
     if observation_set["observation_set_sigil"] != content_sigil(
         _without(observation_set, "observation_set_sigil")
@@ -1653,9 +2178,10 @@ def validate_execution_output_storage_observation_set_v1(
     protection = observation_set["output_root_protection"]
     if protection["kind"] not in {"NO_HOLD", "HELD"}:
         _fail("Output Storage Observation requires a terminal output-root protection branch")
-    if protection["terminalization_storage_manifest_binding"] != observation_set[
-        "terminalization_storage_manifest_binding"
-    ]:
+    if (
+        protection["terminalization_storage_manifest_binding"]
+        != observation_set["terminalization_storage_manifest_binding"]
+    ):
         _fail("Output Storage Observation protection disagrees with terminalization manifest")
 
     members = observation_set["members"]
@@ -1663,7 +2189,8 @@ def validate_execution_output_storage_observation_set_v1(
     result_kind = observation_set["result_binding"]["kind"]
     if members[cursor]["kind"] == "ATTEMPT_OUTPUTS_NONE":
         expected_reason = {
-            "NONE": "NO_RESULT", "REJECTED": "RESULT_REJECTED",
+            "NONE": "NO_RESULT",
+            "REJECTED": "RESULT_REJECTED",
         }.get(result_kind, "OUTPUT_ARRAY_EMPTY")
         if members[cursor]["reason"] != expected_reason:
             _fail("Output Storage Observation output sentinel disagrees with Result binding")
@@ -1682,7 +2209,7 @@ def validate_execution_output_storage_observation_set_v1(
         if output_keys != sorted(output_keys) or len(set(output_keys)) != len(output_keys):
             _fail("Output Storage Observation output members are not uniquely sorted")
 
-    logs = members[cursor:cursor + 3]
+    logs = members[cursor : cursor + 3]
     if len(logs) != 3 or [member["kind"] for member in logs] != ["LOG_STREAM"] * 3:
         _fail("Output Storage Observation must contain exactly three Log streams")
     if [member["stream"] for member in logs] != ["STDOUT", "STDERR", "STRUCTURED"]:
@@ -1710,10 +2237,12 @@ def validate_execution_output_storage_observation_set_v1(
         if not resources:
             _fail("Output Storage Observation resource-evidence group is invalid")
         keys = [
-            (_unsigned_ascii(member["control_evidence_id"], "control evidence ID"),
-             _CONTROL_PHASE_RANK[member["phase"]],
-             _CONTROL_EVIDENCE_KIND_RANK[member["evidence_kind"]],
-             member["phase_evidence_entry_sigil"])
+            (
+                _unsigned_ascii(member["control_evidence_id"], "control evidence ID"),
+                _CONTROL_PHASE_RANK[member["phase"]],
+                _CONTROL_EVIDENCE_KIND_RANK[member["evidence_kind"]],
+                member["phase_evidence_entry_sigil"],
+            )
             for member in resources
         ]
         if keys != sorted(keys) or len(set(keys)) != len(keys):
@@ -1730,9 +2259,14 @@ def validate_execution_output_storage_observation_set_v1(
     elif terminal["kind"] == "TERMINAL_SOURCE_NONE":
         if (
             terminal_binding["kind"] != "QUARANTINED"
-            or any(terminal_binding[field] is not None for field in (
-                "terminal_source_identity", "terminal_source_sigil", "storage_blob",
-            ))
+            or any(
+                terminal_binding[field] is not None
+                for field in (
+                    "terminal_source_identity",
+                    "terminal_source_sigil",
+                    "storage_blob",
+                )
+            )
             or terminal_binding["file_count"] != 0
             or terminal_binding["byte_count"] != 0
             or terminal["reason_codes"] != terminal_binding["reason_codes"]
@@ -1742,8 +2276,12 @@ def validate_execution_output_storage_observation_set_v1(
         if terminal_binding["kind"] not in {"VERIFIED", "QUARANTINED"}:
             _fail("Output Storage Observation terminal source lacks a compatible binding")
         copied = (
-            "terminal_source_identity", "terminal_source_sigil", "storage_blob",
-            "retention_policy_sigil", "file_count", "byte_count",
+            "terminal_source_identity",
+            "terminal_source_sigil",
+            "storage_blob",
+            "retention_policy_sigil",
+            "file_count",
+            "byte_count",
         )
         if any(terminal[field] != terminal_binding[field] for field in copied):
             _fail("Output Storage Observation terminal source disagrees with binding")
@@ -1756,24 +2294,34 @@ def validate_execution_output_storage_observation_set_v1(
         kind = member["kind"]
         if kind in {"ATTEMPT_OUTPUT", "RESOURCE_EVIDENCE"}:
             _validate_observation_storage_v1(
-                member["storage"], member["blob_sigil"], member["byte_size"],
+                member["storage"],
+                member["blob_sigil"],
+                member["byte_size"],
                 observation_set["storage_event"],
             )
         elif kind == "LOG_STREAM":
             _validate_observation_storage_v1(
-                member["content"]["storage"], member["content"]["blob_sigil"],
-                member["captured_bytes"], observation_set["storage_event"],
+                member["content"]["storage"],
+                member["content"]["blob_sigil"],
+                member["captured_bytes"],
+                observation_set["storage_event"],
             )
         elif kind == "TERMINAL_SOURCE":
             _validate_observation_storage_v1(
-                member["storage"], member["storage_blob"]["blob_sigil"],
-                member["storage_blob"]["size_bytes"], observation_set["storage_event"],
+                member["storage"],
+                member["storage_blob"]["blob_sigil"],
+                member["storage_blob"]["size_bytes"],
+                observation_set["storage_event"],
             )
 
-    expected_blob_sigils = sorted({
-        blob_sigil for member in members
-        for blob_sigil in _observation_member_blob_refs_v1(member)
-    }, key=lambda value: _unsigned_ascii(value, "Blob Sigil"))
+    expected_blob_sigils = sorted(
+        {
+            blob_sigil
+            for member in members
+            for blob_sigil in _observation_member_blob_refs_v1(member)
+        },
+        key=lambda value: _unsigned_ascii(value, "Blob Sigil"),
+    )
     if observation_set["blob_sigils"] != expected_blob_sigils:
         _fail("Output Storage Observation Blob Sigils disagree with members")
 
@@ -1789,27 +2337,46 @@ def load_execution_output_storage_observation_set_v1(
 def derive_observation_evidence_subject_sigil_v1(
     owner_binding: dict[str, Any], result_observation_binding: dict[str, Any]
 ) -> str:
-    return content_sigil([
-        "execution-result-observation-subject/1.0", owner_binding,
-        result_observation_binding["runtime_observation"],
-        result_observation_binding["termination_observation"],
-    ])
+    return content_sigil(
+        [
+            "execution-result-observation-subject/1.0",
+            owner_binding,
+            result_observation_binding["runtime_observation"],
+            result_observation_binding["termination_observation"],
+        ]
+    )
 
 
 def derive_observation_evidence_id_v1(evidence: dict[str, Any]) -> str:
-    digest = content_sigil([
-        "execution-observation-evidence-id/1.0", evidence["job_id"],
-        evidence["attempt_id"], evidence["result_ingress_receipt_binding"]["ingress_receipt_id"],
-        evidence["result_observation_binding"]["observation_evidence_subject_sigil"],
-    ]).removeprefix("sha256:").upper()
+    digest = (
+        content_sigil(
+            [
+                "execution-observation-evidence-id/1.0",
+                evidence["job_id"],
+                evidence["attempt_id"],
+                evidence["result_ingress_receipt_binding"]["ingress_receipt_id"],
+                evidence["result_observation_binding"]["observation_evidence_subject_sigil"],
+            ]
+        )
+        .removeprefix("sha256:")
+        .upper()
+    )
     return "OVE-" + digest
 
 
 def _observation_owner(evidence: dict[str, Any]) -> dict[str, Any]:
     members = (
-        "job_id", "job_binding_sigil", "attempt_id", "attempt_binding_sigil",
-        "lease_id", "lease_binding_sigil", "worker_id", "worker_binding_sigil",
-        "worker_session_id", "worker_session_binding_sigil", "executor_epoch",
+        "job_id",
+        "job_binding_sigil",
+        "attempt_id",
+        "attempt_binding_sigil",
+        "lease_id",
+        "lease_binding_sigil",
+        "worker_id",
+        "worker_binding_sigil",
+        "worker_session_id",
+        "worker_session_binding_sigil",
+        "executor_epoch",
         "fence_tuple",
     )
     return {member: evidence[member] for member in members}
@@ -1833,13 +2400,20 @@ def validate_execution_observation_evidence_v1(evidence: dict[str, Any]) -> None
     owner = _observation_owner(evidence)
     _validate_observation_owner_binding(owner)
     binding = evidence["result_observation_binding"]
-    if binding["observation_evidence_subject_sigil"] != derive_observation_evidence_subject_sigil_v1(owner, binding):
+    if binding[
+        "observation_evidence_subject_sigil"
+    ] != derive_observation_evidence_subject_sigil_v1(owner, binding):
         _fail("Observation Evidence subject Sigil mismatch")
     if evidence["observation_evidence_id"] != derive_observation_evidence_id_v1(evidence):
         _fail("Observation Evidence ID mismatch")
     runtime = binding["runtime_observation"]
     termination = binding["termination_observation"]
-    if not (_parse_time(runtime["started_at"]) <= _parse_time(runtime["ended_at"]) <= _parse_time(termination["observed_at"]) <= _parse_time(evidence["created_at"])):
+    if not (
+        _parse_time(runtime["started_at"])
+        <= _parse_time(runtime["ended_at"])
+        <= _parse_time(termination["observed_at"])
+        <= _parse_time(evidence["created_at"])
+    ):
         _fail("Observation Evidence time order mismatch")
     assessment = evidence["assessment"]
     if assessment["kind"] == "MATCHED":
@@ -1850,11 +2424,18 @@ def validate_execution_observation_evidence_v1(evidence: dict[str, Any]) -> None
             or assessment["verified_termination_observation"] != termination
         ):
             _fail("MATCHED Observation Evidence must copy the Result observation")
-        if assessment["verified_source_binding"]["source_kind"] != termination["observation_source"]:
+        if (
+            assessment["verified_source_binding"]["source_kind"]
+            != termination["observation_source"]
+        ):
             _fail("MATCHED Observation Evidence source does not match termination observation")
-    if assessment["kind"] == "MISMATCHED" and any(reason["reason_code"] != "MISMATCH" for reason in assessment["reason_bindings"]):
+    if assessment["kind"] == "MISMATCHED" and any(
+        reason["reason_code"] != "MISMATCH" for reason in assessment["reason_bindings"]
+    ):
         _fail("MISMATCHED Observation Evidence contains a non-MISMATCH reason")
-    if evidence["observation_evidence_sigil"] != content_sigil(_without(evidence, "observation_evidence_sigil")):
+    if evidence["observation_evidence_sigil"] != content_sigil(
+        _without(evidence, "observation_evidence_sigil")
+    ):
         _fail("Observation Evidence self-Sigil mismatch")
 
 
@@ -1909,13 +2490,23 @@ def expected_event_causation_v1(event: dict[str, Any], context: dict[str, Any]) 
         and payload.get("disposition_kind") == "FIRST_DISPOSITION_REJECTION"
     ):
         candidates.append(_context_value(context, "result_ingress_event_id"))
-    if event_type == "attempt.result_rejected" and payload.get("disposition_kind") == "LATE_OR_CONFLICTING_REJECTION":
+    if (
+        event_type == "attempt.result_rejected"
+        and payload.get("disposition_kind") == "LATE_OR_CONFLICTING_REJECTION"
+    ):
         candidates.append(_context_value(context, "pre_event_attempt_last_event_id"))
     if context.get("heartbeat_collision_dependent", False):
         candidates.append(_context_value(context, "heartbeat_collision_event_id"))
     if context.get("ordinary_l12_suffix", False):
-        candidates.append(None if context.get("ordinary_l12_anchor", False) else _context_value(context, "l12_preceding_event_id"))
-    if context.get("missing_intent_recovery", False) or event_type in {"log.closure_recovery_closed", "log.intake_recovery_terminalized"}:
+        candidates.append(
+            None
+            if context.get("ordinary_l12_anchor", False)
+            else _context_value(context, "l12_preceding_event_id")
+        )
+    if context.get("missing_intent_recovery", False) or event_type in {
+        "log.closure_recovery_closed",
+        "log.intake_recovery_terminalized",
+    }:
         candidates.append(_context_value(context, "recovery_opening_event_id"))
     elif event["recovery_action_binding"] is not None:
         candidates.append(_context_value(context, "recovery_opening_event_id"))
@@ -1924,7 +2515,10 @@ def expected_event_causation_v1(event: dict[str, Any], context: dict[str, Any]) 
         if cause["trigger_kind"] == "PRIOR_EVENT":
             candidates.append(cause["trigger_event_id"])
         elif event["recovery_action_binding"] is None:
-            if cause["trigger_event_id"] != event["event_id"] or cause["effective_sequence"] != event["sequence"]:
+            if (
+                cause["trigger_event_id"] != event["event_id"]
+                or cause["effective_sequence"] != event["sequence"]
+            ):
                 _fail("non-prior transition cause does not bind the enclosing Event")
             candidates.append(None)
     if len({candidate for candidate in candidates}) > 1:
@@ -1936,27 +2530,69 @@ def expected_event_idempotency_v1(event: dict[str, Any], context: dict[str, Any]
     """Evaluate JEW3 from locally derivable fields and explicit durable resolvers."""
     event_type = event["event_type"]
     payload = event["payload"]
-    if event_type == "execution.heartbeat_collision_authority_closed" or context.get("heartbeat_collision_dependent", False):
+    if event_type == "execution.heartbeat_collision_authority_closed" or context.get(
+        "heartbeat_collision_dependent", False
+    ):
         return _context_value(context, "candidate_inventory_bytes_sigil")
     if event_type == "attempt.output_staging_preallocated":
-        return content_sigil(["execution-output-staging-preallocation-key/1.0", payload["job_id"], payload["attempt_id"], payload["output_handle_id"]])
+        return content_sigil(
+            [
+                "execution-output-staging-preallocation-key/1.0",
+                payload["job_id"],
+                payload["attempt_id"],
+                payload["output_handle_id"],
+            ]
+        )
     attempt_id = context.get("attempt_id")
     if event_type == "attempt.result_ingress_received":
-        return content_sigil(["execution-result-ingress-key/1.0", _context_value(context, "attempt_id"), payload["result_sigil"]])
+        return content_sigil(
+            [
+                "execution-result-ingress-key/1.0",
+                _context_value(context, "attempt_id"),
+                payload["result_sigil"],
+            ]
+        )
     if event_type == "attempt.result_accepted" or (
-        event_type == "attempt.result_rejected" and payload.get("disposition_kind") == "FIRST_DISPOSITION_REJECTION"
+        event_type == "attempt.result_rejected"
+        and payload.get("disposition_kind") == "FIRST_DISPOSITION_REJECTION"
     ):
         result_sigil = payload.get("result_sigil", payload.get("claimed_result_sigil"))
-        return content_sigil(["execution-result-disposition-key/1.0", _context_value(context, "attempt_id"), result_sigil])
-    if event_type == "attempt.result_rejected" and payload.get("disposition_kind") == "LATE_OR_CONFLICTING_REJECTION":
-        return content_sigil(["execution-result-rejection-message-key/1.0", _context_value(context, "attempt_id"), payload["message_sigil"]])
+        return content_sigil(
+            [
+                "execution-result-disposition-key/1.0",
+                _context_value(context, "attempt_id"),
+                result_sigil,
+            ]
+        )
+    if (
+        event_type == "attempt.result_rejected"
+        and payload.get("disposition_kind") == "LATE_OR_CONFLICTING_REJECTION"
+    ):
+        return content_sigil(
+            [
+                "execution-result-rejection-message-key/1.0",
+                _context_value(context, "attempt_id"),
+                payload["message_sigil"],
+            ]
+        )
     del attempt_id
     if context.get("ordinary_l12_suffix", False):
-        return _context_value(context, "l12_idempotency_key_sigil") if context.get("ordinary_l12_anchor", False) else None
-    if context.get("missing_intent_recovery", False) and event_type in {"log.chunk_rejected", "log.eof_rejected"}:
+        return (
+            _context_value(context, "l12_idempotency_key_sigil")
+            if context.get("ordinary_l12_anchor", False)
+            else None
+        )
+    if context.get("missing_intent_recovery", False) and event_type in {
+        "log.chunk_rejected",
+        "log.eof_rejected",
+    }:
         return _context_value(context, "original_idempotency_key_sigil")
     if event_type == "log.intake_recovery_terminalized":
-        return None if context.get("original_anchor_survived", False) else _context_value(context, "original_idempotency_key_sigil")
+        return (
+            None
+            if context.get("original_anchor_survived", False)
+            else _context_value(context, "original_idempotency_key_sigil")
+        )
     if event_type in {"log.closed", "log.closure_recovery_closed"}:
         return None
     if event_type in {"log.eof_accepted", "log.eof_rejected"}:
@@ -1966,12 +2602,17 @@ def expected_event_idempotency_v1(event: dict[str, Any], context: dict[str, Any]
     return None
 
 
-def validate_execution_journal_event_v1(event: dict[str, Any], *, context: dict[str, Any] | None = None) -> None:
+def validate_execution_journal_event_v1(
+    event: dict[str, Any], *, context: dict[str, Any] | None = None
+) -> None:
     """Validate a closed Event and, when supplied, the JEW2/JEW3 dependency matrix."""
     validate_instance("execution-journal-event-1.0.json", event)
     _check_nfc(event)
     revisions = [
-        (_ENTITY_KIND_RANK[item["entity_kind"]], _unsigned_ascii(item["entity_id"], "entity revision ID"))
+        (
+            _ENTITY_KIND_RANK[item["entity_kind"]],
+            _unsigned_ascii(item["entity_id"], "entity revision ID"),
+        )
         for item in event["entity_revisions"]
     ]
     if revisions != sorted(revisions) or len(revisions) != len(set(revisions)):
@@ -2006,6 +2647,8 @@ def load_execution_journal_event_v1(
     event = _load_strict_object(raw, "Execution Journal Event")
     validate_execution_journal_event_v1(event, context=context)
     return event
+
+
 def build_execution_journal_event_v1(
     unsigned_event: dict[str, Any], *, context: dict[str, Any] | None = None
 ) -> dict[str, Any]:
