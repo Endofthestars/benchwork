@@ -392,12 +392,67 @@ def test_recovery_action_set_is_strictly_sealed_and_ordered() -> None:
 
     two_actions = deepcopy(action_set)
     second = deepcopy(two_actions["actions"][0])
-    second.update({"ordinal": 1, "target_event_id": "JE-FIVE", "target_sequence": 5})
+    second.update({
+        "ordinal": 1, "target_event_id": "JE-FIVE", "target_sequence": 5,
+        "parameters": {
+            "deadline_kind": "ATTEMPT_DEADLINE", "due_at": "2026-08-06T00:00:01Z",
+            "deadline_entity_id": "JB-ONE",
+        },
+    })
     two_actions["actions"].append(second)
     two_actions["action_set_sigil"] = content_sigil(
         {key: member for key, member in two_actions.items() if key != "action_set_sigil"}
     )
     validate_execution_recovery_action_set_v1(two_actions)
+
+    wrong_phase = deepcopy(action_set)
+    wrong_phase["phase"] = "FENCING"
+    wrong_phase["action_set_sigil"] = content_sigil(
+        {key: member for key, member in wrong_phase.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="not allowed in its phase"):
+        validate_execution_recovery_action_set_v1(wrong_phase)
+
+    unordered_actions = deepcopy(two_actions)
+    unordered_actions["actions"].reverse()
+    for ordinal, action in enumerate(unordered_actions["actions"]):
+        action["ordinal"] = ordinal
+        action["target_sequence"] = unordered_actions["derived_through_sequence"] + 2 + ordinal
+    unordered_actions["action_set_sigil"] = content_sigil(
+        {key: member for key, member in unordered_actions.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="canonical order"):
+        validate_execution_recovery_action_set_v1(unordered_actions)
+
+    duplicate = deepcopy(two_actions)
+    duplicate["actions"][1]["parameters"] = deepcopy(duplicate["actions"][0]["parameters"])
+    duplicate["action_set_sigil"] = content_sigil(
+        {key: member for key, member in duplicate.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="duplicate logical actions"):
+        validate_execution_recovery_action_set_v1(duplicate)
+
+    self_referential = deepcopy(action_set)
+    self_referential["phase"] = "FENCING"
+    self_referential["actions"][0].update({
+        "action_kind": "ADVANCE_ATTEMPT", "entity_kind": "ATTEMPT", "entity_id": "AT-ONE",
+        "target_event_type": "attempt.stop_latched",
+        "parameters": {"attempt_id": "AT-ONE", "from_state": "RUNNING", "transition_cause": {
+            "code": "RECOVERY_FENCE", "trigger_kind": "RECOVERY_DERIVATION",
+            "trigger_event_id": "JE-FOUR", "effective_sequence": 4, "evidence_sigil": SIGIL,
+        }},
+    })
+    self_referential_second = deepcopy(self_referential["actions"][0])
+    self_referential_second.update({"ordinal": 1, "target_event_id": "JE-FIVE", "target_sequence": 5})
+    self_referential_second["parameters"]["transition_cause"].update({
+        "trigger_event_id": "JE-FIVE", "effective_sequence": 5,
+    })
+    self_referential["actions"].append(self_referential_second)
+    self_referential["action_set_sigil"] = content_sigil(
+        {key: member for key, member in self_referential.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="duplicate logical actions"):
+        validate_execution_recovery_action_set_v1(self_referential)
 
 
 def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:

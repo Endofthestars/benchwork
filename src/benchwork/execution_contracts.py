@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import math
 import unicodedata
+from copy import deepcopy
 from datetime import datetime
 from typing import Any, NoReturn
 
-from .athanor import AthanorError, content_sigil
+from .athanor import AthanorError, canonical_json, content_sigil
 from .schema_validation import validate_instance
 
 
@@ -58,6 +59,40 @@ _ENTITY_KIND_ORDER = (
     "EXECUTOR", "RECOVERY", "WORKER", "WORKER_SESSION", "JOB", "ATTEMPT", "LEASE", "LOG_STREAM",
 )
 _ENTITY_KIND_RANK = {value: rank for rank, value in enumerate(_ENTITY_KIND_ORDER)}
+_RECOVERY_ACTION_KIND_ORDER = (
+    "COMMIT_DUE_EVENT", "RESTORE_CLOCK", "FENCE_LEASE", "REPUBLISH_TOMBSTONE",
+    "OFFLINE_SESSION", "TERMINATE_PROCESS_TREE", "REVOKE_HANDLES", "CLOSE_SESSION",
+    "CLOSE_LOG", "VERIFY_OUTPUT_STORAGE", "VERIFY_TERMINAL_SOURCE",
+    "BIND_DURABLE_ATTEMPT_AUTHORIZATION", "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD",
+    "RELEASE_DUE_EXECUTION_HOLD", "QUARANTINE_RESOURCE", "ADVANCE_ATTEMPT",
+    "CLEAN_RESOURCE", "COLLECT_ACCOUNTING", "SETTLE_BUDGET",
+    "EVALUATE_ATTEMPT_ASSURANCE", "EVALUATE_JOB_ASSURANCE", "ADVANCE_JOB",
+)
+_RECOVERY_ACTION_KIND_RANK = {
+    value: rank for rank, value in enumerate(_RECOVERY_ACTION_KIND_ORDER)
+}
+_RECOVERY_PHASE_KINDS = {
+    "STARTED": {"COMMIT_DUE_EVENT"},
+    "FENCING": {
+        "FENCE_LEASE", "REPUBLISH_TOMBSTONE", "OFFLINE_SESSION",
+        "BIND_DURABLE_ATTEMPT_AUTHORIZATION", "ADVANCE_ATTEMPT", "ADVANCE_JOB",
+    },
+    "RECONCILING": {
+        "TERMINATE_PROCESS_TREE", "REVOKE_HANDLES", "CLOSE_SESSION", "CLOSE_LOG",
+        "VERIFY_OUTPUT_STORAGE", "VERIFY_TERMINAL_SOURCE", "QUARANTINE_RESOURCE",
+        "ADVANCE_ATTEMPT", "CLEAN_RESOURCE", "COLLECT_ACCOUNTING",
+    },
+    "FINALIZING": {
+        "RESTORE_CLOCK", "ADVANCE_ATTEMPT", "SETTLE_BUDGET",
+        "EVALUATE_ATTEMPT_ASSURANCE", "EVALUATE_JOB_ASSURANCE", "ADVANCE_JOB",
+        "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD", "RELEASE_DUE_EXECUTION_HOLD",
+    },
+}
+_ATTEMPT_TERMINAL_EVENT_TYPES = {
+    "attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out",
+    "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced",
+    "attempt.rejected",
+}
 _AUTHORITY_GATE_ORDER = ("INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "RECOVERY_ACTIVE")
 _AUTHORITY_GATE_RANK = {value: rank for rank, value in enumerate(_AUTHORITY_GATE_ORDER)}
 _DEADLINE_PRIORITY = {
@@ -623,9 +658,16 @@ def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> Non
     ):
         _fail("Execution Recovery action-set self-Sigil mismatch")
     actions = action_set["actions"]
+    if action_set["derived_through_sequence"] < 1:
+        _fail("Execution Recovery action set requires a positive derived-through sequence")
     if [action["ordinal"] for action in actions] != list(range(len(actions))):
         _fail("Execution Recovery action ordinals must be contiguous from zero")
+    if len({action["target_event_id"] for action in actions}) != len(actions):
+        _fail("Execution Recovery action target Event IDs must be unique")
+    logical_actions: set[bytes] = set()
+    ordering_keys: list[tuple[Any, ...]] = []
     for action in actions:
+        _validate_execution_recovery_action_phase_v1(action_set["phase"], action)
         if action["target_sequence"] != action_set["derived_through_sequence"] + 2 + action["ordinal"]:
             _fail("Execution Recovery action target sequence disagrees with ordinal")
         prerequisites = action["prerequisite_event_ids"]
@@ -633,6 +675,71 @@ def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> Non
             prerequisites, key=lambda value: _unsigned_ascii(value, "Recovery prerequisite Event ID")
         ):
             _fail("Execution Recovery prerequisite Event IDs are not unsigned-ASCII sorted")
+        logical_action = _canonical_execution_recovery_logical_action_v1(action)
+        if logical_action in logical_actions:
+            _fail("Execution Recovery action set contains duplicate logical actions")
+        logical_actions.add(logical_action)
+        ordering_keys.append(_execution_recovery_action_ordering_key_v1(action, logical_action))
+    if ordering_keys != sorted(ordering_keys):
+        _fail("Execution Recovery actions are not in canonical order")
+
+
+def _validate_execution_recovery_action_phase_v1(phase: str, action: dict[str, Any]) -> None:
+    kind = action["action_kind"]
+    if kind not in _RECOVERY_PHASE_KINDS[phase]:
+        _fail("Execution Recovery action kind is not allowed in its phase")
+    event_type = action["target_event_type"]
+    if kind == "ADVANCE_ATTEMPT":
+        if phase == "FENCING" and event_type != "attempt.stop_latched":
+            _fail("FENCING Attempt advancement must target STOPPING")
+        if phase == "RECONCILING" and event_type != "attempt.cleaning":
+            _fail("RECONCILING Attempt advancement must target CLEANING")
+        if phase == "FINALIZING" and event_type not in _ATTEMPT_TERMINAL_EVENT_TYPES:
+            _fail("FINALIZING Attempt advancement must target an Attempt terminal state")
+    if kind == "ADVANCE_JOB" and phase == "FENCING" and event_type != "job.stop_latched":
+        _fail("FENCING Job advancement must target STOPPING")
+
+
+def _execution_recovery_action_ordering_key_v1(
+    action: dict[str, Any], logical_action: bytes
+) -> tuple[Any, ...]:
+    kind = action["action_kind"]
+    action_kind_rank = _RECOVERY_ACTION_KIND_RANK[kind]
+    if kind == "COMMIT_DUE_EVENT":
+        parameters = action["parameters"]
+        return (
+            action_kind_rank, _parse_time(parameters["due_at"]),
+            _DEADLINE_PRIORITY[parameters["deadline_kind"]],
+            _unsigned_ascii(parameters["deadline_entity_id"], "Recovery deadline entity ID"),
+            _unsigned_ascii(action["target_event_type"], "Recovery target Event type"),
+        )
+    return (
+        action_kind_rank, _ENTITY_KIND_RANK[action["entity_kind"]],
+        _unsigned_ascii(action["entity_id"], "Recovery entity ID"),
+        _unsigned_ascii(action["target_event_type"], "Recovery target Event type"), logical_action,
+    )
+
+
+def _canonical_execution_recovery_logical_action_v1(action: dict[str, Any]) -> bytes:
+    """Return RFC-0012's reservation-independent logical-action bytes."""
+    logical = {
+        key: deepcopy(value) for key, value in action.items()
+        if key not in {"ordinal", "target_event_id", "target_sequence"}
+    }
+
+    def normalize_transition_causes(value: Any) -> None:
+        if isinstance(value, dict):
+            if value.get("trigger_kind") == "RECOVERY_DERIVATION":
+                value["trigger_event_id"] = "SELF_EVENT"
+                value["effective_sequence"] = "SELF_SEQUENCE"
+            for member in value.values():
+                normalize_transition_causes(member)
+        elif isinstance(value, list):
+            for member in value:
+                normalize_transition_causes(member)
+
+    normalize_transition_causes(logical)
+    return canonical_json(logical).encode("ascii")
 
 
 def load_execution_recovery_action_set_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
