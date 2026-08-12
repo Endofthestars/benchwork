@@ -260,6 +260,30 @@ class ExecutionService:
                 raise AthanorError("execution journal identity is invalid")
             if event["event_type"] not in LOCAL_EXECUTION_EVENT_TYPES:
                 raise AthanorError("execution journal Event type is invalid")
+            if (
+                not isinstance(event["event_id"], str)
+                or not event["event_id"]
+                or not isinstance(event["sequence"], int)
+                or isinstance(event["sequence"], bool)
+                or not isinstance(event["recorded_at"], str)
+                or not isinstance(event["payload"], dict)
+                or not isinstance(event["event_sigil"], str)
+                or not SIGIL.fullmatch(event["event_sigil"])
+            ):
+                raise AthanorError("execution journal Event scalar fields are invalid")
+            try:
+                recorded_at = datetime.fromisoformat(event["recorded_at"].replace("Z", "+00:00"))
+            except ValueError as error:
+                raise AthanorError("execution journal Event recorded_at is invalid") from error
+            if not event["recorded_at"].endswith("Z") or recorded_at.tzinfo != UTC:
+                raise AthanorError("execution journal Event recorded_at is invalid")
+            if previous is None:
+                if event["previous_event_sigil"] is not None:
+                    raise AthanorError("execution journal chain is broken")
+            elif not isinstance(event["previous_event_sigil"], str) or not SIGIL.fullmatch(
+                event["previous_event_sigil"]
+            ):
+                raise AthanorError("execution journal chain is broken")
             if event["event_id"] in event_ids:
                 raise AthanorError("execution journal has a duplicate Event identity")
             if event["sequence"] != len(events) + 1 or event["previous_event_sigil"] != previous:

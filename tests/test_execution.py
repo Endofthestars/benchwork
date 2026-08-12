@@ -205,6 +205,28 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "duplicate Event identity"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_resealed_noncanonical_event_scalars_fail_in_loader(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["sequence"] = True
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "scalar fields are invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["sequence"] = 2
+        events[1]["recorded_at"] = "2026-08-06T00:00:00+00:00"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "recorded_at is invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)
