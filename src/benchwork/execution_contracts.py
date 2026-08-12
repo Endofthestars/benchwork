@@ -1294,7 +1294,7 @@ def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) ->
         _fail("Attempt cleaning reducer requires one draining Attempt")
     attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
     if (
-        event["event_type"] != "attempt.cleaning" or attempt["state"] != "DRAINING"
+        event["event_type"] != "attempt.cleaning" or attempt["state"] not in {"DRAINING", "STOPPING"}
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != attempt["lease_executor_epoch"]
         or event["causation_event_id"] != attempt["last_event_id"]
@@ -1306,6 +1306,31 @@ def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) ->
     reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "CLEANING",
         "terminal_source_binding": payload["terminal_source_binding"], "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
+_STOP_PROGRESS_STEPS_V1 = {
+    "COOPERATIVE_STOP_REQUESTED", "FORCE_TERMINATION_DUE", "PROCESS_TREE_TERMINATED", "HANDLES_REVOKED",
+}
+
+
+def _reduce_attempt_stop_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Record one bounded termination action while the Attempt is stopping."""
+    if len(state["attempts"]) != 1:
+        _fail("Stop progress reducer requires one stopping Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "attempt.stop_progressed" or attempt["state"] != "STOPPING"
+        or payload["step"] not in _STOP_PROGRESS_STEPS_V1
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+    ):
+        _fail("Stop progress Event disagrees with stopping Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
     return build_execution_state_v1(reduced)
 
 
@@ -1443,7 +1468,7 @@ def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> di
 def _reduce_attempt_stop_after_lease_expiry_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
-    """Latch the mandatory stop after an active Lease expiry tombstone.
+    """Latch the mandatory stop after an expired Lease tombstone.
 
     The expiry is the authoritative trigger; this reducer deliberately does
     not infer cancellation, policy, or deadline causes from a local State.
@@ -1455,6 +1480,8 @@ def _reduce_attempt_stop_after_lease_expiry_v1(
     terminal = lease["terminal_event_binding"]
     # ``lease.expired`` already advances the Job in this effective-sequence
     # due chain, so RFC-0012 requires EQUAL(JOB), not a second advance.
+    active_expiry = attempt["state"] in {"LEASED", "STARTING", "RUNNING", "DRAINING"}
+    cause_code = "LEASE_ACTIVE_EXPIRED" if active_expiry else "LEASE_CLAIM_EXPIRED"
     expected_revisions = [
         {"entity_kind": "JOB", "entity_id": job["job_id"], "preceding_revision": job["revision"], "next_revision": job["revision"]},
         {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
@@ -1464,12 +1491,12 @@ def _reduce_attempt_stop_after_lease_expiry_v1(
         "effective_sequence": terminal.get("terminal_sequence")}
     if (
         event["event_type"] != "attempt.stop_latched" or lease["state"] != "EXPIRED"
-        or attempt["state"] not in {"LEASED", "STARTING", "RUNNING", "DRAINING"}
+        or attempt["state"] not in {"READY", "LEASED", "STARTING", "RUNNING", "DRAINING"}
         or job["state"] != "ACTIVE" or attempt["lease_id"] != lease["lease_id"]
         or attempt["lease_terminal_binding"] is None or terminal.get("kind") != "PRESENT"
         or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
         or event["causation_event_id"] != terminal["terminal_event_id"] or event["entity_revisions"] != expected_revisions
-        or cause != {"code": "LEASE_ACTIVE_EXPIRED", "trigger_kind": "PRIOR_EVENT",
+        or cause != {"code": cause_code, "trigger_kind": "PRIOR_EVENT",
             "trigger_event_id": terminal["terminal_event_id"], "effective_sequence": terminal["terminal_sequence"],
             "evidence_sigil": lease["tombstone_event_sigil"]}
         or _parse_time(payload["grace_due_at"]) < _parse_time(event["recorded_at"])
@@ -1598,6 +1625,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_expired_v1(current, event)
         elif event["event_type"] == "attempt.stop_latched":
             current = _reduce_attempt_stop_after_lease_expiry_v1(current, event)
+        elif event["event_type"] == "attempt.stop_progressed":
+            current = _reduce_attempt_stop_progressed_v1(current, event)
         elif event["event_type"] == "lease.heartbeat_accepted":
             current = _reduce_lease_heartbeat_accepted_v1(current, event)
         elif event["event_type"] == "lease.renewed":
