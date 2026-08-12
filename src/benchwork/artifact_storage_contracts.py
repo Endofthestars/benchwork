@@ -282,6 +282,43 @@ def load_artifact_storage_disposition_v1(
     return disposition
 
 
+def validate_artifact_retention_policy_v1(policy: dict[str, Any]) -> None:
+    """Validate a Retention Policy locally without deciding its applicability."""
+    validate_instance("artifact-retention-policy-1.0.json", policy)
+    _check_nfc_and_numbers(policy)
+    if policy["record_sigil"] != content_sigil(_without(policy, "record_sigil")):
+        _fail("Artifact Retention Policy self-Sigil mismatch")
+    for member in ("required_backends", "required_failure_domains"):
+        if policy[member] != sorted(policy[member]):
+            _fail(f"Artifact Retention Policy {member} is not sorted")
+
+
+def load_artifact_retention_policy_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    policy = _load_strict_object(raw, "Artifact Retention Policy")
+    validate_artifact_retention_policy_v1(policy)
+    return policy
+
+
+def validate_artifact_storage_state_supplied_retention_policies_v1(
+    state: dict[str, Any], *, policies: list[dict[str, Any]],
+) -> None:
+    """Compare State retention-policy projections with supplied record bytes."""
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, str] = {}
+    for policy in policies:
+        validate_artifact_retention_policy_v1(policy)
+        if policy["policy_id"] in supplied:
+            _fail("Artifact Storage supplied Retention Policies have duplicate IDs")
+        supplied[policy["policy_id"]] = policy["record_sigil"]
+    for projection in state["retention_policies"]:
+        if supplied.get(projection["policy_id"]) != projection["record_sigil"]:
+            _fail("Artifact Storage State Retention Policy projection lacks matching supplied record")
+    if set(supplied) != {projection["policy_id"] for projection in state["retention_policies"]}:
+        _fail("Artifact Storage supplied Retention Policies do not exactly match State projections")
+
+
 def validate_artifact_storage_state_supplied_control_records_v1(
     state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
     reference_intents: list[dict[str, Any]],
@@ -533,6 +570,10 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             or record["artifact_receipt_sigil"] != protection["receipt_sigil"]
         ):
             _fail("Artifact Storage State Legacy Protection disagrees with its record")
+    for hold in state["holds"]:
+        released = hold["state"] == "RELEASED"
+        if released != (hold["release_authorization_sigil"] is not None):
+            _fail("Artifact Storage State Hold release authorization disagrees with state")
     for request in state["transfer_requests"]:
         selected = request["selected_attempt_id"]
         if selected is not None and selected not in request["attempt_ids"]:

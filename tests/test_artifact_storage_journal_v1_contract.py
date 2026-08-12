@@ -10,6 +10,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
     load_artifact_storage_disposition_v1,
+    load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
     load_artifact_storage_reference_intent_v1,
@@ -24,6 +25,8 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_head_v1,
     validate_artifact_storage_journal_prefix_v1,
     validate_artifact_storage_disposition_v1,
+    validate_artifact_retention_policy_v1,
+    validate_artifact_storage_state_supplied_retention_policies_v1,
     validate_artifact_storage_legacy_protection_v1,
     validate_artifact_storage_recovery_marker_v1,
     validate_artifact_storage_head_supplied_state_v1,
@@ -219,6 +222,21 @@ def _disposition() -> dict[str, object]:
         key: member for key, member in disposition.items() if key != "record_sigil"
     })
     return disposition
+
+
+def _retention_policy() -> dict[str, object]:
+    policy: dict[str, object] = {
+        "schema_version": "artifact-retention-policy/1.0", "policy_id": "SP-ONE",
+        "scope": {"kind": "PROJECT", "project_id": "PROJECT"}, "minimum_replica_count": 0,
+        "required_backends": [], "required_failure_domains": [],
+        "maximum_integrity_age_seconds": None, "deletion_grace_seconds": 0,
+        "retain_until": None, "automatic_gc_allowed": True, "authorization_sigil": SIGIL,
+        "registered_at": STAMP, "record_sigil": "",
+    }
+    policy["record_sigil"] = content_sigil({
+        key: member for key, member in policy.items() if key != "record_sigil"
+    })
+    return policy
 
 
 def _recovery_marker() -> dict[str, object]:
@@ -445,6 +463,35 @@ def test_disposition_is_self_signed_and_has_a_positive_authorization_window() ->
     })
     with pytest.raises(AthanorError, match="expiry must follow"):
         validate_artifact_storage_disposition_v1(expired)
+
+
+def test_retention_policy_and_hold_projection_matrix() -> None:
+    policy = _retention_policy()
+    validate_artifact_retention_policy_v1(policy)
+    assert load_artifact_retention_policy_v1(json.dumps(policy)) == policy
+
+    state = _state()
+    state["retention_policies"] = [{
+        "policy_id": policy["policy_id"], "record_sigil": policy["record_sigil"],
+        "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["holds"] = [{
+        "hold_id": "SH-ONE", "target_kind": "BLOB", "target_id": SIGIL,
+        "policy_id": policy["policy_id"], "state": "ACTIVE", "set_authorization_sigil": SIGIL,
+        "release_authorization_sigil": None, "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_retention_policies_v1(state, policies=[policy])
+
+    invalid_hold = deepcopy(state)
+    invalid_hold["holds"][0]["release_authorization_sigil"] = SIGIL_B  # type: ignore[index]
+    invalid_hold["state_sigil"] = content_sigil({
+        key: member for key, member in invalid_hold.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Hold release authorization"):
+        validate_artifact_storage_state_v1(invalid_hold)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
