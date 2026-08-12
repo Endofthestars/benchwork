@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -139,6 +140,30 @@ class ExecutionServiceTest(unittest.TestCase):
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
         journal.write_text(journal.read_text(encoding="utf-8").replace("job.submitted", "job.queued"), encoding="utf-8")
         with self.assertRaisesRegex(AthanorError, "Sigil|journal"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_wrong_journal_identity_and_duplicate_epoch_fail_closed(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+        events[1]["journal_id"] = "EJ-OTHER"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "identity is invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["journal_id"] = events[0]["journal_id"]
+        events[1]["event_type"] = "executor.epoch-started"
+        events[1]["payload"] = events[0]["payload"]
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "duplicate executor epoch"):
             self.service.observe(observation["job"]["job_id"])
 
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:

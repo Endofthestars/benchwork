@@ -30,6 +30,7 @@ SIGIL = re.compile(r"^sha256:[0-9a-f]{64}$")
 JOB_ID = re.compile(r"^JB-[A-F0-9]{64}$")
 SPECIFICATION_ID = re.compile(r"^ES-[A-Z0-9][A-Z0-9._-]*$")
 MAX_PAGE_SIZE = 256
+LOCAL_EXECUTION_JOURNAL_ID = "EJ-LOCAL-V1"
 TERMINAL_STATES = frozenset(
     {
         "SUCCEEDED",
@@ -240,8 +241,14 @@ class ExecutionService:
                 raise AthanorError("execution journal Event shape is invalid")
             if event["schema_version"] != "benchwork-local-execution-journal-event/0.1":
                 raise AthanorError("execution journal Event version is invalid")
+            if event["journal_id"] != LOCAL_EXECUTION_JOURNAL_ID:
+                raise AthanorError("execution journal identity is invalid")
             if event["sequence"] != len(events) + 1 or event["previous_event_sigil"] != previous:
                 raise AthanorError("execution journal chain is broken")
+            if not events and event["event_type"] != "executor.epoch-started":
+                raise AthanorError("execution journal has no executor epoch")
+            if events and event["event_type"] == "executor.epoch-started":
+                raise AthanorError("execution journal has a duplicate executor epoch")
             expected = content_sigil({key: value for key, value in event.items() if key != "event_sigil"})
             if event["event_sigil"] != expected:
                 raise AthanorError("execution journal Event Sigil is invalid")
@@ -254,7 +261,7 @@ class ExecutionService:
             return
         head = {
             "schema_version": "benchwork-local-execution-journal-head/0.1",
-            "journal_id": "EJ-LOCAL-V1",
+            "journal_id": LOCAL_EXECUTION_JOURNAL_ID,
             "last_sequence": events[-1]["sequence"],
             "last_event_id": events[-1]["event_id"],
             "last_event_sigil": events[-1]["event_sigil"],
@@ -277,7 +284,7 @@ class ExecutionService:
         sequence = len(events) + 1
         event = {
             "schema_version": "benchwork-local-execution-journal-event/0.1",
-            "journal_id": "EJ-LOCAL-V1",
+            "journal_id": LOCAL_EXECUTION_JOURNAL_ID,
             "event_id": f"JE-{sequence:016X}-{uuid4().hex[:16].upper()}",
             "sequence": sequence,
             "event_type": event_type,
