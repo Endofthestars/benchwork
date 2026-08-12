@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from benchwork.athanor import AthanorError, content_sigil
+from benchwork.execution_contracts import derive_execution_output_storage_observation_set_id_v1
 from benchwork.execution_job_outcome import (
     derive_execution_job_outcome_derivation_profile_v1,
     derive_execution_job_outcome_id_v1,
@@ -366,6 +367,65 @@ def test_selected_outcome_cannot_omit_a_locally_required_reason(reason: str) -> 
     _seal(outcome)
     with pytest.raises(AthanorError, match=reason):
         validate_execution_job_outcome_v1(outcome)
+
+
+def test_supplied_observation_set_must_match_outcome_owner_and_closure() -> None:
+    outcome, observation = _selected()
+    observation["job_id"] = "JB-" + "B" * 64
+    observation["observation_set_id"] = derive_execution_output_storage_observation_set_id_v1(observation)
+    observation["observation_set_sigil"] = content_sigil({
+        key: value for key, value in observation.items() if key != "observation_set_sigil"
+    })
+    for binding in (
+        outcome["storage_observation_binding"],
+        outcome["selected_attempt_binding"]["storage_observation_binding"],
+    ):
+        binding["output_storage_observation_set_id"] = observation["observation_set_id"]
+        binding["output_storage_observation_set_sigil"] = observation["observation_set_sigil"]
+    _seal(outcome)
+    facts = _facts(outcome)
+    facts["output_storage_observation_set"] = observation
+    with pytest.raises(AthanorError, match="observation-set job_id"):
+        validate_execution_job_outcome_replayed_facts_v1(outcome, facts)
+
+
+def test_selected_leased_authority_tuple_is_closed_and_cross_bound() -> None:
+    outcome, _ = _selected()
+    sigil = "sha256:" + "e" * 64
+    worker = {
+        "kind": "BOUND", "worker_id": "WK-ONE", "worker_binding_sigil": sigil,
+        "worker_session_id": "WS-01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        "worker_session_binding_sigil": sigil,
+    }
+    lease_id = "LS-01ARZ3NDEKTSV4RRFFQ69G5FAV"
+    outcome["attempt_summaries"][0]["worker_session_binding"] = worker
+    outcome["selected_attempt_binding"]["worker_session_binding"] = worker
+    outcome["authority_binding"] = {
+        "kind": "LEASED", "executor_instance_id": "XI-ONE", "executor_epoch": 1,
+        "executor_build_sigil": sigil,
+        "public_fence_tuple": {
+            "journal_id": "EJ-MAIN", "executor_epoch": 1, "job_id": outcome["job_id"],
+            "attempt_id": outcome["selected_attempt_binding"]["attempt_id"], "lease_id": lease_id,
+            "fencing_generation": 1,
+        },
+    }
+    outcome["lease_terminal_binding"] = {
+        "kind": "TERMINAL", "lease_id": lease_id, "lease_state": "FENCED",
+        "terminal_event_id": "JE-LEASEFENCED", "terminal_event_sigil": sigil,
+        "final_fence_floor": 1, "tombstone_event_sigil": "sha256:" + "f" * 64,
+    }
+    outcome["final_fence_binding"] = {
+        "kind": "TOMBSTONE", "final_fence_floor": 1, "lease_id": lease_id,
+        "lease_terminal_event_sigil": sigil, "tombstone_event_sigil": "sha256:" + "f" * 64,
+    }
+    _seal(outcome)
+    validate_execution_job_outcome_v1(outcome)
+
+    wrong_epoch = deepcopy(outcome)
+    wrong_epoch["authority_binding"]["executor_epoch"] = 2
+    _seal(wrong_epoch)
+    with pytest.raises(AthanorError, match="leased authority"):
+        validate_execution_job_outcome_v1(wrong_epoch)
 
 
 def test_reason_order_and_eligibility_equivalence_are_enforced() -> None:
