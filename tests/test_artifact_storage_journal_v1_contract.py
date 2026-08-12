@@ -1049,6 +1049,69 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="Replica object disagrees"):
         validate_artifact_storage_state_v1(wrong_replica)
 
+    committed_state = deepcopy(state)
+    committed_attempt = _transfer_attempt()
+    target = {
+        "backend_id": "BACKEND", "object_identity_sigil": SIGIL,
+        "locator_sigil": SIGIL, "generation": "GENERATION", "size_bytes": 0,
+        "blob_sigil": SIGIL,
+    }
+    committed_attempt.update({
+        "state": "COMMITTED", "staging_state": "MISSING", "staging_object": target,
+        "commit_intent": {
+            "intent_id": "INTENT", "provisional_replica_id": "SR-ONE",
+            "staging_object": target, "target_object": target,
+            "computed_blob": {"blob_sigil": SIGIL, "size_bytes": 0},
+            "execution_fence": None, "reservation": committed_attempt["reservation"],
+            "recorded_clock": committed_attempt["reservation"]["created_clock"],
+        },
+        "residual_staging_cleanup": {"state": "NOT_REQUIRED", "staging_object": None,
+                                     "evidence_sigil": None, "reason": None},
+        "computed_blob_sigil": SIGIL, "computed_size_bytes": 0,
+        "selected_replica_id": "SR-ONE", "terminal_at": STAMP,
+    })
+    committed_attempt["record_sigil"] = content_sigil({
+        key: member for key, member in committed_attempt.items() if key != "record_sigil"
+    })
+    selected_replica = deepcopy(replica)
+    selected_replica.update({
+        "state": "AVAILABLE", "verification": {
+            "method": "FULL_READBACK_SHA256", "evidence_sigil": SIGIL,
+            "verified_at": STAMP, "next_due_at": None,
+        },
+    })
+    selected_replica["record_sigil"] = content_sigil({
+        key: member for key, member in selected_replica.items() if key != "record_sigil"
+    })
+    committed_state["replicas"] = [{"record": selected_replica, "last_event_sigil": SIGIL}]
+    committed_state["transfer_attempts"] = [{
+        "record": committed_attempt, "last_event_sigil": SIGIL,
+    }]
+    committed_state["state_sigil"] = content_sigil({
+        key: member for key, member in committed_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(committed_state)
+
+    missing_selected = deepcopy(committed_state)
+    missing_selected["replicas"] = []
+    missing_selected["state_sigil"] = content_sigil({
+        key: member for key, member in missing_selected.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="lacks its selected Replica"):
+        validate_artifact_storage_state_v1(missing_selected)
+
+    mismatched_selected = deepcopy(committed_state)
+    mismatched_selected["replicas"][0]["record"]["object"]["generation"] = "OTHER"
+    mismatched_selected["replicas"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in mismatched_selected["replicas"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    mismatched_selected["state_sigil"] = content_sigil({
+        key: member for key, member in mismatched_selected.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees with selected Replica"):
+        validate_artifact_storage_state_v1(mismatched_selected)
+
     blob_state = deepcopy(state)
     blob = {
         "schema_version": "artifact-blob/1.0", "blob_sigil": SIGIL, "size_bytes": 0,

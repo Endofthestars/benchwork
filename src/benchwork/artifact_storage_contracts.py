@@ -772,6 +772,26 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
         released = hold["state"] == "RELEASED"
         if released != (hold["release_authorization_sigil"] is not None):
             _fail("Artifact Storage State Hold release authorization disagrees with state")
+    replicas = {
+        wrapper["record"]["replica_id"]: wrapper["record"] for wrapper in state["replicas"]
+    }
+    for wrapper in state["transfer_attempts"]:
+        attempt = wrapper["record"]
+        if attempt["state"] != "COMMITTED":
+            continue
+        selected = replicas.get(attempt["selected_replica_id"])
+        if selected is None:
+            _fail("Artifact Storage committed Transfer Attempt lacks its selected Replica")
+        computed = attempt["commit_intent"]["computed_blob"]
+        if (
+            attempt["computed_blob_sigil"] != computed["blob_sigil"]
+            or attempt["computed_size_bytes"] != computed["size_bytes"]
+            or selected["blob_sigil"] != computed["blob_sigil"]
+            or selected["size_bytes"] != computed["size_bytes"]
+            or selected["object"] != attempt["commit_intent"]["target_object"]
+            or selected["state"] != "AVAILABLE"
+        ):
+            _fail("Artifact Storage committed Transfer Attempt disagrees with selected Replica")
     for request in state["transfer_requests"]:
         selected = request["selected_attempt_id"]
         if selected is not None and selected not in request["attempt_ids"]:
