@@ -7,6 +7,7 @@ runtime, storage, Result, assurance, or scientific authority.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import unicodedata
@@ -922,6 +923,108 @@ def validate_execution_attempt_v1(attempt: dict[str, Any]) -> None:
         _without(attempt, "attempt_binding_sigil")
     ):
         _fail("Execution Attempt self-Sigil mismatch")
+
+
+def _validate_attempt_authorization_subject_v1(subject: dict[str, Any]) -> None:
+    """Validate the local, immutable portion of one authorization Subject."""
+    validate_instance("attempt-authorization-subject-1.0.json", subject)
+    _check_nfc(subject)
+    effect_ids = [
+        _unsigned_ascii(effect["side_effect_id"], "Attempt authorization side-effect ID")
+        for effect in subject["effects"]
+    ]
+    if effect_ids != sorted(effect_ids) or len(effect_ids) != len(set(effect_ids)):
+        _fail("Attempt authorization Subject effects are not uniquely sorted")
+    preimage = [
+        "attempt-authorization-subject-id/1.0",
+        subject["job_id"],
+        subject["job_binding_sigil"],
+        subject["attempt_id"],
+        subject["attempt_binding_sigil"],
+        subject["retry_ordinal"],
+        subject["specification_id"],
+        subject["specification_sigil"],
+        subject["effects"],
+    ]
+    expected_id = "AA-" + hashlib.sha256(
+        canonical_json(preimage).encode("utf-8")
+    ).hexdigest().upper()
+    if (
+        subject["authorization_subject_id"] != expected_id
+        or subject["authorization_subject_sigil"]
+        != content_sigil(_without(subject, "authorization_subject_sigil"))
+    ):
+        _fail("Attempt authorization Subject identity or self-Sigil mismatch")
+
+
+def _reduce_attempt_authorization_bound_v1(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    immutable_job: dict[str, Any],
+    immutable_attempt: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind a supplied canonical authorization chain to one CREATED Attempt.
+
+    The canonical Event and Receipt are represented by their immutable binding
+    but are not treated as resolved or accepted here; their authority remains
+    with the Athanor-facing resolver.
+    """
+    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1:
+        _fail("Attempt authorization binding requires one Job and Attempt")
+    job, attempt, executor = (
+        state["jobs"][0],
+        state["attempts"][0],
+        state["executor"],
+    )
+    payload = event["payload"]
+    subject = payload["authorization_subject"]
+    binding = payload["attempt_authorization_binding"]
+    validate_execution_job_v1(immutable_job)
+    validate_execution_attempt_v1(immutable_attempt)
+    _validate_attempt_authorization_subject_v1(subject)
+    if (
+        event["event_type"] != "attempt.authorization_bound"
+        or attempt["state"] != "CREATED"
+        or attempt["attempt_authorization_requirement"]["kind"] != "REQUIRED"
+        or attempt["attempt_authorization_state"] != {"kind": "PENDING"}
+        or attempt["first_stop_or_fence_binding"] != {"kind": "NONE"}
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"] != [{
+            "entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"],
+            "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1,
+        }]
+        or subject["job_id"] != job["job_id"]
+        or subject["job_binding_sigil"] != job["job_binding_sigil"]
+        or subject["attempt_id"] != attempt["attempt_id"]
+        or subject["attempt_binding_sigil"] != attempt["attempt_binding_sigil"]
+        or subject["retry_ordinal"] != attempt["retry_ordinal"]
+        or immutable_attempt["attempt_id"] != attempt["attempt_id"]
+        or immutable_attempt["attempt_binding_sigil"] != attempt["attempt_binding_sigil"]
+        or immutable_job["job_id"] != job["job_id"]
+        or immutable_job["job_binding_sigil"] != job["job_binding_sigil"]
+        or subject["specification_id"] != immutable_job["specification_id"]
+        or subject["specification_sigil"] != immutable_job["specification_sigil"]
+        or subject["effects"] != attempt["attempt_authorization_requirement"]["effects"]
+        or {key: binding[key] for key in ("authorization_subject_id", "authorization_subject_sigil")}
+        != {key: subject[key] for key in ("authorization_subject_id", "authorization_subject_sigil")}
+        or binding["authorization_binding_sigil"]
+        != content_sigil(_without(binding, "authorization_binding_sigil"))
+    ):
+        _fail("Attempt authorization binding Event disagrees with CREATED Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{
+        **attempt,
+        "revision": attempt["revision"] + 1,
+        "attempt_authorization_state": {
+            "kind": "BOUND", "authorization_subject": subject,
+            "attempt_authorization_binding": binding,
+        },
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
+    return build_execution_state_v1(reduced)
 
 
 def validate_execution_worker_v1(worker: dict[str, Any]) -> None:
@@ -2143,6 +2246,8 @@ def replay_execution_supplied_state_suffix_v1(
     events: list[dict[str, Any]],
     *,
     supplied_leases: list[dict[str, Any]] | None = None,
+    supplied_jobs: list[dict[str, Any]] | None = None,
+    supplied_attempts: list[dict[str, Any]] | None = None,
     supplied_result_ingress_receipts: list[dict[str, Any]] | None = None,
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
@@ -2178,6 +2283,20 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_worker_session_message_rejected_v1(current, event)
         elif event["event_type"] == "job.message_rejected":
             current = _reduce_job_message_rejected_v1(current, event)
+        elif event["event_type"] == "attempt.authorization_bound":
+            immutable_attempt = _find_supplied_v1(
+                supplied_attempts,
+                event["entity_revisions"][0]["entity_id"],
+                "attempt_id",
+                "Attempt authorization binding",
+            )
+            immutable_job = _find_supplied_v1(
+                supplied_jobs, current["jobs"][0]["job_id"], "job_id",
+                "Attempt authorization binding",
+            )
+            current = _reduce_attempt_authorization_bound_v1(
+                current, event, immutable_job, immutable_attempt
+            )
         elif event["event_type"] in {"worker.draining", "worker.quarantined"}:
             current = _reduce_worker_draining_or_quarantined_v1(current, event)
         elif event["event_type"] == "worker.retired":
@@ -3283,6 +3402,20 @@ def replay_execution_journal_supplied_facts_v1(
                 "Attempt allocation",
             )
             state = _reduce_job_attempt_allocated_v1(state, event, attempt)
+        elif event["event_type"] == "attempt.authorization_bound":
+            immutable_attempt = _find_supplied_v1(
+                supplied_attempts,
+                event["entity_revisions"][0]["entity_id"],
+                "attempt_id",
+                "Attempt authorization binding",
+            )
+            immutable_job = _find_supplied_v1(
+                supplied_jobs, state["jobs"][0]["job_id"], "job_id",
+                "Attempt authorization binding",
+            )
+            state = _reduce_attempt_authorization_bound_v1(
+                state, event, immutable_job, immutable_attempt
+            )
         elif event["event_type"] == "attempt.preflight_started":
             state = _reduce_attempt_preflight_started_v1(state, event)
         elif event["event_type"] == "attempt.preflight_passed":
@@ -3292,6 +3425,8 @@ def replay_execution_journal_supplied_facts_v1(
                 state,
                 [event],
                 supplied_leases=supplied_leases,
+                supplied_jobs=supplied_jobs,
+                supplied_attempts=supplied_attempts,
                 supplied_result_ingress_receipts=supplied_result_ingress_receipts,
                 supplied_result_ingress_intents=supplied_result_ingress_intents,
                 supplied_observation_evidence=supplied_observation_evidence,

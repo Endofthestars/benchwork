@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -7,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from benchwork.athanor import AthanorError, content_sigil
+from benchwork.athanor import AthanorError, canonical_json, content_sigil
 from benchwork.execution_contracts import (
     build_execution_journal_event_v1,
     derive_observation_evidence_id_v1,
@@ -351,6 +352,109 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         replay_execution_journal_supplied_facts_v1(
             [INITIAL, event, queued, allocated, preflight, preflight_passed],
             supplied_jobs=[job], supplied_attempts=[wrong_supplied],
+        )
+
+    required_attempt = _attempt()
+    required_attempt["attempt_authorization_requirement"] = {
+        "kind": "REQUIRED", "effects": [{"side_effect_id": "SE-ONE", "authority_sigil": SIGIL}],
+    }
+    required_attempt["attempt_binding_sigil"] = content_sigil({
+        key: value for key, value in required_attempt.items() if key != "attempt_binding_sigil"
+    })
+    required_allocated = _allocated_event(queued, required_attempt)
+    required_state = replay_execution_journal_supplied_facts_v1(
+        [INITIAL, event, queued, required_allocated],
+        supplied_jobs=[job], supplied_attempts=[required_attempt],
+    )
+    effects = required_attempt["attempt_authorization_requirement"]["effects"]
+    subject: dict[str, Any] = {
+        "schema_version": "attempt-authorization-subject/1.0", "authorization_subject_id": "",
+        "job_id": JOB_ID, "job_binding_sigil": job["job_binding_sigil"],
+        "attempt_id": required_attempt["attempt_id"],
+        "attempt_binding_sigil": required_attempt["attempt_binding_sigil"],
+        "retry_ordinal": 1, "specification_id": job["specification_id"],
+        "specification_sigil": job["specification_sigil"], "effects": effects,
+        "authorization_subject_sigil": "",
+    }
+    subject["authorization_subject_id"] = "AA-" + hashlib.sha256(canonical_json([
+        "attempt-authorization-subject-id/1.0", subject["job_id"], subject["job_binding_sigil"],
+        subject["attempt_id"], subject["attempt_binding_sigil"], subject["retry_ordinal"],
+        subject["specification_id"], subject["specification_sigil"], subject["effects"],
+    ]).encode()).hexdigest().upper()
+    subject["authorization_subject_sigil"] = content_sigil({
+        key: value for key, value in subject.items() if key != "authorization_subject_sigil"
+    })
+    binding = {
+        "authorization_subject_id": subject["authorization_subject_id"],
+        "authorization_subject_sigil": subject["authorization_subject_sigil"],
+        "authorization_transition_request_id": "AAT-" + "A" * 64,
+        "authorization_transition_request_sigil": SIGIL,
+        "authorization_event_id": "AUTH-EVENT", "authorization_event_body_sigil": SIGIL,
+        "authorization_receipt_id": "RC-ONE", "authorization_receipt_sigil": SIGIL,
+    }
+    binding["authorization_binding_sigil"] = content_sigil(binding)
+    bound = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-AUTH", "sequence": 5, "event_type": "attempt.authorization_bound",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:03Z",
+        "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 0, "next_revision": 1}],
+        "causation_event_id": required_allocated["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"authorization_subject": subject, "attempt_authorization_binding": binding},
+        "previous_event_sigil": required_allocated["event_sigil"],
+    })
+    bound_state = replay_execution_supplied_state_suffix_v1(
+        required_state, [bound], supplied_jobs=[job], supplied_attempts=[required_attempt],
+    )
+    assert bound_state["attempts"][0]["attempt_authorization_state"]["kind"] == "BOUND"
+    assert replay_execution_journal_supplied_facts_v1(
+        [INITIAL, event, queued, required_allocated, bound],
+        supplied_jobs=[job], supplied_attempts=[required_attempt],
+    ) == bound_state
+
+    wrong_binding = deepcopy(bound)
+    wrong_binding["payload"]["authorization_subject"]["specification_id"] = "ES-TWO"
+    wrong_binding = build_execution_journal_event_v1({
+        key: value for key, value in wrong_binding.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="Subject identity"):
+        replay_execution_supplied_state_suffix_v1(
+            required_state, [wrong_binding], supplied_jobs=[job], supplied_attempts=[required_attempt],
+        )
+
+    duplicate_effect = deepcopy(bound)
+    duplicate_subject = duplicate_effect["payload"]["authorization_subject"]
+    duplicate_subject["effects"] = [
+        *effects,
+        {"side_effect_id": "SE-ONE", "authority_sigil": "sha256:" + "b" * 64},
+    ]
+    duplicate_subject["authorization_subject_id"] = "AA-" + hashlib.sha256(
+        canonical_json([
+            "attempt-authorization-subject-id/1.0", duplicate_subject["job_id"],
+            duplicate_subject["job_binding_sigil"], duplicate_subject["attempt_id"],
+            duplicate_subject["attempt_binding_sigil"], duplicate_subject["retry_ordinal"],
+            duplicate_subject["specification_id"], duplicate_subject["specification_sigil"],
+            duplicate_subject["effects"],
+        ]).encode()
+    ).hexdigest().upper()
+    duplicate_subject["authorization_subject_sigil"] = content_sigil({
+        key: value for key, value in duplicate_subject.items()
+        if key != "authorization_subject_sigil"
+    })
+    duplicate_binding = duplicate_effect["payload"]["attempt_authorization_binding"]
+    duplicate_binding["authorization_subject_id"] = duplicate_subject["authorization_subject_id"]
+    duplicate_binding["authorization_subject_sigil"] = duplicate_subject["authorization_subject_sigil"]
+    duplicate_binding["authorization_binding_sigil"] = content_sigil({
+        key: value for key, value in duplicate_binding.items()
+        if key != "authorization_binding_sigil"
+    })
+    duplicate_effect = build_execution_journal_event_v1({
+        key: value for key, value in duplicate_effect.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="effects are not uniquely sorted"):
+        replay_execution_supplied_state_suffix_v1(
+            required_state, [duplicate_effect], supplied_jobs=[job], supplied_attempts=[required_attempt],
         )
 
     rejected_cancel = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-JOBREJECT", "sequence": 7, "event_type": "job.message_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:05Z", "observed_at": None, "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}], "causation_event_id": allocated["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"message_kind": "CANCEL_REQUEST", "message_sigil": SIGIL, "reason_codes": ["CONTROL_CHANNEL_LOST"], "historical_disposition_event_id": None}, "previous_event_sigil": preflight_passed["event_sigil"]})
