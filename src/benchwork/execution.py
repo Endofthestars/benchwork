@@ -140,6 +140,32 @@ class LocalBlobStore:
             raise AthanorError("Blob Sigil must be canonical sha256")
         return self.path / "blobs" / sigil.removeprefix("sha256:")
 
+    def _record_path(self, sigil: str) -> Path:
+        self._blob_path(sigil)
+        return self.path / "records" / f"blob-{sigil.removeprefix('sha256:')}.json"
+
+    @staticmethod
+    def _validate_record(record: Any, sigil: str, size_bytes: int) -> None:
+        if not isinstance(record, dict) or set(record) != {
+            "schema_version", "blob_sigil", "size_bytes", "media_type",
+            "backend_id", "availability", "record_sigil",
+        }:
+            raise AthanorError("Blob record is invalid")
+        if (
+            record["schema_version"] != "benchwork-local-artifact-blob/0.1"
+            or record["blob_sigil"] != sigil
+            or record["size_bytes"] != size_bytes
+            or not isinstance(record["media_type"], str)
+            or not record["media_type"]
+            or len(record["media_type"]) > 128
+            or record["backend_id"] != "BE-LOCAL-V1"
+            or record["availability"] != "AVAILABLE"
+            or record["record_sigil"] != content_sigil(
+                {key: value for key, value in record.items() if key != "record_sigil"}
+            )
+        ):
+            raise AthanorError("Blob record conflict or integrity failure")
+
     def import_bytes(self, value: bytes, *, media_type: str = "application/octet-stream") -> dict[str, Any]:
         """Commit one immutable Blob, deduplicating only after independent readback."""
         if not isinstance(value, bytes):
@@ -169,13 +195,14 @@ class LocalBlobStore:
                 "availability": "AVAILABLE",
             }
             record["record_sigil"] = content_sigil(record)
-            record_path = self.path / "records" / f"blob-{sigil.removeprefix('sha256:')}.json"
+            record_path = self._record_path(sigil)
             if record_path.exists():
                 try:
                     prior = json.loads(record_path.read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError) as error:
                     raise AthanorError("Blob record is invalid") from error
-                if not isinstance(prior, dict) or prior != record:
+                self._validate_record(prior, sigil, len(value))
+                if prior != record:
                     raise AthanorError("Blob record conflict or integrity failure")
                 return prior
             else:
@@ -191,6 +218,12 @@ class LocalBlobStore:
             raise AthanorError(f"Blob is unavailable: {sigil}") from error
         if self._sigil_for_bytes(value) != sigil:
             raise AthanorError(f"Blob integrity failure: {sigil}")
+        record_path = self._record_path(sigil)
+        try:
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise AthanorError(f"Blob record is unavailable or invalid: {sigil}") from error
+        self._validate_record(record, sigil, len(value))
         return value
 
 

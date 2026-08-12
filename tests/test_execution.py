@@ -80,6 +80,21 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "record conflict or integrity failure"):
             self.store.import_bytes(b"phase-three", media_type="text/plain")
 
+    def test_readback_requires_a_matching_immutable_blob_record(self) -> None:
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "records"
+            / f"blob-{record['blob_sigil'].removeprefix('sha256:')}.json"
+        )
+        record_path.unlink()
+        with self.assertRaisesRegex(AthanorError, "record is unavailable or invalid"):
+            self.store.read_bytes(record["blob_sigil"])
+
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "Blob record is invalid"):
+            self.store.read_bytes(record["blob_sigil"])
+
 
 class ExecutionServiceTest(unittest.TestCase):
     def setUp(self) -> None:
