@@ -194,6 +194,18 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "not terminalizable|cancelled"):
             self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
 
+    def test_expired_local_job_retains_negative_outcome_and_rejects_late_delivery(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        expired = self.service.record_terminal(
+            job["job_id"], "LEASE_EXPIRED", "local lease deadline elapsed",
+        )
+        self.assertEqual(expired["job"]["state"], "LEASE_EXPIRED")
+        outcome = self.service.get_outcome(job["job_id"])
+        self.assertEqual(outcome["terminal_state"], "LEASE_EXPIRED")
+        self.assertFalse(outcome["eligible_for_acceptance"])
+        with self.assertRaisesRegex(AthanorError, "not terminalizable"):
+            self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
+
     def test_tampered_journal_fails_closed(self) -> None:
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
