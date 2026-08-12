@@ -866,6 +866,41 @@ def _reduce_job_submitted_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_job_queued_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Reduce a submitted Job to its deterministic ready-queue projection."""
+    if event["event_type"] != "job.queued" or len(state["jobs"]) != 1:
+        _fail("Job queue reducer requires exactly one submitted Job")
+    job = state["jobs"][0]
+    executor = state["executor"]
+    if (
+        job["state"] != "SUBMITTED"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"] != [{
+            "entity_kind": "JOB", "entity_id": job["job_id"],
+            "preceding_revision": job["revision"], "next_revision": job["revision"] + 1,
+        }]
+    ):
+        _fail("Job queue Event disagrees with submitted Job projection")
+    payload = event["payload"]
+    if payload["queue_key"] != {"ready_sequence": event["sequence"], "job_id": job["job_id"]}:
+        _fail("Job queue Event has an invalid queue key")
+    if not isinstance(payload["admission_evidence_sigil"], str):
+        _fail("Job queue Event admission evidence is invalid")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["jobs"] = [{
+        **job, "revision": job["revision"] + 1, "state": "QUEUED",
+        "queue_key": payload["queue_key"], "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_executor_clock_uncertain_after_initial_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1134,15 +1169,17 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
-    if len(events) == 2 and events[1]["event_type"] == "job.submitted":
+    if len(events) in {2, 3} and events[1]["event_type"] == "job.submitted":
         if supplied_jobs is None or len(supplied_jobs) != 1:
             _fail("Job submission replay requires exactly one supplied Job")
         state = _reduce_job_submitted_v1(initial_state, events[1], supplied_jobs[0])
+        if len(events) == 3:
+            state = _reduce_job_queued_v1(state, events[2])
         if head is not None and (
             head["journal_id"] != state["journal_binding"]["journal_id"]
-            or head["last_sequence"] != events[1]["sequence"]
-            or head["last_event_id"] != events[1]["event_id"]
-            or head["last_event_sigil"] != events[1]["event_sigil"]
+            or head["last_sequence"] != events[-1]["sequence"]
+            or head["last_event_id"] != events[-1]["event_id"]
+            or head["last_event_sigil"] != events[-1]["event_sigil"]
         ):
             _fail("Execution Journal Head disagrees with replay prefix")
         return state

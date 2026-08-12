@@ -122,6 +122,19 @@ def _submitted_event(job: dict[str, Any]) -> dict[str, Any]:
     return build_execution_journal_event_v1(event)
 
 
+def _queued_event(submitted: dict[str, Any]) -> dict[str, Any]:
+    return build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": submitted["journal_id"],
+        "event_id": "JE-THREE", "sequence": 3, "event_type": "job.queued",
+        "executor_instance_id": submitted["executor_instance_id"], "executor_epoch": submitted["executor_epoch"],
+        "executor_build_sigil": submitted["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:01Z", "observed_at": None,
+        "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 0, "next_revision": 1}],
+        "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None,
+        "payload": {"admission_evidence_sigil": SIGIL, "queue_key": {"ready_sequence": 3, "job_id": JOB_ID}},
+        "previous_event_sigil": submitted["event_sigil"],
+    })
+
+
 def test_job_submission_replay_requires_exact_supplied_job() -> None:
     job = _job()
     validate_execution_job_v1(job)
@@ -131,6 +144,11 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert state["jobs"][0]["budget_ledger"]["attempts"]["limit"] == 1
     assert state["deadlines"][0]["deadline_kind"] == "JOB_DEADLINE"
     assert state["idempotency_records"][0]["scope_id"] == "TK-ONE"
+
+    queued = _queued_event(event)
+    queued_state = replay_execution_journal_prefix_v1([INITIAL, event, queued], supplied_jobs=[job])
+    assert queued_state["jobs"][0]["state"] == "QUEUED"
+    assert queued_state["jobs"][0]["queue_key"] == {"ready_sequence": 3, "job_id": JOB_ID}
 
     altered = deepcopy(job)
     altered["deadline_due_at"] = "2026-08-06T00:02:00Z"
