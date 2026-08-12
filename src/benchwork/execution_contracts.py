@@ -1266,6 +1266,33 @@ def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) ->
     return build_execution_state_v1(reduced)
 
 
+_NONFINAL_CLEANUP_STEPS_V1 = {
+    "LOGS_CLOSED", "OUTPUTS_CLOSED", "TERMINATION_VERIFIED", "RESOURCES_CLEANED", "QUARANTINE_VERIFIED",
+}
+
+
+def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Replay a bounded non-final cleanup step without fabricating accounting."""
+    if len(state["attempts"]) != 1:
+        _fail("Cleanup progress reducer requires one Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "attempt.cleanup_progressed"
+        or attempt["state"] not in {"DRAINING", "STOPPING", "CLEANING"}
+        or payload["step"] not in _NONFINAL_CLEANUP_STEPS_V1
+        or payload["finalization_bindings"] != {"kind": "NONE"}
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+    ):
+        _fail("Cleanup progress Event disagrees with Attempt state")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1317,6 +1344,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_attempt_draining_v1(current, event)
         elif event["event_type"] == "attempt.cleaning":
             current = _reduce_attempt_cleaning_v1(current, event)
+        elif event["event_type"] == "attempt.cleanup_progressed":
+            current = _reduce_cleanup_progressed_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

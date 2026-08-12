@@ -421,6 +421,16 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert cleaning_state["attempts"][0]["state"] == "CLEANING"
     assert cleaning_state["attempts"][0]["terminal_source_binding"] == {"kind": "NOT_APPLICABLE"}
 
+    closed = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-FIFTEEN", "sequence": 15, "event_type": "attempt.cleanup_progressed", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 10, "next_revision": 11}], "causation_event_id": cleaning["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"step": "LOGS_CLOSED", "cleanup_evidence_sigil": SIGIL, "remaining_resource_ids": [], "finalization_bindings": {"kind": "NONE"}}, "previous_event_sigil": cleaning["event_sigil"]})
+    closed_state = replay_execution_supplied_state_suffix_v1(cleaning_state, [closed])
+    assert closed_state["attempts"][0]["revision"] == 11
+
+    premature_capture = deepcopy(closed)
+    premature_capture["payload"]["step"] = "ACCOUNTING_CAPTURED"
+    premature_capture = build_execution_journal_event_v1({key: value for key, value in premature_capture.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(cleaning_state, [premature_capture])
+
     malformed = deepcopy(ingress)
     malformed["payload"]["result_sigil"] = "sha256:" + "b" * 64
     malformed = build_execution_journal_event_v1({key: value for key, value in malformed.items() if key != "event_sigil"})
