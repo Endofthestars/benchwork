@@ -9,6 +9,7 @@ from benchwork.artifact_storage_contracts import (
     derive_artifact_storage_reference_set_id_v1,
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
+    load_artifact_storage_disposition_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
     load_artifact_storage_reference_intent_v1,
@@ -22,6 +23,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_head_supplied_prefix_v1,
     validate_artifact_storage_journal_head_v1,
     validate_artifact_storage_journal_prefix_v1,
+    validate_artifact_storage_disposition_v1,
     validate_artifact_storage_legacy_protection_v1,
     validate_artifact_storage_recovery_marker_v1,
     validate_artifact_storage_head_supplied_state_v1,
@@ -200,6 +202,23 @@ def _tail_evidence() -> dict[str, object]:
         key: member for key, member in evidence.items() if key != "record_sigil"
     })
     return evidence
+
+
+def _disposition() -> dict[str, object]:
+    disposition: dict[str, object] = {
+        "schema_version": "artifact-storage-disposition/1.0", "disposition_id": "SD-ONE",
+        "target_kind": "STAGING", "target_id": "SA-ONE", "target_generation": "GENERATION",
+        "expected_blob_sigil": None,
+        "expected_size_or_bound": {"kind": "UPPER_BOUND", "max_size_bytes": 1},
+        "reason_code": "POLICY_REJECTED", "actor_id": "ACTOR", "policy_sigil": SIGIL,
+        "approval_evidence_sigil": SIGIL, "authorization_sigil": SIGIL,
+        "authorized_at": STAMP, "expires_at": "2026-08-06T00:00:01Z",
+        "idempotency_key_sigil": SIGIL, "record_sigil": "",
+    }
+    disposition["record_sigil"] = content_sigil({
+        key: member for key, member in disposition.items() if key != "record_sigil"
+    })
+    return disposition
 
 
 def _recovery_marker() -> dict[str, object]:
@@ -412,6 +431,20 @@ def test_recovery_evidence_and_marker_phase_matrix() -> None:
     })
     with pytest.raises(AthanorError, match="zero retry"):
         validate_artifact_storage_recovery_marker_v1(zero_retry)
+
+
+def test_disposition_is_self_signed_and_has_a_positive_authorization_window() -> None:
+    disposition = _disposition()
+    validate_artifact_storage_disposition_v1(disposition)
+    assert load_artifact_storage_disposition_v1(json.dumps(disposition)) == disposition
+
+    expired = deepcopy(disposition)
+    expired["expires_at"] = STAMP
+    expired["record_sigil"] = content_sigil({
+        key: member for key, member in expired.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="expiry must follow"):
+        validate_artifact_storage_disposition_v1(expired)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

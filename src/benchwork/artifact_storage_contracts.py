@@ -264,6 +264,24 @@ def load_artifact_storage_recovery_marker_v1(
     return marker
 
 
+def validate_artifact_storage_disposition_v1(disposition: dict[str, Any]) -> None:
+    """Validate a Disposition wire record without resolving its authorization."""
+    validate_instance("artifact-storage-disposition-1.0.json", disposition)
+    _check_nfc_and_numbers(disposition)
+    if disposition["record_sigil"] != content_sigil(_without(disposition, "record_sigil")):
+        _fail("Artifact Storage Disposition self-Sigil mismatch")
+    if _parse_time(disposition["authorized_at"]) >= _parse_time(disposition["expires_at"]):
+        _fail("Artifact Storage Disposition expiry must follow authorization")
+
+
+def load_artifact_storage_disposition_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    disposition = _load_strict_object(raw, "Artifact Storage Disposition")
+    validate_artifact_storage_disposition_v1(disposition)
+    return disposition
+
+
 def validate_artifact_storage_state_supplied_control_records_v1(
     state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
     reference_intents: list[dict[str, Any]],
