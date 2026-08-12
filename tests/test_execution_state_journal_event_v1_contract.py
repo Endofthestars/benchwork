@@ -474,6 +474,12 @@ def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None
     with pytest.raises(Exception, match="copy the Result observation"):
         validate_execution_observation_evidence_v1(mismatched_assessment)
 
+    mismatched_source = deepcopy(evidence)
+    mismatched_source["assessment"]["verified_source_binding"]["source_kind"] = "EXECUTOR_SUPERVISOR"
+    _reseal_evidence(mismatched_source)
+    with pytest.raises(Exception, match="source does not match"):
+        validate_execution_observation_evidence_v1(mismatched_source)
+
     mismatched_receipt = deepcopy(evidence)
     mismatched_receipt["result_ingress_receipt_binding"]["ingress_receipt_sigil"] = SIGIL
     _reseal_evidence(mismatched_receipt)

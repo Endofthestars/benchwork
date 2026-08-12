@@ -336,6 +336,8 @@ def validate_execution_observation_evidence_v1(evidence: dict[str, Any]) -> None
             or assessment["verified_termination_observation"] != termination
         ):
             _fail("MATCHED Observation Evidence must copy the Result observation")
+        if assessment["verified_source_binding"]["source_kind"] != termination["observation_source"]:
+            _fail("MATCHED Observation Evidence source does not match termination observation")
     if assessment["kind"] == "MISMATCHED" and any(reason["reason_code"] != "MISMATCH" for reason in assessment["reason_bindings"]):
         _fail("MISMATCHED Observation Evidence contains a non-MISMATCH reason")
     if evidence["observation_evidence_sigil"] != content_sigil(_without(evidence, "observation_evidence_sigil")):
