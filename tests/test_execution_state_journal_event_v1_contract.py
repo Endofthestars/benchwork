@@ -2191,6 +2191,20 @@ def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None
         validate_execution_observation_evidence_supplied_receipt_v1(mismatched_receipt, receipt)
 
 
+def test_terminal_attempt_events_require_the_closed_terminal_evidence_shape() -> None:
+    event = _event_unsigned()
+    event.update({
+        "event_type": "attempt.failed", "event_id": "JE-TERMINAL", "sequence": 3,
+        "previous_event_sigil": SIGIL, "entity_revisions": [{
+            "entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 1, "next_revision": 2,
+        }],
+        "payload": {"attempt_terminal_evidence": {}, "fencing_generation": 1,
+                    "final_fence_floor": 2, "output_storage_roots": []},
+    })
+    with pytest.raises(Exception):
+        build_execution_journal_event_v1(event)
+
+
 @pytest.mark.parametrize(
     "loader,fixture",
     [

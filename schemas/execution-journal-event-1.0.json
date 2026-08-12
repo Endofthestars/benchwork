@@ -2330,7 +2330,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2364,7 +2364,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2398,7 +2398,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2432,7 +2432,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2466,7 +2466,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2500,7 +2500,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2534,7 +2534,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2568,7 +2568,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -2602,7 +2602,7 @@
               "output_storage_roots"
             ],
             "properties": {
-              "attempt_terminal_evidence": true,
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
               "fencing_generation": true,
               "final_fence_floor": true,
               "output_storage_roots": {
@@ -3760,6 +3760,28 @@
         {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
         {"type": "object", "additionalProperties": false, "required": ["kind", "attempt_id", "attempt_binding_sigil", "attempt_terminal_event_id", "attempt_terminal_event_sigil", "attempt_authorization_state", "worker_session_binding", "result_binding", "completion_anchor_binding", "first_stop_or_fence_binding", "storage_observation_binding"], "properties": {"kind": {"const": "SELECTED"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, "attempt_binding_sigil": {"$ref": "#/$defs/sigil"}, "attempt_terminal_event_id": {"$ref": "#/$defs/event_id"}, "attempt_terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "attempt_authorization_state": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_authorization_state"}, "worker_session_binding": {"$ref": "#/$defs/worker_session_binding"}, "result_binding": {"$ref": "#/$defs/result_binding"}, "completion_anchor_binding": {"$ref": "#/$defs/completion_anchor_binding"}, "first_stop_or_fence_binding": {"$ref": "#/$defs/first_stop_or_fence_binding"}, "storage_observation_binding": {"$ref": "#/$defs/storage_observation_binding"}}}
       ]
+    },
+    "attempt_terminal_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transition_cause", "computation_status", "worker_status", "process_termination_status", "handle_revocation_status", "cleanup_status", "mutable_resource_isolation_status", "output_publication_status", "quarantine_status", "termination_evidence_sigil", "handle_disposition_evidence_sigil", "cleanup_summary_sigil", "quarantine_evidence_sigil", "log_closure_sigil", "output_closure_sigil", "result_binding", "attempt_authorization_state", "completion_anchor_binding", "worker_session_binding", "lease_terminal_binding", "first_stop_or_fence_binding", "storage_observation_binding", "accounting_capture_event_id", "accounting_capture_event_sigil", "control_evidence_set_binding", "quarantine_binding_set_binding", "terminalization_storage_manifest_binding", "output_root_protection", "assurance_input_set_sigil", "terminal_source_binding"],
+      "properties": {
+        "transition_cause": {"$ref": "#/$defs/transition_cause"},
+        "computation_status": {"$ref": "#/$defs/computation_status"}, "worker_status": {"$ref": "#/$defs/worker_status"},
+        "process_termination_status": {"$ref": "#/$defs/process_termination_status"}, "handle_revocation_status": {"$ref": "#/$defs/handle_revocation_status"},
+        "cleanup_status": {"$ref": "#/$defs/cleanup_status"}, "mutable_resource_isolation_status": {"$ref": "#/$defs/mutable_resource_isolation_status"},
+        "output_publication_status": {"$ref": "#/$defs/output_publication_status"}, "quarantine_status": {"$ref": "#/$defs/quarantine_status"},
+        "termination_evidence_sigil": {"$ref": "#/$defs/sigil"}, "handle_disposition_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "cleanup_summary_sigil": {"$ref": "#/$defs/sigil"}, "quarantine_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "log_closure_sigil": {"$ref": "#/$defs/sigil"}, "output_closure_sigil": {"$ref": "#/$defs/sigil"},
+        "result_binding": {"$ref": "#/$defs/result_binding"}, "attempt_authorization_state": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_authorization_state"},
+        "completion_anchor_binding": {"$ref": "#/$defs/completion_anchor_binding"}, "worker_session_binding": {"$ref": "#/$defs/worker_session_binding"},
+        "lease_terminal_binding": {"$ref": "#/$defs/lease_terminal_binding"}, "first_stop_or_fence_binding": {"$ref": "#/$defs/first_stop_or_fence_binding"},
+        "storage_observation_binding": {"$ref": "#/$defs/storage_observation_binding"}, "accounting_capture_event_id": {"$ref": "#/$defs/event_id"},
+        "accounting_capture_event_sigil": {"$ref": "#/$defs/sigil"}, "control_evidence_set_binding": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0#/$defs/controlEvidenceSetBinding"},
+        "quarantine_binding_set_binding": {"$ref": "https://benchwork.dev/schemas/execution-quarantine-binding-set/1.0#/$defs/quarantineBindingSetBinding"},
+        "terminalization_storage_manifest_binding": {"$ref": "#/$defs/terminalization_storage_manifest_binding"}, "output_root_protection": {"$ref": "#/$defs/output_root_protection"},
+        "assurance_input_set_sigil": {"$ref": "#/$defs/sigil"}, "terminal_source_binding": {"$ref": "#/$defs/terminal_source_binding"}
+      }
     },
     "attempt_summary": {
       "type": "object", "additionalProperties": false,
