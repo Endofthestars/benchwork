@@ -451,10 +451,20 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "idempotency key"):
             self.service.start(_specification(), "\x00")
 
+        extra = _specification()
+        extra["backend_configuration"] = {"command": "must-not-be-accepted"}
+        extra["specification_sigil"] = content_sigil(
+            {key: value for key, value in extra.items() if key != "specification_sigil"}
+        )
+        with self.assertRaisesRegex(AthanorError, "specification is incomplete"):
+            self.service.start(extra, "start-001")
+
     def test_observation_and_cancel_validation_fail_closed(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
         with self.assertRaisesRegex(AthanorError, "observation limit"):
             self.service.observe(job["job_id"], limit=0)
+        with self.assertRaisesRegex(AthanorError, "observation limit"):
+            self.service.observe(job["job_id"], limit=True)
         with self.assertRaisesRegex(AthanorError, "cursor is invalid"):
             self.service.observe(job["job_id"], cursor={})
         with self.assertRaisesRegex(AthanorError, "Job ID is invalid"):
@@ -464,6 +474,10 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "revision conflict"):
             self.service.cancel(
                 job["job_id"], job["job_binding_sigil"], job["revision"] + 1, "cancel-001", "reason"
+            )
+        with self.assertRaisesRegex(AthanorError, "cancellation revision"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], True, "cancel-001", "reason"
             )
 
     def test_completed_job_records_terminal_cancellation_observation(self) -> None:

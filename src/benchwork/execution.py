@@ -450,7 +450,7 @@ class ExecutionService:
     @staticmethod
     def _validate_specification(specification: dict[str, Any]) -> None:
         required = {"schema_version", "specification_id", "task_binding", "specification_sigil"}
-        if not isinstance(specification, dict) or not required.issubset(specification):
+        if not isinstance(specification, dict) or set(specification) != required:
             raise AthanorError("execution specification is incomplete")
         if specification["schema_version"] != "benchwork-local-execution-specification/0.1":
             raise AthanorError("execution specification version is invalid")
@@ -723,7 +723,7 @@ class ExecutionService:
         job = state["jobs"].get(job_id)
         if job is None:
             raise AthanorError(f"unknown execution Job: {job_id}")
-        if not isinstance(limit, int) or not 1 <= limit <= MAX_PAGE_SIZE:
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= MAX_PAGE_SIZE:
             raise AthanorError(f"observation limit must be in 1..{MAX_PAGE_SIZE}")
         through_sequence = events[-1]["sequence"]
         through_sigil = events[-1]["event_sigil"]
@@ -745,6 +745,8 @@ class ExecutionService:
             if (
                 not isinstance(fixed_sequence, int)
                 or not isinstance(last_returned, int)
+                or isinstance(fixed_sequence, bool)
+                or isinstance(last_returned, bool)
                 or fixed_sequence < 1
                 or fixed_sequence > len(events)
                 or last_returned < 0
@@ -806,7 +808,11 @@ class ExecutionService:
             raise AthanorError("execution Job ID is invalid")
         if not isinstance(job_binding_sigil, str) or not SIGIL.fullmatch(job_binding_sigil):
             raise AthanorError("execution Job binding is invalid")
-        if not isinstance(expected_job_revision, int) or expected_job_revision < 1:
+        if (
+            not isinstance(expected_job_revision, int)
+            or isinstance(expected_job_revision, bool)
+            or expected_job_revision < 1
+        ):
             raise AthanorError("execution cancellation revision is invalid")
         if not isinstance(reason, str) or not reason or len(reason) > 4096:
             raise AthanorError("execution cancellation reason is invalid")
