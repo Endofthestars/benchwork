@@ -29,6 +29,8 @@ from .athanor import AthanorError, _exclusive_lock, canonical_json, content_sigi
 SIGIL = re.compile(r"^sha256:[0-9a-f]{64}$")
 JOB_ID = re.compile(r"^JB-[A-F0-9]{64}$")
 SPECIFICATION_ID = re.compile(r"^ES-[A-Z0-9][A-Z0-9._-]*$")
+LOCAL_EXECUTION_EVENT_ID = re.compile(r"^JE-[0-9A-F]{16}-[0-9A-F]{16}$")
+LOCAL_EXECUTION_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 MAX_PAGE_SIZE = 256
 LOCAL_EXECUTION_JOURNAL_ID = "EJ-LOCAL-V1"
 LOCAL_EXECUTION_EVENT_TYPES = frozenset(
@@ -263,7 +265,7 @@ class ExecutionService:
                 raise AthanorError("execution journal Event type is invalid")
             if (
                 not isinstance(event["event_id"], str)
-                or not event["event_id"]
+                or not LOCAL_EXECUTION_EVENT_ID.fullmatch(event["event_id"])
                 or not isinstance(event["sequence"], int)
                 or isinstance(event["sequence"], bool)
                 or not isinstance(event["recorded_at"], str)
@@ -276,7 +278,7 @@ class ExecutionService:
                 recorded_at = datetime.fromisoformat(event["recorded_at"].replace("Z", "+00:00"))
             except ValueError as error:
                 raise AthanorError("execution journal Event recorded_at is invalid") from error
-            if not event["recorded_at"].endswith("Z") or recorded_at.tzinfo != UTC:
+            if not LOCAL_EXECUTION_TIMESTAMP.fullmatch(event["recorded_at"]) or recorded_at.tzinfo != UTC:
                 raise AthanorError("execution journal Event recorded_at is invalid")
             if previous_recorded_at is not None and recorded_at < previous_recorded_at:
                 raise AthanorError("execution journal Event time is decreasing")
