@@ -613,6 +613,15 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
         "release_authority_sigil": None, "release_reason": None, "revision": 1,
         "last_event_sigil": SIGIL,
     }]
+    state["open_intents"] = [{
+        "intent_kind": "CANONICAL_REFERENCE", "intent_id": intent["reference_intent_id"],
+        "owner_id": intent["reference_intent_id"],
+        "source_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                         "event_sigil": SIGIL}, "intent_sigil": SIGIL, "revision": 1,
+        "last_event_sigil": SIGIL, "authorization_expires_at": None,
+        "expected_chronicle_head": intent["expected_chronicle_head"],
+        "blob_sigils": intent["blob_sigils"], "reference_set_sigils": [],
+    }]
     state["state_sigil"] = content_sigil({
         key: member for key, member in state.items() if key != "state_sigil"
     })
@@ -1284,6 +1293,34 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="Disposition execution Intent disagrees"):
         validate_artifact_storage_state_v1(missing_disposition_intent)
+
+    canonical_state = deepcopy(state)
+    canonical_state["canonical_reference_intents"] = [{
+        "reference_intent_id": "RI-ONE", "record_sigil": SIGIL, "state": "OPEN",
+        "chronicle_commit": None, "release_kind": None, "release_authority_sigil": None,
+        "release_reason": None, "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    canonical_state["open_intents"] = [{
+        "intent_kind": "CANONICAL_REFERENCE", "intent_id": "RI-ONE", "owner_id": "RI-ONE",
+        "source_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                         "event_sigil": SIGIL}, "intent_sigil": SIGIL, "revision": 1,
+        "last_event_sigil": SIGIL, "authorization_expires_at": None,
+        "expected_chronicle_head": {"schema_version": "chronicle-head/1.1", "event_count": 0,
+                                     "terminal_receipt_sigil": None},
+        "blob_sigils": [], "reference_set_sigils": [],
+    }]
+    canonical_state["state_sigil"] = content_sigil({
+        key: member for key, member in canonical_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(canonical_state)
+
+    missing_canonical_intent = deepcopy(canonical_state)
+    missing_canonical_intent["open_intents"] = []
+    missing_canonical_intent["state_sigil"] = content_sigil({
+        key: member for key, member in missing_canonical_intent.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="canonical-reference Intent disagrees"):
+        validate_artifact_storage_state_v1(missing_canonical_intent)
 
     mismatched_selected = deepcopy(committed_state)
     mismatched_selected["replicas"][0]["record"]["object"]["generation"] = "OTHER"

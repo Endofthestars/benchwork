@@ -919,6 +919,16 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
                 gc_intent_keys.add((plan["gc_plan_id"], target["deletion_intent_id"]))
     if gc_intent_keys != {(intent["owner_id"], intent["intent_id"]) for intent in gc_intents}:
         _fail("Artifact Storage State GC deletion Intent lacks a target projection")
+    canonical_intents = {
+        intent["intent_id"]: intent for intent in state["open_intents"]
+        if intent["intent_kind"] == "CANONICAL_REFERENCE"
+    }
+    for projection in state["canonical_reference_intents"]:
+        intent = canonical_intents.pop(projection["reference_intent_id"], None)
+        if (projection["state"] == "OPEN") != (intent is not None):
+            _fail("Artifact Storage State canonical-reference Intent disagrees with projection")
+    if canonical_intents:
+        _fail("Artifact Storage State canonical-reference Intent lacks a projection")
     availability_counts = {
         "AVAILABLE": 0, "DEGRADED": 0, "UNAVAILABLE": 0, "INCIDENT": 0,
     }
