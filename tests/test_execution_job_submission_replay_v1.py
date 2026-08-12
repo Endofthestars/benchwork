@@ -23,6 +23,7 @@ from benchwork.execution_contracts import (
     validate_agent_result_acceptance_authorization_v1,
     validate_sanctum_assurance_claim_v1,
     validate_execution_job_v1,
+    validate_sanctum_assurance_claim_supplied_attempt_facts_v1,
 )
 
 
@@ -33,6 +34,7 @@ INITIAL = json.loads(
     ).read_text()
 )
 SIGIL = "sha256:" + "a" * 64
+SIGIL_B = "sha256:" + "b" * 64
 JOB_ID = "JB-" + "A" * 64
 
 
@@ -1162,6 +1164,124 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     )
     assert settled_state["jobs"][0]["budget_ledger"] == settled_ledger
     assert settled_state["attempts"][0]["budget_settlement_binding"]["kind"] == "SETTLED"
+
+    supplied_claim = _assurance_claim()
+    supplied_claim.update({
+        "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+        "attempt_terminal_event": {
+            "journal_id": INITIAL["journal_id"],
+            "sequence": terminal["sequence"],
+            "event_id": terminal["event_id"],
+            "event_sigil": terminal["event_sigil"],
+        },
+        "assurance_profile_binding": {
+            key: value for key, value in job["assurance_requirement"].items()
+            if key != "requested_level"
+        },
+        "result_binding": {
+            "kind": "ACCEPTED",
+            "result_sigil": SIGIL,
+            "disposition_event": {
+                "journal_id": INITIAL["journal_id"],
+                "sequence": accepted["sequence"],
+                "event_id": accepted["event_id"],
+                "event_sigil": accepted["event_sigil"],
+            },
+        },
+        "control_evidence_set_binding": capture_finalization[
+            "control_evidence_set_binding"
+        ],
+        "terminal_status": {
+            "attempt_state": "SUCCEEDED",
+            "process_termination_status": "EXITED",
+            "handle_revocation_status": "NOT_APPLICABLE",
+            "cleanup_status": "VERIFIED",
+            "quarantine_status": "NOT_REQUIRED",
+        },
+    })
+    supplied_claim["evidence_cut"].update({
+        "journal_prefix": {
+            "journal_id": INITIAL["journal_id"],
+            "ending_sequence": settled["sequence"],
+            "ending_event_id": settled["event_id"],
+            "ending_event_sigil": settled["event_sigil"],
+        },
+        "state_sigil": settled_state["state_sigil"],
+        "accounting_capture_event": {
+            "journal_id": INITIAL["journal_id"],
+            "sequence": accounting_capture["sequence"],
+            "event_id": accounting_capture["event_id"],
+            "event_sigil": accounting_capture["event_sigil"],
+        },
+        "budget_settlement_event": {
+            "journal_id": INITIAL["journal_id"],
+            "sequence": settled["sequence"],
+            "event_id": settled["event_id"],
+            "event_sigil": settled["event_sigil"],
+        },
+        "control_evidence_set_binding": capture_finalization[
+            "control_evidence_set_binding"
+        ],
+    })
+    supplied_claim["assurance_claim_sigil"] = content_sigil({
+        key: value for key, value in supplied_claim.items()
+        if key != "assurance_claim_sigil"
+    })
+    validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+        supplied_claim,
+        job,
+        settled_state,
+        "AT-ONE",
+        accounting_capture,
+        settled,
+    )
+    forged_claim = deepcopy(supplied_claim)
+    forged_claim["evidence_cut"]["state_sigil"] = SIGIL_B
+    forged_claim["assurance_claim_sigil"] = content_sigil({
+        key: value for key, value in forged_claim.items()
+        if key != "assurance_claim_sigil"
+    })
+    with pytest.raises(AthanorError, match="terminal Attempt facts"):
+        validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+            forged_claim,
+            job,
+            settled_state,
+            "AT-ONE",
+            accounting_capture,
+            settled,
+        )
+
+    forged_claim = deepcopy(supplied_claim)
+    forged_claim["evidence_cut"]["control_evidence_set_binding"]["control_evidence_set_sigil"] = SIGIL_B
+    forged_claim["assurance_claim_sigil"] = content_sigil({
+        key: value for key, value in forged_claim.items()
+        if key != "assurance_claim_sigil"
+    })
+    with pytest.raises(AthanorError, match="terminal Attempt facts"):
+        validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+            forged_claim,
+            job,
+            settled_state,
+            "AT-ONE",
+            accounting_capture,
+            settled,
+        )
+
+    forged_claim = deepcopy(supplied_claim)
+    forged_claim["evidence_cut"]["accounting_capture_event"]["sequence"] = 15
+    forged_claim["assurance_claim_sigil"] = content_sigil({
+        key: value for key, value in forged_claim.items()
+        if key != "assurance_claim_sigil"
+    })
+    with pytest.raises(AthanorError, match="terminal Attempt facts"):
+        validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+            forged_claim,
+            job,
+            settled_state,
+            "AT-ONE",
+            accounting_capture,
+            settled,
+        )
 
     partial_undercharge = deepcopy(settled)
     partial_undercharge["payload"].update({

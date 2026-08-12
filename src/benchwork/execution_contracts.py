@@ -1046,6 +1046,152 @@ def load_sanctum_assurance_claim_v1(raw: str | bytes | bytearray) -> dict[str, A
     return claim
 
 
+def validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+    claim: dict[str, Any],
+    job: dict[str, Any],
+    state: dict[str, Any],
+    attempt_id: str,
+    accounting_capture_event: dict[str, Any],
+    budget_settlement_event: dict[str, Any],
+) -> None:
+    """Compare a Claim with caller-supplied terminal Job/Attempt State facts.
+
+    This is a supplied-facts comparator, not a verifier.  It closes only the
+    Claim fields whose values are already frozen in the supplied immutable Job
+    and Execution State.  Registry installation, signer identity, predicate
+    evaluation, evidence availability and durable currentness remain external
+    authorities and are deliberately not inferred here.
+    """
+    validate_sanctum_assurance_claim_v1(claim)
+    validate_execution_job_v1(job)
+    validate_execution_state_v1(state)
+    validate_execution_journal_event_v1(accounting_capture_event)
+    validate_execution_journal_event_v1(budget_settlement_event)
+    attempts = [item for item in state["attempts"] if item["attempt_id"] == attempt_id]
+    if len(attempts) != 1 or len(state["jobs"]) != 1:
+        _fail("Supplied Assurance Claim facts require one Job and named Attempt")
+    attempt = attempts[0]
+    state_job = state["jobs"][0]
+    terminal = attempt["terminal_event_binding"]
+    capture = attempt["accounting_capture_binding"]
+    settlement = attempt["budget_settlement_binding"]
+    result = attempt["result_binding"]
+    capture_ref = {
+        "journal_id": state["journal_binding"]["journal_id"],
+        "sequence": accounting_capture_event["sequence"],
+        "event_id": capture["event_id"],
+        "event_sigil": capture["event_sigil"],
+    }
+    settlement_ref = {
+        "journal_id": state["journal_binding"]["journal_id"],
+        "sequence": budget_settlement_event["sequence"],
+        "event_id": settlement["event_id"],
+        "event_sigil": settlement["event_sigil"],
+    }
+    capture_attempt_ids = [
+        revision["entity_id"]
+        for revision in accounting_capture_event["entity_revisions"]
+        if revision["entity_kind"] == "ATTEMPT"
+    ]
+    if result["kind"] == "ACCEPTED":
+        claim_result = {
+            "kind": "ACCEPTED",
+            "result_sigil": result["result_sigil"],
+            "disposition_event": {
+                "journal_id": state["journal_binding"]["journal_id"],
+                "sequence": result["disposition_sequence"],
+                "event_id": result["disposition_event_id"],
+                "event_sigil": result["disposition_event_sigil"],
+            },
+        }
+    elif result["kind"] == "REJECTED":
+        claim_result = {
+            "kind": "REJECTED",
+            "message_sigil": result["message_sigil"],
+            "disposition_event": {
+                "journal_id": state["journal_binding"]["journal_id"],
+                "sequence": result["disposition_sequence"],
+                "event_id": result["disposition_event_id"],
+                "event_sigil": result["disposition_event_sigil"],
+            },
+            "reason_codes": result["reason_codes"],
+        }
+    else:
+        claim_result = result
+    if (
+        state_job["job_id"] != job["job_id"]
+        or state_job["job_binding_sigil"] != job["job_binding_sigil"]
+        or attempt["job_id"] != job["job_id"]
+        or claim["job_id"] != job["job_id"]
+        or claim["attempt_id"] != attempt["attempt_id"]
+        or claim["attempt_binding_sigil"] != attempt["attempt_binding_sigil"]
+        or terminal["kind"] != "PRESENT"
+        or capture["kind"] != "CAPTURED"
+        or settlement["kind"] != "SETTLED"
+        or claim["attempt_terminal_event"] != {
+            "journal_id": state["journal_binding"]["journal_id"],
+            "sequence": terminal["terminal_sequence"],
+            "event_id": terminal["terminal_event_id"],
+            "event_sigil": terminal["terminal_event_sigil"],
+        }
+        or claim["requested_assurance"]
+        != job["assurance_requirement"]["requested_level"]
+        or claim["assurance_profile_binding"]
+        != {
+            "profile_version": job["assurance_requirement"]["profile_version"],
+            "profile_sigil": job["assurance_requirement"]["profile_sigil"],
+            "conformance_suite_id": job["assurance_requirement"][
+                "conformance_suite_id"
+            ],
+            "conformance_suite_sigil": job["assurance_requirement"][
+                "conformance_suite_sigil"
+            ],
+        }
+        or claim["result_binding"] != claim_result
+        or claim["control_evidence_set_binding"]
+        != attempt["control_evidence_set_binding"]
+        or claim["evidence_cut"]["control_evidence_set_binding"]
+        != claim["control_evidence_set_binding"]
+        or claim["evidence_cut"]["control_evidence_set_binding"]
+        != attempt["control_evidence_set_binding"]
+        or claim["terminal_status"]["attempt_state"] != attempt["state"]
+        or claim["evidence_cut"]["journal_prefix"]
+        != {
+            "journal_id": state["journal_binding"]["journal_id"],
+            "ending_sequence": state["journal_binding"]["through_sequence"],
+            "ending_event_id": state["journal_binding"]["through_event_id"],
+            "ending_event_sigil": state["journal_binding"]["through_event_sigil"],
+        }
+        or claim["evidence_cut"]["state_sigil"] != state["state_sigil"]
+        or claim["evidence_cut"]["accounting_capture_event"] != capture_ref
+        or claim["evidence_cut"]["budget_settlement_event"] != settlement_ref
+        or accounting_capture_event["journal_id"] != capture_ref["journal_id"]
+        or accounting_capture_event["event_id"] != capture_ref["event_id"]
+        or accounting_capture_event["event_sigil"] != capture_ref["event_sigil"]
+        or accounting_capture_event["event_type"] != "attempt.cleanup_progressed"
+        or accounting_capture_event["payload"]["step"] != "ACCOUNTING_CAPTURED"
+        or capture_attempt_ids != [attempt_id]
+        or budget_settlement_event["journal_id"] != settlement_ref["journal_id"]
+        or budget_settlement_event["event_id"] != settlement_ref["event_id"]
+        or budget_settlement_event["event_sigil"] != settlement_ref["event_sigil"]
+        or budget_settlement_event["event_type"] != "job.budget_settled"
+        or budget_settlement_event["payload"]["attempt_id"] != attempt_id
+        or budget_settlement_event["payload"]["accounting_capture_event_id"]
+        != capture["event_id"]
+        or budget_settlement_event["payload"]["accounting_capture_event_sigil"]
+        != capture["event_sigil"]
+        or settlement["accounting_capture_event_id"] != capture["event_id"]
+        or settlement["accounting_capture_event_sigil"] != capture["event_sigil"]
+        or not (
+            accounting_capture_event["sequence"] < terminal["terminal_sequence"]
+            < budget_settlement_event["sequence"]
+        )
+        or budget_settlement_event["sequence"]
+        > state["journal_binding"]["through_sequence"]
+    ):
+        _fail("Supplied Sanctum Assurance Claim disagrees with terminal Attempt facts")
+
+
 def _validate_attempt_authorization_subject_v1(subject: dict[str, Any]) -> None:
     """Validate the local, immutable portion of one authorization Subject."""
     validate_instance("attempt-authorization-subject-1.0.json", subject)
