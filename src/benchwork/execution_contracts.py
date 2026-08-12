@@ -869,6 +869,45 @@ def validate_execution_state_supplied_recovery_action_set_v1(
         _fail("Execution State Recovery projection disagrees with supplied action set")
 
 
+def validate_execution_recovery_action_supplied_event_v1(
+    action_set: dict[str, Any], event: dict[str, Any],
+) -> None:
+    """Compare one caller-supplied Event with its frozen Recovery action.
+
+    Causation, idempotency, durable action-set retrieval, and the Event's
+    business postcondition remain external authorities; this only checks the
+    closed action-to-envelope relation RFC-0012 assigns to replay.
+    """
+    validate_execution_recovery_action_set_v1(action_set)
+    validate_execution_journal_event_v1(event)
+    binding = event["recovery_action_binding"]
+    if binding is None:
+        _fail("Recovery action Event lacks a Recovery action binding")
+    if (
+        binding["recovery_id"] != action_set["recovery_id"]
+        or binding["phase"] != action_set["phase"]
+        or binding["action_set_sigil"] != action_set["action_set_sigil"]
+    ):
+        _fail("Recovery action Event binding disagrees with supplied action set")
+    ordinal = binding["action_ordinal"]
+    if ordinal >= len(action_set["actions"]):
+        _fail("Recovery action Event ordinal is outside supplied action set")
+    action = action_set["actions"][ordinal]
+    if (
+        event["event_id"] != action["target_event_id"]
+        or event["sequence"] != action["target_sequence"]
+        or event["event_type"] != action["target_event_type"]
+    ):
+        _fail("Recovery action Event envelope disagrees with supplied action")
+    expected_revision = [{
+        "entity_kind": action["entity_kind"], "entity_id": action["entity_id"],
+        "preceding_revision": action["expected_revision"],
+        "next_revision": action["expected_revision"] + 1,
+    }]
+    if event["entity_revisions"] != expected_revision:
+        _fail("Recovery action Event revision effect disagrees with supplied action")
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([

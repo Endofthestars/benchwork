@@ -45,6 +45,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
+    validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
     validate_execution_root_hold_release_authorization_v1,
     validate_execution_control_evidence_set_v1,
@@ -211,6 +212,33 @@ def _recovery_action_set() -> dict[str, Any]:
     }
     action_set["action_set_sigil"] = content_sigil(action_set)
     return action_set
+
+
+def _recovery_action_event(action_set: dict[str, Any]) -> dict[str, Any]:
+    action = action_set["actions"][0]
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
+        "event_id": action["target_event_id"], "sequence": action["target_sequence"],
+        "event_type": action["target_event_type"], "executor_instance_id": "XI-ONE",
+        "executor_epoch": 1, "executor_build_sigil": SIGIL,
+        "recorded_at": "2026-08-06T00:00:02Z", "observed_at": None,
+        "entity_revisions": [{"entity_kind": action["entity_kind"], "entity_id": action["entity_id"],
+                              "preceding_revision": action["expected_revision"],
+                              "next_revision": action["expected_revision"] + 1}],
+        "causation_event_id": "JE-TWO", "idempotency_key_sigil": None,
+        "recovery_action_binding": {"recovery_id": action_set["recovery_id"],
+                                    "phase": action_set["phase"],
+                                    "action_set_sigil": action_set["action_set_sigil"],
+                                    "action_ordinal": action["ordinal"]},
+        "payload": {"transition_cause": {"code": "JOB_DEADLINE",
+                                            "trigger_kind": "RECOVERY_DERIVATION",
+                                            "trigger_event_id": action["target_event_id"],
+                                            "effective_sequence": action["target_sequence"],
+                                            "evidence_sigil": SIGIL}, "request_binding": None},
+        "previous_event_sigil": SIGIL_B,
+    }
+    event["event_sigil"] = content_sigil(event)
+    return event
 
 
 def _owner() -> dict[str, Any]:
@@ -751,6 +779,20 @@ def test_active_recovery_projection_matches_one_supplied_action_set() -> None:
     })
     with pytest.raises(Exception, match="disagrees with supplied"):
         validate_execution_state_supplied_recovery_action_set_v1(state, wrong_set)
+
+
+def test_recovery_action_event_matches_its_supplied_frozen_envelope() -> None:
+    action_set = _recovery_action_set()
+    event = _recovery_action_event(action_set)
+    validate_execution_recovery_action_supplied_event_v1(action_set, event)
+
+    wrong_envelope = deepcopy(event)
+    wrong_envelope["event_id"] = "JE-WRONG"
+    wrong_envelope["event_sigil"] = content_sigil({
+        key: member for key, member in wrong_envelope.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="envelope disagrees"):
+        validate_execution_recovery_action_supplied_event_v1(action_set, wrong_envelope)
 
 
 def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
