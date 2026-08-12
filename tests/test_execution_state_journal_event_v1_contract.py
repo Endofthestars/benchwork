@@ -21,6 +21,7 @@ from benchwork.execution_contracts import (
     load_execution_observation_evidence_v1,
     load_execution_request_v1,
     load_execution_result_ingress_receipt_v1,
+    load_execution_recovery_action_set_v1,
     load_execution_state_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
@@ -30,6 +31,7 @@ from benchwork.execution_contracts import (
     validate_execution_initial_state_supplied_facts_v1,
     validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
+    validate_execution_recovery_action_set_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -141,6 +143,24 @@ def _clock_uncertain_event(initial: dict[str, Any]) -> dict[str, Any]:
     }
     event["event_sigil"] = content_sigil(event)
     return event
+
+
+def _recovery_action_set() -> dict[str, Any]:
+    action_set = {
+        "schema_version": "execution-recovery-action-set/1.0", "recovery_id": "RY-ONE",
+        "phase": "STARTED", "derived_from_journal_id": "EJ-ONE",
+        "derived_through_sequence": 2, "derived_through_event_sigil": SIGIL,
+        "supersedes_action_set_sigil": None,
+        "actions": [{
+            "ordinal": 0, "action_kind": "COMMIT_DUE_EVENT", "entity_kind": "JOB",
+            "entity_id": "JB-ONE", "expected_revision": 0, "target_event_id": "JE-FOUR",
+            "target_sequence": 4, "target_event_type": "job.stop_latched",
+            "prerequisite_event_ids": ["JE-ONE", "JE-TWO"],
+            "parameters": {"deadline_kind": "JOB_DEADLINE", "due_at": STAMP, "deadline_entity_id": "JB-ONE"},
+        }],
+    }
+    action_set["action_set_sigil"] = content_sigil(action_set)
+    return action_set
 
 
 def _owner() -> dict[str, Any]:
@@ -335,6 +355,49 @@ def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
     raw = (FIXTURES / "execution-state-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_state_v1(raw)
+
+
+def test_recovery_action_set_is_strictly_sealed_and_ordered() -> None:
+    action_set = _recovery_action_set()
+    assert load_execution_recovery_action_set_v1(json.dumps(action_set)) == action_set
+
+    bad_ordinal = deepcopy(action_set)
+    bad_ordinal["actions"][0]["ordinal"] = 1
+    bad_ordinal["action_set_sigil"] = content_sigil(
+        {key: member for key, member in bad_ordinal.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="ordinals must be contiguous"):
+        validate_execution_recovery_action_set_v1(bad_ordinal)
+
+    bad_target = deepcopy(action_set)
+    bad_target["actions"][0]["target_sequence"] = 5
+    bad_target["action_set_sigil"] = content_sigil(
+        {key: member for key, member in bad_target.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="target sequence"):
+        validate_execution_recovery_action_set_v1(bad_target)
+
+    stale_sigil = deepcopy(action_set)
+    stale_sigil["actions"][0]["expected_revision"] = 1
+    with pytest.raises(Exception, match="self-Sigil"):
+        validate_execution_recovery_action_set_v1(stale_sigil)
+
+    unordered_prerequisites = deepcopy(action_set)
+    unordered_prerequisites["actions"][0]["prerequisite_event_ids"].reverse()
+    unordered_prerequisites["action_set_sigil"] = content_sigil(
+        {key: member for key, member in unordered_prerequisites.items() if key != "action_set_sigil"}
+    )
+    with pytest.raises(Exception, match="prerequisite Event IDs"):
+        validate_execution_recovery_action_set_v1(unordered_prerequisites)
+
+    two_actions = deepcopy(action_set)
+    second = deepcopy(two_actions["actions"][0])
+    second.update({"ordinal": 1, "target_event_id": "JE-FIVE", "target_sequence": 5})
+    two_actions["actions"].append(second)
+    two_actions["action_set_sigil"] = content_sigil(
+        {key: member for key, member in two_actions.items() if key != "action_set_sigil"}
+    )
+    validate_execution_recovery_action_set_v1(two_actions)
 
 
 def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:

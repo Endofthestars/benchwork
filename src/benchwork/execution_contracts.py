@@ -614,6 +614,33 @@ def replay_execution_journal_prefix_v1(
     _fail("Execution Journal replay reducer is unavailable for later Events")
 
 
+def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> None:
+    """Validate a frozen Recovery action set without deriving or executing it."""
+    validate_instance("execution-recovery-action-set-1.0.json", action_set)
+    _check_nfc(action_set)
+    if action_set["action_set_sigil"] != content_sigil(
+        _without(action_set, "action_set_sigil")
+    ):
+        _fail("Execution Recovery action-set self-Sigil mismatch")
+    actions = action_set["actions"]
+    if [action["ordinal"] for action in actions] != list(range(len(actions))):
+        _fail("Execution Recovery action ordinals must be contiguous from zero")
+    for action in actions:
+        if action["target_sequence"] != action_set["derived_through_sequence"] + 2 + action["ordinal"]:
+            _fail("Execution Recovery action target sequence disagrees with ordinal")
+        prerequisites = action["prerequisite_event_ids"]
+        if prerequisites != sorted(
+            prerequisites, key=lambda value: _unsigned_ascii(value, "Recovery prerequisite Event ID")
+        ):
+            _fail("Execution Recovery prerequisite Event IDs are not unsigned-ASCII sorted")
+
+
+def load_execution_recovery_action_set_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    action_set = _load_strict_object(raw, "Execution Recovery action set")
+    validate_execution_recovery_action_set_v1(action_set)
+    return action_set
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([
