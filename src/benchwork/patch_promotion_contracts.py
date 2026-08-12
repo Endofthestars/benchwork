@@ -209,6 +209,35 @@ def load_patch_promotion_mutation_intent_v1(raw: str | bytes | bytearray) -> dic
     return intent
 
 
+def validate_patch_promotion_target_guard_v1(guard: dict[str, Any]) -> None:
+    """Validate local target-guard invariants without asserting physical ownership."""
+    validate_instance("patch-promotion-target-guard-1.0.json", guard)
+    _check_nfc(guard)
+    if guard["guard_sigil"] != content_sigil(_without(guard, "guard_sigil")):
+        _fail("Patch Promotion Target Guard self-Sigil mismatch")
+    anchors = (guard["clock_anchor_evidence_sigil"], guard["original_remaining_ns"])
+    if any(value is None for value in anchors) and not all(value is None for value in anchors):
+        _fail("Patch Promotion Target Guard anchor fields must be jointly null or present")
+    times = (guard["acquired_at"], guard["expires_at"])
+    if any(value is None for value in times) and not all(value is None for value in times):
+        _fail("Patch Promotion Target Guard acquisition times must be jointly null or present")
+    if times[0] is not None and _time(times[1]) < _time(times[0]):
+        _fail("Patch Promotion Target Guard expires before acquisition")
+    active = {"HELD", "RENEWING", "RELEASING", "FENCING", "RECOVERING"}
+    if guard["state"] in active and (any(value is None for value in anchors) or any(value is None for value in times)):
+        _fail("Patch Promotion active Target Guard lacks a deadline anchor")
+    if guard["fence_floor"] > guard["fencing_generation"]:
+        _fail("Patch Promotion Target Guard fence floor exceeds fencing generation")
+    if guard["state"] == "NONE" and any((guard["backend_generation"], *anchors, *times)):
+        _fail("Patch Promotion empty Target Guard has active physical fields")
+
+
+def load_patch_promotion_target_guard_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    guard = _load_strict_object(raw, "Patch Promotion Target Guard")
+    validate_patch_promotion_target_guard_v1(guard)
+    return guard
+
+
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate one closed self-authenticating Promotion Journal Event."""
     validate_instance("patch-promotion-journal-event-1.0.json", event)
