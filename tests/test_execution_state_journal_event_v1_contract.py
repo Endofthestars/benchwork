@@ -48,6 +48,7 @@ from benchwork.execution_contracts import (
     validate_execution_recovery_action_set_supplied_prefix_v1,
     validate_execution_recovery_start_supplied_action_set_v1,
     validate_execution_recovery_phase_advance_supplied_action_sets_v1,
+    validate_execution_recovery_rebase_supplied_action_sets_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
@@ -948,6 +949,62 @@ def test_recovery_phase_advance_binds_state_and_sealed_action_sets() -> None:
     with pytest.raises(Exception, match="phase advance disagrees"):
         validate_execution_recovery_phase_advance_supplied_action_sets_v1(
             state, event, completed_set, wrong_next,
+        )
+
+
+def test_recovery_rebase_binds_state_and_sealed_action_sets() -> None:
+    prior_set = _recovery_action_set()
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["journal_binding"] = {
+        "journal_id": "EJ-ONE", "through_sequence": 3, "through_event_id": "JE-THREE",
+        "through_event_sigil": SIGIL_B,
+    }
+    state["executor"].update({
+        "revision": 2, "clock_state": "UNCERTAIN", "clock_uncertain_event_id": "JE-TWO",
+        "active_recovery_id": "RY-ONE", "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B,
+    })
+    state["recoveries"] = [{
+        "recovery_id": "RY-ONE", "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": prior_set["action_set_sigil"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B,
+    }]
+    _reseal_state(state)
+    replacement_set = deepcopy(prior_set)
+    replacement_set["supersedes_action_set_sigil"] = prior_set["action_set_sigil"]
+    replacement_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in replacement_set.items() if key != "action_set_sigil"
+    })
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
+        "event_id": "JE-FOUR", "sequence": 4, "event_type": "recovery.action_set_rebased",
+        "executor_instance_id": "XI-ONE", "executor_epoch": 1, "executor_build_sigil": SIGIL,
+        "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
+        "entity_revisions": [{"entity_kind": "RECOVERY", "entity_id": "RY-ONE",
+                              "preceding_revision": 0, "next_revision": 1}],
+        "causation_event_id": None, "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"recovery_id": "RY-ONE", "phase": "STARTED",
+                    "prior_action_set_sigil": prior_set["action_set_sigil"],
+                    "replacement_action_set_sigil": replacement_set["action_set_sigil"],
+                    "reason_event_id": "JE-TWO", "new_epoch": 1,
+                    "carried_completion_event_ids": []},
+        "previous_event_sigil": SIGIL_B,
+    }
+    event["event_sigil"] = content_sigil({key: member for key, member in event.items() if key != "event_sigil"})
+    validate_execution_recovery_rebase_supplied_action_sets_v1(
+        state, event, prior_set, replacement_set,
+    )
+
+    wrong_replacement = deepcopy(replacement_set)
+    wrong_replacement["supersedes_action_set_sigil"] = SIGIL
+    wrong_replacement["action_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_replacement.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="rebase disagrees"):
+        validate_execution_recovery_rebase_supplied_action_sets_v1(
+            state, event, prior_set, wrong_replacement,
         )
 
 

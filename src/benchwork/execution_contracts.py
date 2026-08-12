@@ -961,6 +961,51 @@ def validate_execution_recovery_phase_advance_supplied_action_sets_v1(
         _fail("Execution Recovery phase advance disagrees with supplied State or action sets")
 
 
+def validate_execution_recovery_rebase_supplied_action_sets_v1(
+    state: dict[str, Any], event: dict[str, Any], prior_action_set: dict[str, Any],
+    replacement_action_set: dict[str, Any],
+) -> None:
+    """Check one Recovery rebase against supplied State and sealed action sets.
+
+    This verifies closed bindings only.  It does not determine whether carried
+    completion events remain valid, derive replacement actions, or establish
+    durable/current action-set availability.
+    """
+    validate_execution_state_v1(state)
+    validate_execution_journal_event_v1(event)
+    validate_execution_recovery_action_set_v1(prior_action_set)
+    validate_execution_recovery_action_set_v1(replacement_action_set)
+    active_recovery_id = state["executor"]["active_recovery_id"]
+    if active_recovery_id is None:
+        _fail("Execution Recovery rebase requires an active Recovery")
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    payload = event["payload"]
+    expected_revision = [{
+        "entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
+        "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1,
+    }]
+    if (
+        event["event_type"] != "recovery.action_set_rebased"
+        or event["recovery_action_binding"] is not None
+        or event["journal_id"] != state["journal_binding"]["journal_id"]
+        or event["sequence"] != state["journal_binding"]["through_sequence"] + 1
+        or event["previous_event_sigil"] != state["journal_binding"]["through_event_sigil"]
+        or event["entity_revisions"] != expected_revision
+        or payload["recovery_id"] != recovery["recovery_id"]
+        or payload["phase"] != recovery["state"]
+        or payload["prior_action_set_sigil"] != recovery["current_action_set_sigil"]
+        or payload["prior_action_set_sigil"] != prior_action_set["action_set_sigil"]
+        or prior_action_set["recovery_id"] != recovery["recovery_id"]
+        or prior_action_set["phase"] != recovery["state"]
+        or payload["replacement_action_set_sigil"] != replacement_action_set["action_set_sigil"]
+        or replacement_action_set["recovery_id"] != recovery["recovery_id"]
+        or replacement_action_set["phase"] != recovery["state"]
+        or replacement_action_set["supersedes_action_set_sigil"] != prior_action_set["action_set_sigil"]
+        or payload["new_epoch"] != event["executor_epoch"]
+    ):
+        _fail("Execution Recovery rebase disagrees with supplied State or action sets")
+
+
 def validate_execution_state_supplied_recovery_action_set_v1(
     state: dict[str, Any], action_set: dict[str, Any],
 ) -> None:
