@@ -1245,6 +1245,27 @@ def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) ->
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Freeze the terminal-source disposition before cleanup progresses."""
+    if len(state["attempts"]) != 1:
+        _fail("Attempt cleaning reducer requires one draining Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "attempt.cleaning" or attempt["state"] != "DRAINING"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or attempt["terminal_source_binding"] is not None
+    ):
+        _fail("Attempt cleaning Event disagrees with draining Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "CLEANING",
+        "terminal_source_binding": payload["terminal_source_binding"], "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1294,6 +1315,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_result_accepted_v1(current, event, evidence, receipt)
         elif event["event_type"] == "attempt.draining":
             current = _reduce_attempt_draining_v1(current, event)
+        elif event["event_type"] == "attempt.cleaning":
+            current = _reduce_attempt_cleaning_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

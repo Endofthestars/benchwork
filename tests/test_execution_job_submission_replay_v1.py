@@ -416,6 +416,11 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     with pytest.raises(AthanorError, match="disagrees"):
         replay_execution_supplied_state_suffix_v1(accepted_state, [wrong_draining])
 
+    cleaning = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-FOURTEEN", "sequence": 14, "event_type": "attempt.cleaning", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 9, "next_revision": 10}], "causation_event_id": draining["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"log_closure_sigil": SIGIL, "output_closure_sigil": SIGIL, "termination_evidence_sigil": SIGIL, "quarantine_plan_sigil": SIGIL, "terminal_source_binding": {"kind": "NOT_APPLICABLE"}}, "previous_event_sigil": draining["event_sigil"]})
+    cleaning_state = replay_execution_supplied_state_suffix_v1(draining_state, [cleaning])
+    assert cleaning_state["attempts"][0]["state"] == "CLEANING"
+    assert cleaning_state["attempts"][0]["terminal_source_binding"] == {"kind": "NOT_APPLICABLE"}
+
     malformed = deepcopy(ingress)
     malformed["payload"]["result_sigil"] = "sha256:" + "b" * 64
     malformed = build_execution_journal_event_v1({key: value for key, value in malformed.items() if key != "event_sigil"})
