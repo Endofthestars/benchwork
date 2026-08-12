@@ -577,6 +577,12 @@ def _validate_reason_order_and_local_predicates(outcome: dict[str, Any]) -> None
                 and completion["sequence"] > outcome["job_terminal"]["event_sequence"]
             )
         )
+        required_predicates["AUTHORITY_LOST_BEFORE_COMPLETION"] = (
+            completion["kind"] != "NOT_ESTABLISHED"
+            and outcome["first_stop_or_fence_binding"]["kind"] == "PRESENT"
+            and outcome["first_stop_or_fence_binding"]["effective_sequence"]
+            <= completion["sequence"]
+        )
         selected_succeeded = summary["terminal_state"] == "SUCCEEDED"
         required_predicates["WORKER_SESSION_EVIDENCE_MISSING"] = (
             selected_succeeded

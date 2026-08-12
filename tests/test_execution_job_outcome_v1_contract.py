@@ -322,6 +322,30 @@ def test_selected_attempt_direct_copies_and_observation_reconstruction() -> None
     ] == observation["members"]
 
 
+def test_selected_outcome_cannot_omit_locally_evident_authority_loss() -> None:
+    outcome, _ = _selected()
+    completion = {
+        "kind": "NO_RESULT", "event_id": "JE-DRAINING",
+        "event_sigil": "sha256:" + "7" * 64, "sequence": 8,
+        "process_exit_observation_sigil": "sha256:" + "6" * 64,
+    }
+    outcome["completion_anchor_binding"] = completion
+    outcome["selected_attempt_binding"]["completion_anchor_binding"] = completion
+    outcome["ineligibility_reasons"] = [
+        "JOB_NOT_SUCCEEDED", "ATTEMPT_NOT_SUCCEEDED",
+        "AUTHORITY_LOST_BEFORE_COMPLETION", "OUTPUT_INVALID", "ASSURANCE_UNMET",
+        "STORAGE_OBSERVATION_INVALID",
+    ]
+    _seal(outcome)
+    validate_execution_job_outcome_v1(outcome)
+
+    missing_reason = deepcopy(outcome)
+    missing_reason["ineligibility_reasons"].remove("AUTHORITY_LOST_BEFORE_COMPLETION")
+    _seal(missing_reason)
+    with pytest.raises(AthanorError, match="AUTHORITY_LOST_BEFORE_COMPLETION"):
+        validate_execution_job_outcome_v1(missing_reason)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
