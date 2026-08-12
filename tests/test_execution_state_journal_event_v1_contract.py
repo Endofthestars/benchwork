@@ -1186,6 +1186,40 @@ def test_storage_root_manifest_closes_local_owner_and_blob_integrity() -> None:
     with pytest.raises(Exception, match="protection plan"):
         validate_execution_storage_root_manifest_v1(bad_protection)
 
+    committed_blob = deepcopy(manifest)
+    blob = {"blob_sigil": SIGIL_B, "size_bytes": 1}
+    committed_blob["entries"][0]["claimed_blob"] = blob
+    committed_blob["entries"][0]["storage_origin"] = {
+        "kind": "COMMITTED_BLOB",
+        "transfer": {"transfer_id": "ST-ONE", "transfer_attempt_id": "SA-ONE",
+                     "request_record_sigil": SIGIL, "attempt_record_sigil": SIGIL, "terminal_event": {
+            "journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL,
+        }},
+        "provenance_id": "SP-ONE", "provenance_sigil": SIGIL, "blob_record_sigil": SIGIL,
+        "terminal_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1, "event_sigil": SIGIL},
+    }
+    committed_blob["entries"][0]["entry_sigil"] = content_sigil({
+        key: member for key, member in committed_blob["entries"][0].items() if key != "entry_sigil"
+    })
+    committed_blob["blob_refs"] = [blob]
+    committed_blob["protection_plan"] = {
+        "kind": "PLANNED", "reference_set_registration_event_id": "SE-ONE", "hold_id": "SH-ONE",
+        "hold_set_event_id": "SE-TWO", "policy_id": "SP-EXECUTION-ROOT-HOLD-V1", "policy_sigil": SIGIL,
+        "hold_lifetime": {"kind": "OWNER_TERMINAL"},
+    }
+    committed_blob["manifest_sigil"] = content_sigil({
+        key: member for key, member in committed_blob.items() if key != "manifest_sigil"
+    })
+    validate_execution_storage_root_manifest_v1(committed_blob)
+
+    missing_blob = deepcopy(committed_blob)
+    missing_blob["blob_refs"] = []
+    missing_blob["manifest_sigil"] = content_sigil({
+        key: member for key, member in missing_blob.items() if key != "manifest_sigil"
+    })
+    with pytest.raises(Exception, match="Blob refs"):
+        validate_execution_storage_root_manifest_v1(missing_blob)
+
 
 def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None:
     receipt = _receipt()
