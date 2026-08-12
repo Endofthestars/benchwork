@@ -205,6 +205,20 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         _fail("Execution State clock uncertainty gate disagrees with clock state")
     if (executor["active_recovery_id"] is not None) != ("RECOVERY_ACTIVE" in gates):
         _fail("Execution State recovery gate disagrees with active recovery")
+    recovery_ids = [recovery["recovery_id"] for recovery in state["recoveries"]]
+    if len(recovery_ids) != len(set(recovery_ids)):
+        _fail("duplicate Recovery projection identity")
+    active_recoveries = [
+        recovery for recovery in state["recoveries"] if recovery["state"] != "COMPLETED"
+    ]
+    if len(active_recoveries) > 1:
+        _fail("Execution State has more than one active Recovery")
+    active_recovery_id = executor["active_recovery_id"]
+    if active_recovery_id is None:
+        if active_recoveries:
+            _fail("Execution State active Recovery is missing from executor projection")
+    elif len(active_recoveries) != 1 or active_recoveries[0]["recovery_id"] != active_recovery_id:
+        _fail("Execution State executor active Recovery does not match recovery projection")
     worker_ids: set[str] = set()
     for worker in state["workers"]:
         session_ids = worker["worker_session_ids"]

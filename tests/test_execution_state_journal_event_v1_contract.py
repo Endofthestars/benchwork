@@ -413,6 +413,31 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     with pytest.raises(Exception, match="canonical order"):
         load_execution_state_v1(json.dumps(wrong_order))
 
+    recovery = deepcopy(state)
+    recovery_id = "RY-" + "A" * 64
+    recovery["recoveries"] = [{
+        "recovery_id": recovery_id, "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": None, "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }]
+    recovery["executor"]["active_recovery_id"] = recovery_id
+    recovery["executor"]["authority_gates"] = ["RECOVERY_ACTIVE"]
+    _reseal_state(recovery)
+    assert load_execution_state_v1(json.dumps(recovery)) == recovery
+
+    missing_recovery = deepcopy(recovery)
+    missing_recovery["recoveries"] = []
+    _reseal_state(missing_recovery)
+    with pytest.raises(Exception, match="active Recovery does not match"):
+        load_execution_state_v1(json.dumps(missing_recovery))
+
+    unprojected_recovery = deepcopy(recovery)
+    unprojected_recovery["executor"]["active_recovery_id"] = None
+    unprojected_recovery["executor"]["authority_gates"] = []
+    _reseal_state(unprojected_recovery)
+    with pytest.raises(Exception, match="active Recovery is missing"):
+        load_execution_state_v1(json.dumps(unprojected_recovery))
+
     changed_executor = deepcopy(state)
     changed_executor["executor"]["revision"] = 1
     changed_executor["state_sigil"] = content_sigil(
