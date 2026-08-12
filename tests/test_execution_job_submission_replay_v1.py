@@ -10,6 +10,7 @@ import pytest
 
 from benchwork.athanor import AthanorError, canonical_json, content_sigil
 from benchwork.execution_contracts import (
+    build_execution_state_v1,
     build_execution_journal_event_v1,
     derive_observation_evidence_id_v1,
     derive_observation_evidence_subject_sigil_v1,
@@ -153,7 +154,7 @@ def _queued_event(submitted: dict[str, Any]) -> dict[str, Any]:
                     "next_revision": 1,
                 }
             ],
-            "causation_event_id": None,
+            "causation_event_id": submitted["event_id"],
             "idempotency_key_sigil": None,
             "recovery_action_binding": None,
             "payload": {
@@ -206,6 +207,13 @@ def _attempt() -> dict[str, Any]:
         "deadline_due_at": "2026-08-06T00:00:30Z",
         "attempt_binding_sigil": "",
     }
+    attempt["attempt_binding_sigil"] = content_sigil(
+        {key: value for key, value in attempt.items() if key != "attempt_binding_sigil"}
+    )
+    return attempt
+
+
+def _reseal_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
     attempt["attempt_binding_sigil"] = content_sigil(
         {key: value for key, value in attempt.items() if key != "attempt_binding_sigil"}
     )
@@ -462,7 +470,7 @@ def _allocated_event(queued: dict[str, Any], attempt: dict[str, Any]) -> dict[st
                     key=lambda item: item["entity_id"],
                 ),
             ],
-            "causation_event_id": None,
+            "causation_event_id": queued["event_id"],
             "idempotency_key_sigil": None,
             "recovery_action_binding": None,
             "payload": {
@@ -539,6 +547,36 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         "STDERR",
         "STRUCTURED",
     ]
+    future_attempt = _reseal_attempt({
+        **deepcopy(attempt),
+        "attempt_id": "AT-TWO",
+        "retry_ordinal": 2,
+        "fencing_generation": 2,
+        "crucible_id": "CU-TWO",
+        "output_namespace_id": "ON-TWO",
+        "log_stream_ids": {
+            "STDOUT": "LG-FOUR",
+            "STDERR": "LG-FIVE",
+            "STRUCTURED": "LG-SIX",
+        },
+        "created_at": "2026-08-06T00:00:04Z",
+    })
+    assert replay_execution_journal_supplied_facts_v1(
+        [INITIAL, event, queued, allocated],
+        supplied_jobs=[job],
+        supplied_attempts=[attempt, future_attempt],
+    ) == allocated_state
+    unrelated_allocation = deepcopy(allocated)
+    unrelated_allocation["causation_event_id"] = event["event_id"]
+    unrelated_allocation = build_execution_journal_event_v1({
+        key: value for key, value in unrelated_allocation.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="queued Job projection"):
+        replay_execution_journal_supplied_facts_v1(
+            [INITIAL, event, queued, unrelated_allocation],
+            supplied_jobs=[job],
+            supplied_attempts=[attempt],
+        )
     preflight = _preflight_event(allocated)
     preflight_state = replay_execution_journal_prefix_v1(
         [INITIAL, event, queued, allocated, preflight],
@@ -1173,6 +1211,111 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert unmet_state["attempts"][0]["attempt_assurance_binding"]["kind"] == "UNMET"
     assert unmet_state["jobs"][0]["attempt_summaries"][0]["assurance_evaluation_event_sigil"] == unmet_attempt_assurance["event_sigil"]
 
+    retry_state_unsigned = deepcopy(assured_state)
+    retry_state_unsigned.pop("state_sigil")
+    retry_job = retry_state_unsigned["jobs"][0]
+    retry_job.update({
+        "state": "QUEUED",
+        "queue_key": {"ready_sequence": 20, "job_id": JOB_ID},
+    })
+    retry_ledger = {
+        name: {
+            "limit": 2,
+            "reserved": 0,
+            "consumed": 1,
+            "exhaustion_status": "AVAILABLE",
+        }
+        for name in reservation
+    }
+    retry_ledger["budget_ledger_sigil"] = content_sigil(retry_ledger)
+    retry_job["budget_ledger"] = retry_ledger
+    retry_state = build_execution_state_v1(retry_state_unsigned)
+
+    retry_attempt = _reseal_attempt({
+        **deepcopy(attempt),
+        "attempt_id": "AT-TWO",
+        "retry_ordinal": 2,
+        "fencing_generation": 2,
+        "crucible_id": "CU-TWO",
+        "output_namespace_id": "ON-TWO",
+        "log_stream_ids": {
+            "STDOUT": "LG-FOUR",
+            "STDERR": "LG-FIVE",
+            "STRUCTURED": "LG-SIX",
+        },
+        "created_at": "2026-08-06T00:00:04Z",
+    })
+
+    def retry_allocation_event(candidate: dict[str, Any]) -> dict[str, Any]:
+        resulting_ledger = {
+            name: {
+                "limit": 2,
+                "reserved": 1,
+                "consumed": 1,
+                "exhaustion_status": "EXHAUSTED",
+            }
+            for name in reservation
+        }
+        resulting_ledger["budget_ledger_sigil"] = content_sigil(resulting_ledger)
+        return build_execution_journal_event_v1({
+            "schema_version": "execution-journal-event/1.0",
+            "journal_id": INITIAL["journal_id"],
+            "event_id": "JE-RETRYALLOCATED",
+            "sequence": 20,
+            "event_type": "job.attempt_allocated",
+            "executor_instance_id": INITIAL["executor_instance_id"],
+            "executor_epoch": 1,
+            "executor_build_sigil": INITIAL["executor_build_sigil"],
+            "recorded_at": candidate["created_at"],
+            "observed_at": None,
+            "entity_revisions": [
+                {"entity_kind": "JOB", "entity_id": JOB_ID,
+                 "preceding_revision": 4, "next_revision": 5},
+                {"entity_kind": "ATTEMPT", "entity_id": candidate["attempt_id"],
+                 "preceding_revision": None, "next_revision": 0},
+                *[
+                    {"entity_kind": "LOG_STREAM", "entity_id": stream_id,
+                     "preceding_revision": None, "next_revision": 0}
+                    for stream_id in sorted(candidate["log_stream_ids"].values())
+                ],
+            ],
+            "causation_event_id": retry_state["jobs"][0]["last_event_id"],
+            "idempotency_key_sigil": None,
+            "recovery_action_binding": None,
+            "payload": {
+                "attempt_binding_sigil": candidate["attempt_binding_sigil"],
+                "retry_ordinal": 2,
+                "fencing_generation": 2,
+                "prior_fencing_counter": 1,
+                "resulting_fence_floor": 2,
+                "budget_reservation": candidate["budget_reservation"],
+                "resulting_budget_ledger_sigil": resulting_ledger["budget_ledger_sigil"],
+            },
+            "previous_event_sigil": retry_state["journal_binding"]["through_event_sigil"],
+        })
+
+    allocated_retry_state = replay_execution_supplied_state_suffix_v1(
+        retry_state,
+        [retry_allocation_event(retry_attempt)],
+        supplied_attempts=[attempt, retry_attempt],
+    )
+    assert [item["attempt_id"] for item in allocated_retry_state["attempts"]] == [
+        "AT-ONE", "AT-TWO"
+    ]
+
+    for field, old_value in (
+        ("crucible_id", attempt["crucible_id"]),
+        ("output_namespace_id", attempt["output_namespace_id"]),
+        ("log_stream_ids", attempt["log_stream_ids"]),
+    ):
+        reused = _reseal_attempt({**deepcopy(retry_attempt), field: old_value})
+        with pytest.raises(AthanorError, match="queued Job projection"):
+            replay_execution_supplied_state_suffix_v1(
+                retry_state,
+                [retry_allocation_event(reused)],
+                supplied_attempts=[attempt, reused],
+            )
+
     job_assurance = build_execution_journal_event_v1({
         "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
         "event_id": "JE-JOBASSURANCE", "sequence": 20, "event_type": "job.assurance_evaluated",
@@ -1334,6 +1477,45 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
             [INITIAL, event, queued, allocated],
             supplied_jobs=[job],
             supplied_attempts=[wrong_attempt],
+        )
+
+    duplicate_attempt = deepcopy(attempt)
+    duplicate_attempt.update({
+        "attempt_id": "AT-TWO",
+        "retry_ordinal": 2,
+        "fencing_generation": 2,
+        "created_at": "2026-08-06T00:00:04Z",
+    })
+    duplicate_attempt["attempt_binding_sigil"] = content_sigil({
+        key: value for key, value in duplicate_attempt.items() if key != "attempt_binding_sigil"
+    })
+    retry_allocation = deepcopy(allocated)
+    retry_allocation.update({
+        "event_id": "JE-ALLOCATEDTWO", "sequence": 4,
+        "recorded_at": duplicate_attempt["created_at"],
+        "previous_event_sigil": queued["event_sigil"],
+        "entity_revisions": [
+            {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 1, "next_revision": 2},
+            {"entity_kind": "ATTEMPT", "entity_id": "AT-TWO", "preceding_revision": None, "next_revision": 0},
+            *[
+                {"entity_kind": "LOG_STREAM", "entity_id": stream_id, "preceding_revision": None, "next_revision": 0}
+                for stream_id in sorted(duplicate_attempt["log_stream_ids"].values())
+            ],
+        ],
+        "payload": {
+            "attempt_binding_sigil": duplicate_attempt["attempt_binding_sigil"],
+            "retry_ordinal": 2, "fencing_generation": 2, "prior_fencing_counter": 1,
+            "resulting_fence_floor": 2, "budget_reservation": duplicate_attempt["budget_reservation"],
+            "resulting_budget_ledger_sigil": SIGIL,
+        },
+    })
+    retry_allocation["event_sigil"] = content_sigil({
+        key: value for key, value in retry_allocation.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="queued Job projection"):
+        replay_execution_journal_prefix_v1(
+            [INITIAL, event, queued, retry_allocation],
+            supplied_jobs=[job], supplied_attempts=[attempt, duplicate_attempt],
         )
 
     altered = deepcopy(job)

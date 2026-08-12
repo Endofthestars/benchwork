@@ -3010,7 +3010,19 @@ def replay_execution_supplied_state_suffix_v1(
             or event["previous_event_sigil"] != prior["through_event_sigil"]
         ):
             _fail("Execution supplied-state suffix Event does not continue State")
-        if event["event_type"] == "lease.offered":
+        if event["event_type"] == "job.attempt_allocated":
+            if len(event["entity_revisions"]) < 2:
+                _fail("Attempt allocation Event lacks its Attempt revision")
+            attempt = _find_supplied_v1(
+                supplied_attempts,
+                event["entity_revisions"][1]["entity_id"],
+                "attempt_id",
+                "Attempt allocation",
+            )
+            current = _reduce_job_attempt_allocated_v1(
+                current, event, attempt, supplied_attempts
+            )
+        elif event["event_type"] == "lease.offered":
             lease_id = event["entity_revisions"][-1]["entity_id"]
             lease = _find_supplied_v1(supplied_leases, lease_id, "lease_id", "Lease offer")
             current = _reduce_lease_offered_v1(current, event, lease)
@@ -3445,7 +3457,10 @@ def _reserved_budget_ledger_v1(
 
 
 def _reduce_job_attempt_allocated_v1(
-    state: dict[str, Any], event: dict[str, Any], attempt: dict[str, Any]
+    state: dict[str, Any],
+    event: dict[str, Any],
+    attempt: dict[str, Any],
+    immutable_attempts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Atomically allocate one fresh Attempt, budget reservation, and log streams."""
     validate_execution_attempt_v1(attempt)
@@ -3456,6 +3471,34 @@ def _reduce_job_attempt_allocated_v1(
     prior_attempts = state["attempts"]
     prior_attempt_ids = {item["attempt_id"] for item in prior_attempts}
     prior_log_ids = {item["log_stream_id"] for item in state["log_streams"]}
+    if immutable_attempts is not None:
+        for immutable_attempt in immutable_attempts:
+            validate_execution_attempt_v1(immutable_attempt)
+        immutable_by_id = {item["attempt_id"]: item for item in immutable_attempts}
+        if (
+            len(immutable_by_id) != len(immutable_attempts)
+            or immutable_by_id.get(attempt["attempt_id"]) != attempt
+            or set(immutable_by_id) != prior_attempt_ids | {attempt["attempt_id"]}
+            or any(
+                immutable_by_id[prior["attempt_id"]]["attempt_binding_sigil"]
+                != prior["attempt_binding_sigil"]
+                or immutable_by_id[prior["attempt_id"]]["job_id"] != job["job_id"]
+                or immutable_by_id[prior["attempt_id"]]["job_binding_sigil"]
+                != job["job_binding_sigil"]
+                for prior in prior_attempts
+            )
+        ):
+            _fail("Attempt allocation immutable history disagrees with retained State")
+        prior_crucibles = {
+            immutable_by_id[prior["attempt_id"]]["crucible_id"] for prior in prior_attempts
+        }
+        prior_namespaces = {
+            immutable_by_id[prior["attempt_id"]]["output_namespace_id"]
+            for prior in prior_attempts
+        }
+    else:
+        prior_crucibles = set()
+        prior_namespaces = set()
     expected_retry_ordinal = len(prior_attempts) + 1
     if (
         job["state"] != "QUEUED"
@@ -3468,11 +3511,14 @@ def _reduce_job_attempt_allocated_v1(
         or attempt["attempt_id"] in prior_attempt_ids
         or attempt["retry_ordinal"] != expected_retry_ordinal
         or attempt["fencing_generation"] != job["fencing_counter"] + 1
+        or attempt["crucible_id"] in prior_crucibles
+        or attempt["output_namespace_id"] in prior_namespaces
         or any(log_id in prior_log_ids for log_id in attempt["log_stream_ids"].values())
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
         or event["executor_build_sigil"]
         != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != job["last_event_id"]
     ):
         _fail("Attempt allocation disagrees with the queued Job projection")
     payload = event["payload"]
@@ -4148,10 +4194,25 @@ def replay_execution_journal_supplied_facts_v1(
         elif event["event_type"] == "job.queued":
             state = _reduce_job_queued_v1(state, event)
         elif event["event_type"] == "job.attempt_allocated":
-            if supplied_attempts is None or len(supplied_attempts) != 1:
+            if supplied_attempts is None:
                 _fail("Attempt allocation replay requires exactly one supplied immutable record")
-            attempt = supplied_attempts[0]
-            state = _reduce_job_attempt_allocated_v1(state, event, attempt)
+            if len(event["entity_revisions"]) < 2:
+                _fail("Attempt allocation Event lacks its Attempt revision")
+            attempt_id = event["entity_revisions"][1]["entity_id"]
+            attempt = _find_supplied_v1(
+                supplied_attempts, attempt_id, "attempt_id", "Attempt allocation"
+            )
+            visible_attempt_ids = {
+                item["attempt_id"] for item in state["attempts"]
+            } | {attempt_id}
+            allocation_attempts = [
+                item
+                for item in supplied_attempts
+                if item["attempt_id"] in visible_attempt_ids
+            ]
+            state = _reduce_job_attempt_allocated_v1(
+                state, event, attempt, allocation_attempts
+            )
         elif event["event_type"] == "attempt.authorization_bound":
             immutable_attempt = _find_supplied_v1(
                 supplied_attempts,
