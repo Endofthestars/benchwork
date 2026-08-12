@@ -1041,6 +1041,42 @@ def _reduce_lease_offered_v1(state: dict[str, Any], event: dict[str, Any], lease
     return build_execution_state_v1(reduced)
 
 
+def _reduce_lease_claimed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Atomically activate an offered Lease and its READY Attempt."""
+    if len(state["leases"]) != 1 or len(state["attempts"]) != 1 or len(state["worker_sessions"]) != 1:
+        _fail("Lease claim reducer requires one offered Lease, Attempt, and Session")
+    lease, attempt, session = state["leases"][0], state["attempts"][0], state["worker_sessions"][0]
+    executor = state["executor"]
+    payload = event["payload"]
+    expected_revisions = [
+        {"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1},
+        {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
+        {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1},
+    ]
+    if (
+        event["event_type"] != "lease.claimed" or lease["state"] != "OFFERED" or attempt["state"] != "READY"
+        or session["state"] not in {"READY", "BUSY"} or session["capacity"] is None
+        or session["capacity_in_use"] + 1 > session["capacity"]
+        or attempt["lease_id"] != lease["lease_id"] or attempt["worker_session_binding"]["kind"] != "BOUND"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["entity_revisions"] != expected_revisions
+        or payload["claimed_at"] != event["recorded_at"] or _parse_time(payload["claimed_at"]) > _parse_time(lease["claim_due_at"])
+        or payload["session_capacity_after"] != session["capacity_in_use"] + 1
+    ):
+        _fail("Lease claim Event disagrees with offered Lease state")
+    fence = {"journal_id": event["journal_id"], "executor_epoch": lease["executor_epoch"], "job_id": lease["job_id"], "attempt_id": lease["attempt_id"], "lease_id": lease["lease_id"], "fencing_generation": lease["fencing_generation"]}
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "LEASED", "lease_executor_epoch": lease["executor_epoch"], "public_fence_tuple": fence, "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    capacity_after = session["capacity_in_use"] + 1
+    reduced["worker_sessions"] = [{**session, "revision": session["revision"] + 1, "state": "BUSY", "capacity_in_use": capacity_after, "next_heartbeat_due_at": payload["next_heartbeat_due_at"], "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1, "state": "ACTIVE", "expiry_due_at": lease["initial_expiry_due_at"] if "initial_expiry_due_at" in lease else lease["expiry_due_at"], "next_heartbeat_due_at": payload["next_heartbeat_due_at"], "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["deadlines"] = sorted([item for item in state["deadlines"] if not (item["deadline_kind"] == "LEASE_CLAIM_DEADLINE" and item["entity_id"] == lease["lease_id"])] + [
+        {"deadline_kind": "LEASE_EXPIRY", "due_at": lease["expiry_due_at"], "fixed_priority": _DEADLINE_PRIORITY["LEASE_EXPIRY"], "entity_id": lease["lease_id"], "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"]},
+        {"deadline_kind": "HEARTBEAT_TIMEOUT", "due_at": payload["next_heartbeat_due_at"], "fixed_priority": _DEADLINE_PRIORITY["HEARTBEAT_TIMEOUT"], "entity_id": session["worker_session_id"], "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"]},
+    ], key=lambda item: (_parse_time(item["due_at"]), item["fixed_priority"], _unsigned_ascii(item["entity_id"], "Deadline entity ID")))
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1070,6 +1106,8 @@ def replay_execution_supplied_state_suffix_v1(
             lease_id = event["entity_revisions"][-1]["entity_id"]
             lease = _find_supplied_v1(supplied_leases, lease_id, "lease_id", "Lease offer")
             current = _reduce_lease_offered_v1(current, event, lease)
+        elif event["event_type"] == "lease.claimed":
+            current = _reduce_lease_claimed_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

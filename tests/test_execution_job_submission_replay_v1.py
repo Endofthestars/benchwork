@@ -350,6 +350,11 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     offered_state = replay_execution_supplied_state_suffix_v1(combined, [offered], supplied_leases=[lease])
     assert offered_state["leases"][0]["state"] == "OFFERED"
     assert offered_state["attempts"][0]["lease_id"] == lease["lease_id"]
+    claimed = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-EIGHT", "sequence": 8, "event_type": "lease.claimed", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:06Z", "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 0, "next_revision": 1}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"credential_proof_sigil": SIGIL, "claimed_at": "2026-08-06T00:00:06Z", "next_heartbeat_due_at": "2026-08-06T00:00:09Z", "session_capacity_after": 1}, "previous_event_sigil": offered["event_sigil"]})
+    claimed_state = replay_execution_supplied_state_suffix_v1(offered_state, [claimed])
+    assert claimed_state["leases"][0]["state"] == "ACTIVE"
+    assert claimed_state["attempts"][0]["state"] == "LEASED"
+    assert claimed_state["worker_sessions"][0]["capacity_in_use"] == 1
 
     wrong_attempt = deepcopy(attempt)
     wrong_attempt["retry_ordinal"] = 2
