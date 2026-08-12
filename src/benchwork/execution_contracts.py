@@ -603,14 +603,87 @@ def _reduce_executor_clock_uncertain_after_initial_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_recovery_started_after_clock_uncertain_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Reduce the empty-projection Recovery start after the clock gate."""
+    executor = state["executor"]
+    if event["event_type"] != "recovery.started":
+        _fail("internal reducer dispatch does not match Recovery start")
+    if (
+        event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+    ):
+        _fail("Recovery start Event disagrees with replayed Executor identity")
+    if (
+        executor["clock_state"] != "UNCERTAIN"
+        or executor["active_recovery_id"] is not None
+        or executor["authority_gates"] != ["CLOCK_UNCERTAIN"]
+        or state["recoveries"]
+    ):
+        _fail("Recovery start requires the clock-gated initial projection")
+    if event["recovery_action_binding"] is not None:
+        _fail("Recovery start must not carry a Recovery action binding")
+    payload = event["payload"]
+    if (
+        payload["replay_through_sequence"] != state["journal_binding"]["through_sequence"]
+        or payload["replay_through_event_sigil"] != state["journal_binding"]["through_event_sigil"]
+        or payload["old_epoch"] != executor["executor_epoch"]
+        or payload["new_epoch"] != executor["executor_epoch"]
+        or payload["prior_recovery_id"] is not None
+    ):
+        _fail("Recovery start payload disagrees with clock-gated prefix")
+    if any(payload[member] for member in (
+        "nonterminal_job_ids", "nonterminal_attempt_ids", "nonterminal_lease_ids",
+        "nonterminal_worker_session_ids",
+    )):
+        _fail("Recovery start reducer requires empty nonterminal projections")
+    if any(state[member] for member in (
+        "workers", "worker_sessions", "jobs", "attempts", "leases", "log_streams",
+        "deadlines", "idempotency_records",
+    )):
+        _fail("Recovery start reducer requires the initial empty projections")
+    expected_revisions = [
+        {
+            "entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
+            "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1,
+        },
+        {
+            "entity_kind": "RECOVERY", "entity_id": payload["recovery_id"],
+            "preceding_revision": None, "next_revision": 0,
+        },
+    ]
+    if event["entity_revisions"] != expected_revisions:
+        _fail("Recovery start Event has invalid revision effects")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["executor"] = {
+        **executor, "revision": executor["revision"] + 1,
+        "active_recovery_id": payload["recovery_id"],
+        "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }
+    reduced["recoveries"] = [{
+        "recovery_id": payload["recovery_id"], "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": event["event_sigil"],
+        "current_action_set_sigil": payload["initial_action_set_sigil"],
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Verify a v1 Journal prefix and reduce its installed ISR3 suffix only.
+    """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
 
-    Prefix integrity is checked before reducer dispatch.  The only installed
-    reducer is ISR3; a syntactically valid later Event therefore fails closed
-    rather than being interpreted as a no-op or a guessed transition.
+    Prefix integrity is checked before reducer dispatch.  A syntactically valid
+    Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
+    fails closed rather than being interpreted as a no-op or guessed transition.
     """
     if not events:
         _fail("Execution Journal replay requires a nonempty prefix")
@@ -654,10 +727,14 @@ def replay_execution_journal_prefix_v1(
         if head is not None:
             validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
         return initial_state
-    if len(events) == 2 and events[1]["event_type"] == "executor.clock_uncertain":
+    if len(events) >= 2 and events[1]["event_type"] == "executor.clock_uncertain":
         state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
+        if len(events) == 3 and events[2]["event_type"] == "recovery.started":
+            state = _reduce_recovery_started_after_clock_uncertain_v1(state, events[2])
+        elif len(events) != 2:
+            _fail("Execution Journal replay reducer is unavailable for later Events")
         if head is not None:
-            last = events[1]
+            last = events[-1]
             if (
                 head["journal_id"] != state["journal_binding"]["journal_id"]
                 or head["last_sequence"] != last["sequence"]

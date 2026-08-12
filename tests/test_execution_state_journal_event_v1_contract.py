@@ -162,6 +162,38 @@ def _clock_uncertain_event(initial: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
+def _recovery_started_event(clock_uncertain: dict[str, Any]) -> dict[str, Any]:
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": clock_uncertain["journal_id"],
+        "event_id": "JE-THREE", "sequence": 3, "event_type": "recovery.started",
+        "executor_instance_id": clock_uncertain["executor_instance_id"],
+        "executor_epoch": clock_uncertain["executor_epoch"],
+        "executor_build_sigil": clock_uncertain["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:02Z", "observed_at": None,
+        "entity_revisions": [
+            {"entity_kind": "EXECUTOR", "entity_id": clock_uncertain["executor_instance_id"],
+             "preceding_revision": 1, "next_revision": 2},
+            {"entity_kind": "RECOVERY", "entity_id": "RY-ONE",
+             "preceding_revision": None, "next_revision": 0},
+        ],
+        "causation_event_id": None, "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {
+            "recovery_id": "RY-ONE", "prior_recovery_id": None,
+            "replay_through_sequence": 2,
+            "replay_through_event_sigil": clock_uncertain["event_sigil"],
+            "old_epoch": clock_uncertain["executor_epoch"],
+            "new_epoch": clock_uncertain["executor_epoch"],
+            "nonterminal_job_ids": [], "nonterminal_attempt_ids": [],
+            "nonterminal_lease_ids": [], "nonterminal_worker_session_ids": [],
+            "initial_action_set_sigil": SIGIL,
+        },
+        "previous_event_sigil": clock_uncertain["event_sigil"],
+    }
+    event["event_sigil"] = content_sigil(event)
+    return event
+
+
 def _recovery_action_set() -> dict[str, Any]:
     action_set = {
         "schema_version": "execution-recovery-action-set/1.0", "recovery_id": "RY-ONE",
@@ -907,6 +939,25 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     assert reduced["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN"]
     assert reduced["executor"]["clock_uncertain_event_id"] == "JE-TWO"
     assert reduced["journal_binding"]["through_event_sigil"] == clock_uncertain["event_sigil"]
+
+    recovery_started = _recovery_started_event(clock_uncertain)
+    recovered = replay_execution_journal_prefix_v1([event, clock_uncertain, recovery_started])
+    assert recovered["executor"]["active_recovery_id"] == "RY-ONE"
+    assert recovered["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
+    assert recovered["recoveries"] == [{
+        "recovery_id": "RY-ONE", "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": recovery_started["event_sigil"],
+        "current_action_set_sigil": SIGIL, "last_event_id": "JE-THREE",
+        "last_event_sigil": recovery_started["event_sigil"],
+    }]
+
+    mismatched_prefix = deepcopy(recovery_started)
+    mismatched_prefix["payload"]["replay_through_sequence"] = 1
+    mismatched_prefix["event_sigil"] = content_sigil({
+        key: member for key, member in mismatched_prefix.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="payload disagrees"):
+        replay_execution_journal_prefix_v1([event, clock_uncertain, mismatched_prefix])
 
     changed_anchor = deepcopy(clock_uncertain)
     changed_anchor["payload"]["last_trusted_utc"] = "2026-08-06T00:00:01Z"
