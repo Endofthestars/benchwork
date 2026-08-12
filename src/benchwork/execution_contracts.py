@@ -511,6 +511,8 @@ def replay_execution_journal_prefix_v1(
     """
     if not events:
         _fail("Execution Journal replay requires a nonempty prefix")
+    if not all(isinstance(event, dict) for event in events):
+        _fail("Execution Journal replay prefix contains a nonobject Event")
     journal_id = events[0].get("journal_id")
     previous_sigil: str | None = None
     for expected_sequence, event in enumerate(events, 1):

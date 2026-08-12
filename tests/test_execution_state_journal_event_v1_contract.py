@@ -483,6 +483,10 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     validate_execution_initial_state_supplied_facts_v1(event, state, head)
     assert replay_execution_initial_prefix_v1([event], head=head) == state
     assert replay_execution_journal_prefix_v1([event], head=head) == state
+    with pytest.raises(Exception, match="nonempty prefix"):
+        replay_execution_journal_prefix_v1([])
+    with pytest.raises(Exception, match="nonobject Event"):
+        replay_execution_journal_prefix_v1([event, None])  # type: ignore[list-item]
     with pytest.raises(Exception, match="only the initial one-Event prefix"):
         replay_execution_initial_prefix_v1([event, event])
     with pytest.raises(Exception, match="sequence gap"):
