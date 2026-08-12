@@ -252,6 +252,9 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
                 or record["backend"]["backend_id"] != record["object"]["backend_id"]
             ):
                 _fail("Artifact Storage State Replica object disagrees with record")
+    for quarantine in state["quarantines"]:
+        if quarantine["record_sigil"] != content_sigil(_without(quarantine, "record_sigil")):
+            _fail("Artifact Storage State Quarantine record self-Sigil mismatch")
     for request in state["transfer_requests"]:
         selected = request["selected_attempt_id"]
         if selected is not None and selected not in request["attempt_ids"]:
@@ -263,6 +266,19 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
     if len(set(open_intent_ids)) != len(open_intent_ids):
         _fail("Artifact Storage State open-intent IDs must be globally unique")
+    availability_counts = {
+        "AVAILABLE": 0, "DEGRADED": 0, "UNAVAILABLE": 0, "INCIDENT": 0,
+    }
+    for wrapper in state["blobs"]:
+        availability_counts[wrapper["record"]["availability"]] += 1
+    expected_availability_counters = {
+        "available_blobs": availability_counts["AVAILABLE"],
+        "degraded_blobs": availability_counts["DEGRADED"],
+        "unavailable_blobs": availability_counts["UNAVAILABLE"],
+        "incident_blobs": availability_counts["INCIDENT"],
+    }
+    if state["availability_counters"] != expected_availability_counters:
+        _fail("Artifact Storage State availability counters disagree with Blob records")
 
 
 def load_artifact_storage_state_v1(raw: str | bytes | bytearray) -> dict[str, Any]:

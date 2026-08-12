@@ -336,3 +336,32 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="Replica object disagrees"):
         validate_artifact_storage_state_v1(wrong_replica)
+
+    blob_state = deepcopy(state)
+    blob = {
+        "schema_version": "artifact-blob/1.0", "blob_sigil": SIGIL, "size_bytes": 0,
+        "first_verified_at": None, "availability": "AVAILABLE",
+        "availability_as_of": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                              "event_sigil": SIGIL}, "availability_basis_sigil": SIGIL,
+        "effective_policy_set_sigil": SIGIL, "next_verification_due_at": None,
+        "known_replica_ids": [], "eligible_replica_ids": [], "integrity_event_sigils": [],
+        "media_type_observations": [], "filename_observations": [], "revision": 1,
+        "record_sigil": "",
+    }
+    blob["record_sigil"] = content_sigil({
+        key: member for key, member in blob.items() if key != "record_sigil"
+    })
+    blob_state["blobs"] = [{"record": blob, "last_event_sigil": SIGIL}]
+    blob_state["availability_counters"]["available_blobs"] = 1
+    blob_state["state_sigil"] = content_sigil({
+        key: member for key, member in blob_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(blob_state)
+
+    bad_counters = deepcopy(blob_state)
+    bad_counters["availability_counters"]["available_blobs"] = 0
+    bad_counters["state_sigil"] = content_sigil({
+        key: member for key, member in bad_counters.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="availability counters disagree"):
+        validate_artifact_storage_state_v1(bad_counters)
