@@ -3054,13 +3054,13 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_result_ingress_received_v1(current, event, receipt, intent)
         elif event["event_type"] == "attempt.result_accepted":
             evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"]["observation_evidence_disposition_binding"]["observation_evidence_id"], "observation_evidence_id", "Result acceptance")
-            intake = current["attempts"][0]["result_intake"]
+            intake = _current_attempt_v1(current, "Result acceptance dispatch")["result_intake"]
             receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result acceptance")
             current = _reduce_result_accepted_v1(current, event, evidence, receipt)
         elif event["event_type"] == "attempt.result_rejected":
             if event["payload"].get("disposition_kind") == "FIRST_DISPOSITION_REJECTION":
                 evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"].get("observation_evidence_disposition_binding", {}).get("observation_evidence_id", ""), "observation_evidence_id", "Result rejection")
-                intake = current["attempts"][0]["result_intake"]
+                intake = _current_attempt_v1(current, "Result rejection dispatch")["result_intake"]
                 receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result rejection")
                 current = _reduce_result_rejected_v1(current, event, evidence, receipt)
             else:
