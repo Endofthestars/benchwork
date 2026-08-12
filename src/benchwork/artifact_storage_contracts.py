@@ -775,6 +775,14 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     replicas = {
         wrapper["record"]["replica_id"]: wrapper["record"] for wrapper in state["replicas"]
     }
+    replica_ids_by_blob: dict[str, list[str]] = {}
+    for replica in replicas.values():
+        replica_ids_by_blob.setdefault(replica["blob_sigil"], []).append(replica["replica_id"])
+    for wrapper in state["blobs"]:
+        blob = wrapper["record"]
+        expected_known = sorted(replica_ids_by_blob.get(blob["blob_sigil"], []))
+        if blob["known_replica_ids"] != expected_known:
+            _fail("Artifact Storage Blob known Replicas disagree with State Replica projections")
     for wrapper in state["transfer_attempts"]:
         attempt = wrapper["record"]
         if attempt["state"] != "COMMITTED":

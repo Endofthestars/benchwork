@@ -1194,6 +1194,39 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     validate_artifact_storage_state_v1(blob_state)
 
+    linked_blob_state = deepcopy(blob_state)
+    linked_replica = deepcopy(replica)
+    linked_replica["state"] = "AVAILABLE"
+    linked_replica["verification"] = {
+        "method": "FULL_READBACK_SHA256", "evidence_sigil": SIGIL,
+        "verified_at": STAMP, "next_due_at": None,
+    }
+    linked_replica["record_sigil"] = content_sigil({
+        key: member for key, member in linked_replica.items() if key != "record_sigil"
+    })
+    linked_blob_state["replicas"] = [{"record": linked_replica, "last_event_sigil": SIGIL}]
+    linked_blob_state["blobs"][0]["record"]["known_replica_ids"] = ["SR-ONE"]
+    linked_blob_state["blobs"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in linked_blob_state["blobs"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    linked_blob_state["state_sigil"] = content_sigil({
+        key: member for key, member in linked_blob_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(linked_blob_state)
+
+    missing_known = deepcopy(linked_blob_state)
+    missing_known["blobs"][0]["record"]["known_replica_ids"] = []
+    missing_known["blobs"][0]["record"]["record_sigil"] = content_sigil({
+        key: member for key, member in missing_known["blobs"][0]["record"].items()
+        if key != "record_sigil"
+    })
+    missing_known["state_sigil"] = content_sigil({
+        key: member for key, member in missing_known.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="known Replicas disagree"):
+        validate_artifact_storage_state_v1(missing_known)
+
     bad_counters = deepcopy(blob_state)
     bad_counters["availability_counters"]["available_blobs"] = 0
     bad_counters["state_sigil"] = content_sigil({
