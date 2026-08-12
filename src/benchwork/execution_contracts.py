@@ -58,6 +58,8 @@ _ENTITY_KIND_ORDER = (
     "EXECUTOR", "RECOVERY", "WORKER", "WORKER_SESSION", "JOB", "ATTEMPT", "LEASE", "LOG_STREAM",
 )
 _ENTITY_KIND_RANK = {value: rank for rank, value in enumerate(_ENTITY_KIND_ORDER)}
+_AUTHORITY_GATE_ORDER = ("INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "RECOVERY_ACTIVE")
+_AUTHORITY_GATE_RANK = {value: rank for rank, value in enumerate(_AUTHORITY_GATE_ORDER)}
 _EXECUTION_REQUEST_SCHEMAS_V1 = {
     "start": "execution-start-request-1.0.json",
     "observe": "execution-observe-request-1.0.json",
@@ -195,6 +197,14 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     build = state["executor"]["executor_build_binding"]
     if build["executor_build_sigil"] != content_sigil(_without(build, "executor_build_sigil")):
         _fail("Execution State executor build self-Sigil mismatch")
+    executor = state["executor"]
+    gates = executor["authority_gates"]
+    if gates != sorted(gates, key=_AUTHORITY_GATE_RANK.__getitem__):
+        _fail("Execution State authority gates are not in canonical order")
+    if (executor["clock_state"] == "UNCERTAIN") != ("CLOCK_UNCERTAIN" in gates):
+        _fail("Execution State clock uncertainty gate disagrees with clock state")
+    if (executor["active_recovery_id"] is not None) != ("RECOVERY_ACTIVE" in gates):
+        _fail("Execution State recovery gate disagrees with active recovery")
     worker_ids: set[str] = set()
     for session in state["worker_sessions"]:
         session_id = session["worker_session_id"]

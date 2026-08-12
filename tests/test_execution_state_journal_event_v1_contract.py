@@ -311,6 +311,22 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     with pytest.raises(Exception, match="executor build self-Sigil"):
         load_execution_state_v1(json.dumps(tampered))
 
+    wrong_gate = deepcopy(state)
+    wrong_gate["executor"]["authority_gates"] = ["CLOCK_UNCERTAIN"]
+    wrong_gate["state_sigil"] = content_sigil(
+        {key: member for key, member in wrong_gate.items() if key != "state_sigil"}
+    )
+    with pytest.raises(Exception, match="clock uncertainty gate"):
+        load_execution_state_v1(json.dumps(wrong_gate))
+
+    wrong_order = deepcopy(state)
+    wrong_order["executor"]["authority_gates"] = ["RECOVERY_ACTIVE", "INTEGRITY_FAILURE"]
+    wrong_order["state_sigil"] = content_sigil(
+        {key: member for key, member in wrong_order.items() if key != "state_sigil"}
+    )
+    with pytest.raises(Exception, match="canonical order"):
+        load_execution_state_v1(json.dumps(wrong_order))
+
     changed_executor = deepcopy(state)
     changed_executor["executor"]["revision"] = 1
     changed_executor["state_sigil"] = content_sigil(
