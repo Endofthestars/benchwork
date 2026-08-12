@@ -480,10 +480,14 @@ def test_retry_requires_same_id_and_identical_canonical_record() -> None:
     "raw",
     [
         b'\xff\xfe{\x00}\x00',
+        b'\xef\xbb\xbf{}',
         b'{"schema_version":"execution-job-outcome/1.0","schema_version":"x"}',
+        b'{"outer":{"member":1,"member":2}}',
         b'[]',
         b'{} trailing',
         b'{"x":NaN}',
+        b'{"x":1.0}',
+        b'{"x":"e\xcc\x81"}',
     ],
 )
 def test_strict_loader_rejects_noncanonical_json_inputs(raw: bytes) -> None:
