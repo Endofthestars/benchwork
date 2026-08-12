@@ -318,7 +318,11 @@ class ExecutionService:
         previous: str | None = None
         previous_recorded_at: datetime | None = None
         event_ids: set[str] = set()
-        for line_number, line in enumerate(self._journal_path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            lines = self._journal_path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            raise AthanorError("execution journal is unreadable") from error
+        for line_number, line in enumerate(lines, 1):
             try:
                 event = _load_strict_local_json_object(
                     line, f"execution journal Event at line {line_number}",
