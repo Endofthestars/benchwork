@@ -349,6 +349,22 @@ def load_artifact_provenance_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
     return provenance
 
 
+def validate_artifact_storage_backend_v1(backend: dict[str, Any]) -> None:
+    """Validate a Backend Profile record without probing its declared capabilities."""
+    validate_instance("artifact-storage-backend-1.0.json", backend)
+    _check_nfc_and_numbers(backend)
+    if backend["record_sigil"] != content_sigil(_without(backend, "record_sigil")):
+        _fail("Artifact Storage Backend self-Sigil mismatch")
+    if backend["verification_methods"] != sorted(backend["verification_methods"]):
+        _fail("Artifact Storage Backend verification methods are not sorted")
+
+
+def load_artifact_storage_backend_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    backend = _load_strict_object(raw, "Artifact Storage Backend")
+    validate_artifact_storage_backend_v1(backend)
+    return backend
+
+
 def validate_artifact_storage_state_supplied_provenance_v1(
     state: dict[str, Any], *, records: list[dict[str, Any]],
 ) -> None:

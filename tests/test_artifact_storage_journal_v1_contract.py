@@ -12,6 +12,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_disposition_v1,
     load_artifact_gc_plan_v1,
     load_artifact_provenance_v1,
+    load_artifact_storage_backend_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
@@ -29,6 +30,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_disposition_v1,
     validate_artifact_gc_plan_v1,
     validate_artifact_provenance_v1,
+    validate_artifact_storage_backend_v1,
     validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
@@ -308,6 +310,58 @@ def _provenance() -> dict[str, object]:
         key: member for key, member in provenance.items() if key != "record_sigil"
     })
     return provenance
+
+
+def _backend_profile() -> dict[str, object]:
+    reserve_classes = (
+        "INITIALIZATION", "COORDINATOR_LIVENESS", "CLOCK_PRESSURE",
+        "CATALOG_ADMINISTRATION", "VERIFICATION_INCIDENT", "RETENTION_REFERENCE",
+        "GC_ADMINISTRATION", "RECOVERY",
+    )
+    profile: dict[str, object] = {
+        "schema_version": "artifact-storage-backend/1.0", "backend_id": "BACKEND",
+        "adapter_id": "ADAPTER", "adapter_version": "1.0", "protocol_version": "1.0",
+        "adapter_sigil": SIGIL, "configuration_sigil": SIGIL, "namespace_sigil": SIGIL,
+        "isolation": {"scope": "SINGLE_PROJECT", "namespace_enforcement": "ADAPTER_SCOPED",
+                      "worker_access": "NONE", "worker_credentials_exposed": False},
+        "limits": {"max_object_bytes": 1,
+                   "transfer_bounds": {"max_bytes": 1, "max_duration_millis": 1,
+                                       "max_file_count": None, "max_chunk_count": 1, "buffer_bytes": 1},
+                   "max_concurrent_streams": 1, "max_inventory_entries": 1,
+                   "max_tail_recovery_retries": 1,
+                   "system_reserve_limits": [{"reserve_class": item, "max_event_frame_count": 1,
+                                              "max_control_record_count": 0,
+                                              "max_recovery_evidence_count": 0,
+                                              "max_event_frame_bytes": 56,
+                                              "max_control_record_bytes": 1,
+                                              "max_recovery_evidence_bytes": 1}
+                                             for item in reserve_classes],
+                   "system_journal_reserve_bytes": 1, "system_control_record_reserve_bytes": 1,
+                   "system_recovery_reserve_bytes": 1},
+        "consistency": {"read_after_write": "STRONG", "list_consistency": "STRONG",
+                        "atomic_visibility": True, "immutable_generation": True,
+                        "exact_generation_reads": True},
+        "durability": {"commit_semantics": "FSYNC_FILE_AND_PARENT", "logical_readback": True,
+                       "transparent_encryption": False, "transparent_compression": False},
+        "verification_methods": ["CONFORMANCE_END_TO_END", "FULL_READBACK_SHA256"],
+        "range_resume": {"range_reads": False, "resumable_stage_writes": False,
+                         "resume_binding": "UNSUPPORTED"},
+        "conditional_operations": {"conditional_create": True, "no_overwrite_finalize": True,
+                                   "exact_generation_stat": True, "exact_generation_delete": True},
+        "deletion_capabilities": {"exact_generation_delete": True, "wildcard_delete": False,
+                                  "retention_lock": "NONE", "verification": "POST_DELETE_STAT"},
+        "credential_class": "COORDINATOR_HOST_LOCAL",
+        "fencing": {"mode": "COORDINATOR_PRECOMMIT", "attempt_staging_isolated": True,
+                    "executor_epoch_checked": True, "job_fence_floor_checked": True,
+                    "tombstone_checked": True},
+        "conformance": {"profile_id": "LOCAL-PHASE3/1.0", "suite_version": "1.0",
+                        "suite_sigil": SIGIL, "host_platform_sigil": SIGIL, "evidence_sigil": SIGIL},
+        "record_sigil": "",
+    }
+    profile["record_sigil"] = content_sigil({
+        key: member for key, member in profile.items() if key != "record_sigil"
+    })
+    return profile
 
 
 def _recovery_marker() -> dict[str, object]:
@@ -598,6 +652,20 @@ def test_provenance_is_self_signed_and_matches_state_projection() -> None:
     missing = deepcopy(state)
     with pytest.raises(AthanorError, match="Provenance projection lacks"):
         validate_artifact_storage_state_supplied_provenance_v1(missing, records=[])
+
+
+def test_backend_profile_is_self_signed_and_canonically_orders_methods() -> None:
+    profile = _backend_profile()
+    validate_artifact_storage_backend_v1(profile)
+    assert load_artifact_storage_backend_v1(json.dumps(profile)) == profile
+
+    unordered = deepcopy(profile)
+    unordered["verification_methods"].reverse()  # type: ignore[index]
+    unordered["record_sigil"] = content_sigil({
+        key: member for key, member in unordered.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="verification methods are not sorted"):
+        validate_artifact_storage_backend_v1(unordered)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
