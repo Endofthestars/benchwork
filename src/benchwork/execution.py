@@ -852,6 +852,30 @@ class ExecutionService:
         events = self._existing_events()
         return self._observation_unlocked(events, job_id, limit, cursor)
 
+    def queue(self, job_id: str) -> dict[str, Any]:
+        """Durably make one submitted Job available to the local Worker.
+
+        This is an internal scheduler boundary, not an MCP execution method.
+        Replaying the operation after a restart is idempotent only for the
+        already queued projection; terminal or cancellation states never gain
+        a late queue transition.
+        """
+        if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id):
+            raise AthanorError("execution Job ID is invalid")
+        if not self._journal_path.exists():
+            raise AthanorError(f"unknown execution Job: {job_id}")
+        with _exclusive_lock(self._lock_path):
+            events = self._events_unlocked()
+            job = self._project(events)["jobs"].get(job_id)
+            if job is None:
+                raise AthanorError(f"unknown execution Job: {job_id}")
+            if job["state"] == "QUEUED":
+                return self._observation_unlocked(events, job_id, MAX_PAGE_SIZE, None)
+            if job["state"] != "SUBMITTED":
+                raise AthanorError("execution Job is not queueable")
+            self._append_unlocked("job.queued", {"job_id": job_id})
+            return self._observation_unlocked(self._events_unlocked(), job_id, MAX_PAGE_SIZE, None)
+
     def cancel(
         self,
         job_id: str,
@@ -930,6 +954,8 @@ class ExecutionService:
                 raise AthanorError("execution Job is not terminalizable")
             if job["state"] == "CANCEL_REQUESTED" and state != "CANCELLED":
                 raise AthanorError("cancelled execution Job cannot accept a worker terminal result")
+            if job["state"] not in {"QUEUED", "CANCEL_REQUESTED"}:
+                raise AthanorError("execution Job must be queued before a worker terminal result")
             self._append_unlocked("job.terminal", {"job_id": job_id, "state": state, "reason": reason})
             return self._observation_unlocked(self._events_unlocked(), job_id, MAX_PAGE_SIZE, None)
 

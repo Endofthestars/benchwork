@@ -257,6 +257,7 @@ class ExecutionServiceTest(unittest.TestCase):
 
     def test_expired_local_job_retains_negative_outcome_and_rejects_late_delivery(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
         expired = self.service.record_terminal(
             job["job_id"], "LEASE_EXPIRED", "local lease deadline elapsed",
         )
@@ -269,6 +270,7 @@ class ExecutionServiceTest(unittest.TestCase):
 
     def test_duplicate_terminal_delivery_is_rejected_without_rewriting_history(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
         terminal = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
         event_count = len(self.service.observe(job["job_id"])["events"])
 
@@ -278,6 +280,17 @@ class ExecutionServiceTest(unittest.TestCase):
         observation = self.service.observe(job["job_id"])
         self.assertEqual(observation["job"], terminal["job"])
         self.assertEqual(len(observation["events"]), event_count)
+
+    def test_worker_terminal_requires_durable_queue_and_survives_restart(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        with self.assertRaisesRegex(AthanorError, "must be queued"):
+            self.service.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
+
+        queued = self.service.queue(job["job_id"])["job"]
+        restarted = ExecutionService(Path(self.directory.name))
+        self.assertEqual(restarted.observe(job["job_id"])["job"], queued)
+        terminal = restarted.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
+        self.assertEqual(terminal["job"]["state"], "SUCCEEDED")
 
     def test_tampered_journal_fails_closed(self) -> None:
         observation = self.service.start(_specification(), "start-001")
@@ -432,6 +445,7 @@ class ExecutionServiceTest(unittest.TestCase):
         journal.unlink()
         observation = self.service.start(_specification(), "start-002")
         job = observation["job"]
+        self.service.queue(job["job_id"])
         self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
         events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
         events[-1]["payload"]["state"] = []
@@ -571,6 +585,7 @@ class ExecutionServiceTest(unittest.TestCase):
 
     def test_completed_job_records_terminal_cancellation_observation(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
         completed = self.service.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
         terminal = completed["job"]
         observed = self.service.cancel(
@@ -585,9 +600,9 @@ class ExecutionServiceTest(unittest.TestCase):
 
     def test_queued_job_can_terminalize_and_invalid_journal_json_is_rejected(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
-        self.service._append_unlocked("job.queued", {"job_id": job["job_id"]})
-        queued = self.service.observe(job["job_id"])["job"]
+        queued = self.service.queue(job["job_id"])["job"]
         self.assertEqual(queued["state"], "QUEUED")
+        self.assertEqual(self.service.queue(job["job_id"])["job"], queued)
         failed = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
         self.assertEqual(failed["job"]["state"], "FAILED")
 
@@ -618,6 +633,7 @@ class ExecutionServiceTest(unittest.TestCase):
         self.assertEqual(not_ready["error"]["code"], "EXECUTION_NOT_READY")
         service = ExecutionService(Path(self.directory.name))
         job = started["data"]["job"]
+        service.queue(job["job_id"])
         service.record_terminal(job["job_id"], "FAILED", "worker failed")
         stale_revision = tools.benchwork_cancel_job(
             job["job_id"],
