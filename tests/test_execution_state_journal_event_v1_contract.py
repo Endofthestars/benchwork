@@ -547,6 +547,14 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     with pytest.raises(Exception, match="trusted-time anchor"):
         replay_execution_journal_prefix_v1([event, changed_anchor])
+
+    decreasing_time = deepcopy(clock_uncertain)
+    decreasing_time["recorded_at"] = "2026-08-05T23:59:59Z"
+    decreasing_time["event_sigil"] = content_sigil(
+        {key: member for key, member in decreasing_time.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="decreasing recorded_at"):
+        replay_execution_journal_prefix_v1([event, decreasing_time])
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )

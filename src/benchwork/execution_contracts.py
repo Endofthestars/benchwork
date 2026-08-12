@@ -563,6 +563,7 @@ def replay_execution_journal_prefix_v1(
         _fail("Execution Journal replay prefix contains a nonobject Event")
     journal_id = events[0].get("journal_id")
     previous_sigil: str | None = None
+    previous_recorded_at: datetime | None = None
     for expected_sequence, event in enumerate(events, 1):
         validate_execution_journal_event_v1(event)
         if event["journal_id"] != journal_id:
@@ -571,7 +572,11 @@ def replay_execution_journal_prefix_v1(
             _fail("Execution Journal replay prefix has a sequence gap")
         if event["previous_event_sigil"] != previous_sigil:
             _fail("Execution Journal replay prefix has a broken Event chain")
+        recorded_at = _parse_time(event["recorded_at"])
+        if previous_recorded_at is not None and recorded_at < previous_recorded_at:
+            _fail("Execution Journal replay prefix has decreasing recorded_at time")
         previous_sigil = event["event_sigil"]
+        previous_recorded_at = recorded_at
     if head is not None:
         validate_execution_journal_head_v1(head)
         last = events[-1]
