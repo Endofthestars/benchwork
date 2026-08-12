@@ -71,6 +71,19 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "path is not a directory: blobs"):
             self.store.initialize()
 
+    def test_storage_rejects_colliding_root_and_lock_paths(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        storage.parent.mkdir(parents=True)
+        storage.write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "managed storage path is not a directory"):
+            self.store.initialize()
+
+        storage.unlink()
+        storage.mkdir()
+        (storage / "locks").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "managed storage lock path is not a directory"):
+            self.store.initialize()
+
     def test_deduplication_rejects_resealed_or_conflicting_blob_metadata(self) -> None:
         first = self.store.import_bytes(b"phase-three", media_type="text/plain")
         record_path = (

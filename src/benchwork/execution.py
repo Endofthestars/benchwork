@@ -151,7 +151,14 @@ class LocalBlobStore:
         self._lock_path = self.path / "locks" / "storage.lock"
 
     def initialize(self) -> None:
+        if self.path.exists() and not self.path.is_dir():
+            raise AthanorError("managed storage path is not a directory")
+        locks_path = self.path / "locks"
+        if locks_path.exists() and not locks_path.is_dir():
+            raise AthanorError("managed storage lock path is not a directory")
         with _exclusive_lock(self._lock_path):
+            if self.path.exists() and not self.path.is_dir():
+                raise AthanorError("managed storage path is not a directory")
             for name in ("records", "blobs", "staging", "quarantine", "locks", "recovery"):
                 directory = self.path / name
                 if directory.exists() and not directory.is_dir():
