@@ -1381,6 +1381,52 @@ def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> d
     return build_execution_state_v1(reduced)
 
 
+def _reduce_lease_heartbeat_accepted_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Advance one active Lease's monotonic supervisor-observed heartbeat."""
+    if len(state["leases"]) != 1:
+        _fail("Lease heartbeat reducer requires one active Lease")
+    lease, payload, executor = state["leases"][0], event["payload"], state["executor"]
+    prior = lease["last_heartbeat_sequence"]
+    floors = payload["resource_counter_floors_after"]
+    if (
+        event["event_type"] != "lease.heartbeat_accepted" or lease["state"] != "ACTIVE"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["entity_revisions"] != [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1}]
+        or payload["prior_accepted_sequence"] != prior or payload["sequence"] <= (prior or 0)
+        or _parse_time(payload["received_at"]) > _parse_time(payload["next_heartbeat_due_at"])
+        or _parse_time(payload["received_at"]) > _parse_time(lease["expiry_due_at"])
+        or any(value is not None and value < (lease["resource_counter_floors"][key] or 0) for key, value in floors.items())
+    ):
+        _fail("Lease heartbeat Event disagrees with active Lease state")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1,
+        "last_heartbeat_sequence": payload["sequence"], "last_heartbeat_message_sigil": payload["heartbeat_message_sigil"],
+        "last_resource_sample_sigil": payload["resource_sample_sigil"], "resource_counter_floors": floors,
+        "next_heartbeat_due_at": payload["next_heartbeat_due_at"], "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["deadlines"] = sorted([item for item in state["deadlines"] if not (item["deadline_kind"] == "HEARTBEAT_TIMEOUT" and item["entity_id"] == lease["worker_session_id"])] + [{"deadline_kind": "HEARTBEAT_TIMEOUT", "due_at": payload["next_heartbeat_due_at"], "fixed_priority": _DEADLINE_PRIORITY["HEARTBEAT_TIMEOUT"], "entity_id": lease["worker_session_id"], "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"]}], key=lambda item: (_parse_time(item["due_at"]), item["fixed_priority"], _unsigned_ascii(item["entity_id"], "Deadline entity ID")))
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_lease_renewed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Extend an active Lease only within its immutable maximum expiry."""
+    if len(state["leases"]) != 1:
+        _fail("Lease renewal reducer requires one active Lease")
+    lease, payload, executor = state["leases"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "lease.renewed" or lease["state"] != "ACTIVE"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["entity_revisions"] != [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1}]
+        or payload["prior_expiry_due_at"] != lease["expiry_due_at"]
+        or not (_parse_time(lease["expiry_due_at"]) < _parse_time(payload["new_expiry_due_at"]) <= _parse_time(lease["maximum_expiry_due_at"]))
+        or payload["renewal_counter"] != lease["renewal_counter"] + 1
+    ):
+        _fail("Lease renewal Event disagrees with active Lease state")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1, "expiry_due_at": payload["new_expiry_due_at"], "renewal_counter": payload["renewal_counter"], "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["deadlines"] = sorted([item for item in state["deadlines"] if not (item["deadline_kind"] == "LEASE_EXPIRY" and item["entity_id"] == lease["lease_id"])] + [{"deadline_kind": "LEASE_EXPIRY", "due_at": payload["new_expiry_due_at"], "fixed_priority": _DEADLINE_PRIORITY["LEASE_EXPIRY"], "entity_id": lease["lease_id"], "source_event_id": event["event_id"], "source_event_sigil": event["event_sigil"]}], key=lambda item: (_parse_time(item["due_at"]), item["fixed_priority"], _unsigned_ascii(item["entity_id"], "Deadline entity ID")))
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1441,6 +1487,10 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_cleanup_progressed_v1(current, event)
         elif event["event_type"] == "lease.released":
             current = _reduce_lease_released_v1(current, event)
+        elif event["event_type"] == "lease.heartbeat_accepted":
+            current = _reduce_lease_heartbeat_accepted_v1(current, event)
+        elif event["event_type"] == "lease.renewed":
+            current = _reduce_lease_renewed_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

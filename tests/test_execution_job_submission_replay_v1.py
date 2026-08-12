@@ -363,6 +363,13 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     running_state = replay_execution_supplied_state_suffix_v1(claimed_state, [starting, running])
     assert running_state["attempts"][0]["state"] == "RUNNING"
 
+    heartbeat = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-HEARTBEAT", "sequence": 11, "event_type": "lease.heartbeat_accepted", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"heartbeat_message_sigil": SIGIL, "sequence": 1, "prior_accepted_sequence": None, "received_at": "2026-08-06T00:00:06Z", "next_heartbeat_due_at": "2026-08-06T00:00:09Z", "resource_sample_sigil": SIGIL, "resource_counter_floors_after": {"cpu_time_seconds": 0, "storage_bytes_written": 0, "network_egress_bytes": 0}}, "previous_event_sigil": running["event_sigil"]})
+    heartbeat_state = replay_execution_supplied_state_suffix_v1(running_state, [heartbeat])
+    assert heartbeat_state["leases"][0]["last_heartbeat_sequence"] == 1
+    renewal = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-RENEWAL", "sequence": 12, "event_type": "lease.renewed", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 2, "next_revision": 3}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"renewal_request_sigil": SIGIL, "prior_expiry_due_at": lease["initial_expiry_due_at"], "new_expiry_due_at": lease["maximum_expiry_due_at"], "renewal_counter": 1}, "previous_event_sigil": heartbeat["event_sigil"]})
+    renewed_state = replay_execution_supplied_state_suffix_v1(heartbeat_state, [renewal])
+    assert renewed_state["leases"][0]["renewal_counter"] == 1
+
     owner = {
         "job_id": JOB_ID, "job_binding_sigil": job["job_binding_sigil"], "attempt_id": "AT-ONE",
         "attempt_binding_sigil": attempt["attempt_binding_sigil"], "lease_id": lease["lease_id"],
