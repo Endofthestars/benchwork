@@ -47,6 +47,7 @@ from benchwork.execution_contracts import (
     validate_execution_recovery_action_set_v1,
     validate_execution_recovery_action_set_supplied_prefix_v1,
     validate_execution_recovery_start_supplied_action_set_v1,
+    validate_execution_recovery_phase_advance_supplied_action_sets_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
@@ -878,6 +879,75 @@ def test_recovery_start_binds_its_started_action_set_and_prefix() -> None:
     with pytest.raises(Exception, match="start disagrees"):
         validate_execution_recovery_start_supplied_action_set_v1(
             recovery_started, wrong_set, [initial, clock_uncertain],
+        )
+
+
+def test_recovery_phase_advance_binds_state_and_sealed_action_sets() -> None:
+    initial = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    clock_uncertain = _clock_uncertain_event(initial)
+    recovery_started = _recovery_started_event(clock_uncertain)
+    completed_set = _recovery_action_set()
+    completed_set["derived_through_event_sigil"] = clock_uncertain["event_sigil"]
+    completed_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in completed_set.items() if key != "action_set_sigil"
+    })
+    next_set = deepcopy(completed_set)
+    next_set.update({
+        "phase": "FENCING", "derived_through_sequence": 3,
+        "derived_through_event_sigil": recovery_started["event_sigil"], "actions": [],
+    })
+    next_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in next_set.items() if key != "action_set_sigil"
+    })
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["journal_binding"] = {
+        "journal_id": recovery_started["journal_id"], "through_sequence": 3,
+        "through_event_id": recovery_started["event_id"],
+        "through_event_sigil": recovery_started["event_sigil"],
+    }
+    state["executor"].update({
+        "revision": 2, "clock_state": "UNCERTAIN", "clock_uncertain_event_id": "JE-TWO",
+        "active_recovery_id": "RY-ONE", "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
+        "last_event_id": recovery_started["event_id"], "last_event_sigil": recovery_started["event_sigil"],
+    })
+    state["recoveries"] = [{
+        "recovery_id": "RY-ONE", "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": recovery_started["event_sigil"],
+        "current_action_set_sigil": completed_set["action_set_sigil"],
+        "last_event_id": recovery_started["event_id"], "last_event_sigil": recovery_started["event_sigil"],
+    }]
+    _reseal_state(state)
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
+        "event_id": "JE-FOUR", "sequence": 4, "event_type": "recovery.phase_advanced",
+        "executor_instance_id": initial["executor_instance_id"], "executor_epoch": initial["executor_epoch"],
+        "executor_build_sigil": initial["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:03Z",
+        "observed_at": None,
+        "entity_revisions": [{"entity_kind": "RECOVERY", "entity_id": "RY-ONE",
+                              "preceding_revision": 0, "next_revision": 1}],
+        "causation_event_id": None, "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"recovery_id": "RY-ONE", "from_phase": "STARTED", "to_phase": "FENCING",
+                    "completed_action_set_sigil": completed_set["action_set_sigil"],
+                    "next_action_set_sigil": next_set["action_set_sigil"],
+                    "completed_entity_ids": [], "quarantined_entity_ids": []},
+        "previous_event_sigil": recovery_started["event_sigil"],
+    }
+    event["event_sigil"] = content_sigil({key: member for key, member in event.items() if key != "event_sigil"})
+    validate_execution_recovery_phase_advance_supplied_action_sets_v1(
+        state, event, completed_set, next_set,
+    )
+
+    wrong_next = deepcopy(next_set)
+    wrong_next["recovery_id"] = "RY-TWO"
+    wrong_next["action_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_next.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="phase advance disagrees"):
+        validate_execution_recovery_phase_advance_supplied_action_sets_v1(
+            state, event, completed_set, wrong_next,
         )
 
 

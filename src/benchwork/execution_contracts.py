@@ -88,6 +88,11 @@ _RECOVERY_PHASE_KINDS = {
         "RELEASE_INACTIVE_EXECUTION_INPUT_HOLD", "RELEASE_DUE_EXECUTION_HOLD",
     },
 }
+_RECOVERY_NEXT_PHASE = {
+    "STARTED": "FENCING",
+    "FENCING": "RECONCILING",
+    "RECONCILING": "FINALIZING",
+}
 _ATTEMPT_TERMINAL_EVENT_TYPES = {
     "attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out",
     "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced",
@@ -907,6 +912,53 @@ def validate_execution_recovery_start_supplied_action_set_v1(
         or action_set["supersedes_action_set_sigil"] is not None
     ):
         _fail("Execution Recovery start disagrees with supplied action set or prefix")
+
+
+def validate_execution_recovery_phase_advance_supplied_action_sets_v1(
+    state: dict[str, Any], event: dict[str, Any], completed_action_set: dict[str, Any],
+    next_action_set: dict[str, Any],
+) -> None:
+    """Check one Recovery phase event against supplied before/after action sets.
+
+    Completion of every action, durable action-set availability, and the next
+    set's derivation prefix remain replay and storage authority concerns.  This
+    helper only compares the closed State, Event, and sealed documents supplied
+    by the caller.
+    """
+    validate_execution_state_v1(state)
+    validate_execution_journal_event_v1(event)
+    validate_execution_recovery_action_set_v1(completed_action_set)
+    validate_execution_recovery_action_set_v1(next_action_set)
+    active_recovery_id = state["executor"]["active_recovery_id"]
+    if active_recovery_id is None:
+        _fail("Execution Recovery phase advance requires an active Recovery")
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id)
+    payload = event["payload"]
+    expected_next = _RECOVERY_NEXT_PHASE.get(recovery["state"])
+    expected_revision = [{
+        "entity_kind": "RECOVERY", "entity_id": recovery["recovery_id"],
+        "preceding_revision": recovery["revision"], "next_revision": recovery["revision"] + 1,
+    }]
+    if (
+        event["event_type"] != "recovery.phase_advanced"
+        or event["recovery_action_binding"] is not None
+        or event["journal_id"] != state["journal_binding"]["journal_id"]
+        or event["sequence"] != state["journal_binding"]["through_sequence"] + 1
+        or event["previous_event_sigil"] != state["journal_binding"]["through_event_sigil"]
+        or event["entity_revisions"] != expected_revision
+        or payload["recovery_id"] != recovery["recovery_id"]
+        or payload["from_phase"] != recovery["state"]
+        or payload["to_phase"] != expected_next
+        or payload["completed_action_set_sigil"] != recovery["current_action_set_sigil"]
+        or payload["completed_action_set_sigil"] != completed_action_set["action_set_sigil"]
+        or completed_action_set["recovery_id"] != recovery["recovery_id"]
+        or completed_action_set["phase"] != recovery["state"]
+        or payload["next_action_set_sigil"] != next_action_set["action_set_sigil"]
+        or next_action_set["recovery_id"] != recovery["recovery_id"]
+        or next_action_set["phase"] != payload["to_phase"]
+        or next_action_set["supersedes_action_set_sigil"] is not None
+    ):
+        _fail("Execution Recovery phase advance disagrees with supplied State or action sets")
 
 
 def validate_execution_state_supplied_recovery_action_set_v1(
