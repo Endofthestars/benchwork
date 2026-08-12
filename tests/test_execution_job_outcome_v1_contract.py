@@ -34,6 +34,15 @@ FIXTURE = (
     / "execution-job-outcome-v1"
     / "valid-no-attempt.json"
 )
+OS_FIXTURE = (
+    ROOT
+    / "tests"
+    / "fixtures"
+    / "phase3"
+    / "rfc0012"
+    / "execution-output-storage-observation-set-v1"
+    / "valid-minimal.json"
+)
 DERIVED_MEMBERS = {
     "schema_version",
     "outcome_id",
@@ -68,6 +77,119 @@ def _facts(outcome: dict[str, Any]) -> dict[str, Any]:
     )
     facts["output_storage_observation_set"] = None
     return facts
+
+
+def _selected() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build a contract-only selected-Attempt Outcome from frozen fixtures."""
+    outcome = _load()
+    observation = json.loads(OS_FIXTURE.read_text(encoding="utf-8"))
+    sigil = "sha256:" + "d" * 64
+    attempt_id = observation["attempt_id"]
+    attempt_sigil = observation["attempt_binding_sigil"]
+    worker = {"kind": "NONE"}
+    authorization = {"kind": "NONE"}
+    storage_binding = {
+        "kind": "FROZEN",
+        "storage_journal_id": observation["storage_event"]["journal_id"],
+        "through_sequence": observation["storage_event"]["sequence"],
+        "through_event_sigil": observation["storage_event"]["event_sigil"],
+        "output_storage_observation_set_id": observation["observation_set_id"],
+        "output_storage_observation_set_sigil": observation["observation_set_sigil"],
+    }
+    first_stop = {
+        "kind": "PRESENT", "event_id": "JE-STOP", "event_type": "attempt.failed",
+        "event_sigil": "sha256:" + "8" * 64, "effective_sequence": 8,
+    }
+    summary = {
+        "attempt_id": attempt_id, "attempt_binding_sigil": attempt_sigil,
+        "retry_ordinal": 1, "terminal_state": "FAILED",
+        "terminal_event_id": "JE-ATTEMPTFAILED", "terminal_event_sigil": "sha256:" + "9" * 64,
+        "worker_session_binding": worker,
+        "attempt_authorization_requirement": {"kind": "NONE", "effects": []},
+        "attempt_authorization_state": authorization,
+        "budget_settlement_event_sigil": "sha256:" + "a" * 64,
+        "assurance_evaluation_event_sigil": "sha256:" + "b" * 64,
+    }
+    selected = {
+        "kind": "SELECTED", "attempt_id": attempt_id, "attempt_binding_sigil": attempt_sigil,
+        "attempt_terminal_event_id": summary["terminal_event_id"],
+        "attempt_terminal_event_sigil": summary["terminal_event_sigil"],
+        "attempt_authorization_state": authorization, "worker_session_binding": worker,
+        "result_binding": observation["result_binding"],
+        "completion_anchor_binding": {"kind": "NOT_ESTABLISHED"},
+        "first_stop_or_fence_binding": first_stop,
+        "storage_observation_binding": storage_binding,
+    }
+    outcome["job_terminal"] = {
+        **outcome["job_terminal"], "job_revision": 12, "event_id": "JE-JOBFAILED",
+        "event_sequence": 12, "event_sigil": "sha256:" + "f" * 64,
+    }
+    outcome["attempt_summaries"] = [summary]
+    outcome["selected_attempt_binding"] = selected
+    outcome["result_binding"] = selected["result_binding"]
+    outcome["completion_anchor_binding"] = selected["completion_anchor_binding"]
+    outcome["first_stop_or_fence_binding"] = first_stop
+    outcome["lease_terminal_binding"] = {"kind": "NONE"}
+    outcome["authority_binding"] = {
+        "kind": "ASSIGNED_NO_LEASE", "allocation_executor_instance_id": "XI-ONE",
+        "allocation_executor_epoch": 1, "allocation_executor_build_sigil": sigil,
+        "job_id": outcome["job_id"], "attempt_id": attempt_id, "fencing_generation": 1,
+    }
+    outcome["final_fence_binding"] = {
+        "kind": "ASSIGNED_NO_LEASE", "final_fence_floor": 1, "attempt_id": attempt_id,
+        "attempt_terminal_event_sigil": summary["terminal_event_sigil"],
+    }
+    outcome["runtime_outcome"] = {
+        "kind": "ATTEMPT", "computation_status": "FAILED", "worker_status": "FAILED",
+        "process_termination_status": "EXITED", "handle_revocation_status": "NOT_APPLICABLE",
+        "cleanup_status": "VERIFIED", "mutable_resource_isolation_status": "VERIFIED_ISOLATED",
+        "output_publication_status": "FAILED", "quarantine_status": "NOT_REQUIRED",
+        "termination_evidence_sigil": sigil, "handle_disposition_evidence_sigil": sigil,
+        "cleanup_summary_sigil": sigil, "quarantine_evidence_sigil": sigil,
+        "log_closure_sigil": observation["log_closure_sigil"],
+        "output_closure_sigil": observation["output_closure_sigil"],
+        "accounting_capture_event_id": "JE-ACCOUNTING", "accounting_capture_event_sigil": sigil,
+    }
+    outcome["terminal_source_binding"] = observation["terminal_source_binding"]
+    outcome["terminal_source_observation"] = observation["members"][-1]
+    outcome["assurance_context_binding"] = {
+        **{key: value for key, value in outcome["assurance_context_binding"].items() if key != "kind"},
+        "kind": "ATTEMPT", "backend_identity": "local-backend",
+        "backend_configuration_sigil": sigil, "host_identity_sigil": sigil,
+    }
+    outcome["attempt_assurance_binding"] = {
+        "kind": "UNMET", "evaluation_event_id": "JE-ATTEMPTASSURANCE",
+        "evaluation_event_sigil": summary["assurance_evaluation_event_sigil"],
+        "evaluation_sequence": 10, "reason_codes": ["ASSURANCE_UNMET"], "evidence_set_sigil": sigil,
+    }
+    outcome["job_assurance_binding"] = {
+        "kind": "UNMET", "evaluation_event_id": "JE-JOBASSURANCE",
+        "evaluation_event_sigil": "sha256:" + "c" * 64, "evaluation_sequence": 11,
+        "attempt_id": attempt_id,
+        "attempt_assurance_event_sigil": summary["assurance_evaluation_event_sigil"],
+        "reason_codes": ["ASSURANCE_UNMET"], "evidence_set_sigil": sigil,
+    }
+    for member in (
+        "control_evidence_set_binding", "quarantine_binding_set_binding",
+        "terminalization_storage_manifest_binding", "output_root_protection",
+    ):
+        outcome[member] = observation[member]
+    outcome["budget_binding"]["selected_attempt_settlement"] = {
+        "kind": "SETTLED", "event_id": "JE-BUDGETSETTLED",
+        "event_sigil": summary["budget_settlement_event_sigil"],
+        "accounting_capture_event_id": "JE-ACCOUNTING", "accounting_capture_event_sigil": sigil,
+        "usage_status": "MEASURED",
+    }
+    outcome["outputs"] = observation["members"][:1]
+    outcome["logs"] = observation["members"][1:4]
+    outcome["resource_evidence"] = observation["members"][4:5]
+    outcome["storage_observation_binding"] = storage_binding
+    outcome["ineligibility_reasons"] = [
+        "JOB_NOT_SUCCEEDED", "ATTEMPT_NOT_SUCCEEDED", "COMPLETION_NOT_ESTABLISHED",
+        "OUTPUT_INVALID", "ASSURANCE_UNMET", "STORAGE_OBSERVATION_INVALID",
+    ]
+    outcome["terminal_recorded_at"] = "2026-08-06T00:00:12Z"
+    return _seal(outcome), observation
 
 
 def test_valid_no_attempt_fixture_and_strict_loader() -> None:
@@ -182,6 +304,68 @@ def test_no_attempt_matrix_and_directly_decidable_reasons_are_enforced() -> None
     _seal(wrong_runtime)
     with pytest.raises(AthanorError):
         validate_execution_job_outcome_v1(wrong_runtime)
+
+
+def test_selected_attempt_direct_copies_and_observation_reconstruction() -> None:
+    outcome, observation = _selected()
+    validate_execution_job_outcome_v1(outcome)
+    facts = _facts(outcome)
+    facts["output_storage_observation_set"] = observation
+    validate_execution_job_outcome_replayed_facts_v1(outcome, facts)
+    assert [member["stream"] for member in outcome["logs"]] == [
+        "STDOUT", "STDERR", "STRUCTURED",
+    ]
+    assert [
+        *outcome["outputs"], *outcome["logs"], *outcome["resource_evidence"],
+        outcome["terminal_source_observation"],
+    ] == observation["members"]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("selected_copy", "direct result_binding"),
+        ("authority_job", "authority bindings disagree"),
+        ("final_fence", "authority bindings disagree"),
+        ("manifest_copy", "frozen manifest"),
+        ("terminal_source", "terminal-source observation"),
+    ],
+)
+def test_selected_cross_object_equalities_fail_closed(mutation: str, message: str) -> None:
+    outcome, _ = _selected()
+    if mutation == "selected_copy":
+        outcome["result_binding"] = {
+            "kind": "REJECTED", "message_sigil": "sha256:" + "1" * 64,
+            "disposition_event_id": "JE-REJECTED", "disposition_event_sigil": "sha256:" + "2" * 64,
+            "disposition_sequence": 6, "reason_codes": ["RESULT_CONFLICT"],
+        }
+    elif mutation == "authority_job":
+        outcome["authority_binding"]["job_id"] = "JB-" + "B" * 64
+    elif mutation == "final_fence":
+        outcome["final_fence_binding"]["final_fence_floor"] = 2
+    elif mutation == "manifest_copy":
+        outcome["output_root_protection"]["terminalization_storage_manifest_binding"][
+            "storage_root_manifest_sigil"
+        ] = "sha256:" + "0" * 64
+    else:
+        outcome["terminal_source_observation"] = {
+            "kind": "TERMINAL_SOURCE_NONE", "reason_codes": ["SOURCE_ABSENT"],
+        }
+    _seal(outcome)
+    with pytest.raises(AthanorError, match=message):
+        validate_execution_job_outcome_v1(outcome)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ("COMPLETION_NOT_ESTABLISHED", "OUTPUT_INVALID", "ASSURANCE_UNMET", "STORAGE_OBSERVATION_INVALID"),
+)
+def test_selected_outcome_cannot_omit_a_locally_required_reason(reason: str) -> None:
+    outcome, _ = _selected()
+    outcome["ineligibility_reasons"].remove(reason)
+    _seal(outcome)
+    with pytest.raises(AthanorError, match=reason):
+        validate_execution_job_outcome_v1(outcome)
 
 
 def test_reason_order_and_eligibility_equivalence_are_enforced() -> None:

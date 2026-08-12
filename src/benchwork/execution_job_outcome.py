@@ -510,7 +510,7 @@ def _validate_selected_observation_groups(outcome: dict[str, Any]) -> None:
         if len(logical_names) != len(set(logical_names)):
             _fail("Outcome output observations contain duplicate logical names")
 
-    if [member["stream_kind"] for member in outcome["logs"]] != [
+    if [member["stream"] for member in outcome["logs"]] != [
         "STDOUT",
         "STDERR",
         "STRUCTURED",
