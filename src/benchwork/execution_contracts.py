@@ -744,16 +744,29 @@ def validate_execution_journal_prefix_wire_v1(
 
 
 def replay_execution_journal_prefix_v1(
-    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+    recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
 
     Prefix integrity is checked before reducer dispatch.  A syntactically valid
     Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
     fails closed rather than being interpreted as a no-op or guessed transition.
+    ``recovery_action_sets`` is required only for the six-Event, action-free
+    Recovery control path; it is not an authority to derive or execute actions.
     """
     if not events:
         _fail("Execution Journal replay requires a nonempty prefix")
+    if recovery_action_sets is not None:
+        empty_recovery_types = [
+            "executor.epoch_started", "executor.clock_uncertain", "recovery.started",
+            "recovery.phase_advanced", "recovery.phase_advanced", "recovery.phase_advanced",
+        ]
+        if [event.get("event_type") if isinstance(event, dict) else None for event in events] != empty_recovery_types:
+            _fail("Execution Journal recovery action sets are only supported for the empty Recovery path")
+        return replay_execution_empty_recovery_phase_prefix_v1(
+            events, recovery_action_sets, head=head,
+        )
     validate_execution_journal_prefix_wire_v1(events, head=head)
     initial_state = replay_execution_initial_prefix_v1([events[0]])
     if len(events) == 1:

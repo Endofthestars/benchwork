@@ -1037,6 +1037,10 @@ def test_empty_recovery_phase_replay_projects_each_control_phase() -> None:
         [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
         [started_set, fencing_set, reconciling_set, finalizing_set],
     )
+    assert replay_execution_journal_prefix_v1(
+        [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
+        recovery_action_sets=[started_set, fencing_set, reconciling_set, finalizing_set],
+    ) == state
 
     assert state["journal_binding"]["through_sequence"] == 6
     assert state["recoveries"] == [{
