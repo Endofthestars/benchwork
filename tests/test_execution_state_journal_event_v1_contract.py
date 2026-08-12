@@ -358,6 +358,42 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     assert load_execution_state_v1(json.dumps(terminal_lease)) == terminal_lease
 
 
+def test_state_locally_binds_log_stream_closure_projections() -> None:
+    state = _state_with_session_and_lease()
+    log_stream = {
+        "log_stream_id": "LG-ONE", "revision": 0, "state": "OPEN", "attempt_id": "AT-ONE",
+        "stream": "STDOUT", "next_sequence": 0, "captured_bytes": 0, "dropped_bytes": 0,
+        "truncated": False, "final_sequence": None, "stream_set_sigil": None,
+        "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }
+    state["log_streams"] = [log_stream]
+    _reseal_state(state)
+    assert load_execution_state_v1(json.dumps(state)) == state
+
+    open_with_terminal_fields = deepcopy(state)
+    open_with_terminal_fields["log_streams"][0]["stream_set_sigil"] = SIGIL
+    _reseal_state(open_with_terminal_fields)
+    with pytest.raises(Exception, match="Open Log stream"):
+        load_execution_state_v1(json.dumps(open_with_terminal_fields))
+
+    closed_without_sigil = deepcopy(state)
+    closed_without_sigil["log_streams"][0]["state"] = "CLOSED"
+    _reseal_state(closed_without_sigil)
+    with pytest.raises(Exception, match="Closed Log stream must have"):
+        load_execution_state_v1(json.dumps(closed_without_sigil))
+
+    closed_empty = deepcopy(state)
+    closed_empty["log_streams"][0].update({"state": "CLOSED", "stream_set_sigil": SIGIL})
+    _reseal_state(closed_empty)
+    assert load_execution_state_v1(json.dumps(closed_empty)) == closed_empty
+
+    closed_past_next = deepcopy(closed_empty)
+    closed_past_next["log_streams"][0]["final_sequence"] = 0
+    _reseal_state(closed_past_next)
+    with pytest.raises(Exception, match="final sequence must precede"):
+        load_execution_state_v1(json.dumps(closed_past_next))
+
+
 def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> None:
     event = json.loads(
         (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()

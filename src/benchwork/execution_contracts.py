@@ -264,6 +264,21 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         tombstone_members = (lease["tombstone_generation"], lease["tombstone_event_sigil"])
         if (all(member is not None for member in tombstone_members)) != terminal:
             _fail("Lease tombstone fields disagree with terminal lease state")
+    log_stream_ids: set[str] = set()
+    for log_stream in state["log_streams"]:
+        log_stream_id = log_stream["log_stream_id"]
+        if log_stream_id in log_stream_ids:
+            _fail("duplicate Log-stream projection identity")
+        log_stream_ids.add(log_stream_id)
+        final_sequence = log_stream["final_sequence"]
+        stream_set_sigil = log_stream["stream_set_sigil"]
+        if log_stream["state"] == "OPEN":
+            if final_sequence is not None or stream_set_sigil is not None:
+                _fail("Open Log stream must not have terminal stream fields")
+        elif stream_set_sigil is None:
+            _fail("Closed Log stream must have a stream-set Sigil")
+        elif final_sequence is not None and final_sequence >= log_stream["next_sequence"]:
+            _fail("Closed Log stream final sequence must precede next sequence")
     keys = [_idempotency_projection(record) for record in state["idempotency_records"]]
     if keys != sorted(keys):
         _fail("idempotency_records are not sorted by the canonical 11-rank key")
