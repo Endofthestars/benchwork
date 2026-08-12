@@ -899,12 +899,12 @@ def validate_execution_recovery_action_supplied_event_v1(
         or event["event_type"] != action["target_event_type"]
     ):
         _fail("Recovery action Event envelope disagrees with supplied action")
-    expected_revision = [{
+    expected_revision = {
         "entity_kind": action["entity_kind"], "entity_id": action["entity_id"],
         "preceding_revision": action["expected_revision"],
         "next_revision": action["expected_revision"] + 1,
-    }]
-    if event["entity_revisions"] != expected_revision:
+    }
+    if expected_revision not in event["entity_revisions"]:
         _fail("Recovery action Event revision effect disagrees with supplied action")
 
 

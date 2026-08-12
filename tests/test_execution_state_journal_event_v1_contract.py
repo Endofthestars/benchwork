@@ -786,6 +786,17 @@ def test_recovery_action_event_matches_its_supplied_frozen_envelope() -> None:
     event = _recovery_action_event(action_set)
     validate_execution_recovery_action_supplied_event_v1(action_set, event)
 
+    multi_owner = deepcopy(event)
+    multi_owner["entity_revisions"] = [
+        {"entity_kind": "EXECUTOR", "entity_id": "XI-ONE", "preceding_revision": 1,
+         "next_revision": 2},
+        *event["entity_revisions"],
+    ]
+    multi_owner["event_sigil"] = content_sigil({
+        key: member for key, member in multi_owner.items() if key != "event_sigil"
+    })
+    validate_execution_recovery_action_supplied_event_v1(action_set, multi_owner)
+
     wrong_envelope = deepcopy(event)
     wrong_envelope["event_id"] = "JE-WRONG"
     wrong_envelope["event_sigil"] = content_sigil({
