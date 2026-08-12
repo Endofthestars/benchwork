@@ -765,6 +765,98 @@ def replay_execution_journal_prefix_v1(
     _fail("Execution Journal replay reducer is unavailable for later Events")
 
 
+def _reduce_empty_recovery_phase_advance_v1(
+    state: dict[str, Any], event: dict[str, Any], completed_action_set: dict[str, Any],
+    next_action_set: dict[str, Any],
+) -> dict[str, Any]:
+    """Reduce one action-free Recovery phase transition.
+
+    Callers establish sealed action-set availability separately.  This reducer
+    deliberately accepts only empty action sets and empty completion effects,
+    so it cannot mistake an omitted operational consequence for a completed
+    Recovery action.
+    """
+    validate_execution_recovery_phase_advance_supplied_action_sets_v1(
+        state, event, completed_action_set, next_action_set,
+    )
+    executor = state["executor"]
+    recovery_id = executor["active_recovery_id"]
+    if recovery_id is None:
+        _fail("empty Recovery phase reducer requires an active Recovery")
+    recovery = next(item for item in state["recoveries"] if item["recovery_id"] == recovery_id)
+    if (
+        event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or completed_action_set["actions"]
+        or next_action_set["actions"]
+        or event["payload"]["completed_entity_ids"]
+        or event["payload"]["quarantined_entity_ids"]
+    ):
+        _fail("empty Recovery phase reducer received operational action effects")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced["recoveries"] = [{
+        **recovery,
+        "revision": recovery["revision"] + 1,
+        "state": event["payload"]["to_phase"],
+        "current_action_set_sigil": next_action_set["action_set_sigil"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
+def replay_execution_empty_recovery_phase_prefix_v1(
+    events: list[dict[str, Any]], recovery_action_sets: list[dict[str, Any]], *,
+    head: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Reduce the action-free ``STARTED -> FINALIZING`` Recovery control path.
+
+    This narrow deterministic projection is intentionally not a general
+    Journal replay: it requires the initial empty State, an uncertain clock,
+    four sealed empty action sets, and exactly the three phase transitions.
+    It neither establishes durable action-set availability nor handles
+    ``recovery.completed``, whose post-State assertion needs the complete
+    installed reducer and external durable facts.
+    """
+    if len(events) != 6 or len(recovery_action_sets) != 4:
+        _fail("empty Recovery phase replay requires six Events and four action sets")
+    validate_execution_journal_prefix_wire_v1(events, head=head)
+    if [event["event_type"] for event in events] != [
+        "executor.epoch_started", "executor.clock_uncertain", "recovery.started",
+        "recovery.phase_advanced", "recovery.phase_advanced", "recovery.phase_advanced",
+    ]:
+        _fail("empty Recovery phase replay has an unsupported Event sequence")
+    for action_set in recovery_action_sets:
+        validate_execution_recovery_action_set_v1(action_set)
+        if action_set["actions"] or action_set["supersedes_action_set_sigil"] is not None:
+            _fail("empty Recovery phase replay requires initial empty action sets")
+    state = replay_execution_journal_prefix_v1(events[:3])
+    started_set = recovery_action_sets[0]
+    validate_execution_recovery_start_supplied_action_set_v1(
+        events[2], started_set, events[:2],
+    )
+    if state["recoveries"][0]["current_action_set_sigil"] != started_set["action_set_sigil"]:
+        _fail("empty Recovery phase replay start State disagrees with action set")
+    for index, event in enumerate(events[3:], 1):
+        completed_set = recovery_action_sets[index - 1]
+        next_set = recovery_action_sets[index]
+        validate_execution_recovery_action_set_supplied_prefix_v1(
+            completed_set, events[: index + 1],
+        )
+        validate_execution_recovery_action_set_supplied_prefix_v1(
+            next_set, events[: index + 2],
+        )
+        state = _reduce_empty_recovery_phase_advance_v1(
+            state, event, completed_set, next_set,
+        )
+    return state
+
+
 def validate_execution_recovery_action_set_v1(action_set: dict[str, Any]) -> None:
     """Validate a frozen Recovery action set without deriving or executing it."""
     validate_instance("execution-recovery-action-set-1.0.json", action_set)

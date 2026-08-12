@@ -36,6 +36,7 @@ from benchwork.execution_contracts import (
     load_execution_output_storage_observation_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_empty_recovery_phase_prefix_v1,
     validate_execution_journal_prefix_wire_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
@@ -218,6 +219,50 @@ def _recovery_action_set() -> dict[str, Any]:
     }
     action_set["action_set_sigil"] = content_sigil(action_set)
     return action_set
+
+
+def _empty_recovery_action_set(
+    phase: str, prefix: list[dict[str, Any]],
+) -> dict[str, Any]:
+    action_set = {
+        "schema_version": "execution-recovery-action-set/1.0", "recovery_id": "RY-ONE",
+        "phase": phase, "derived_from_journal_id": prefix[-1]["journal_id"],
+        "derived_through_sequence": prefix[-1]["sequence"],
+        "derived_through_event_sigil": prefix[-1]["event_sigil"],
+        "supersedes_action_set_sigil": None, "actions": [], "action_set_sigil": "",
+    }
+    action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in action_set.items() if key != "action_set_sigil"
+    })
+    return action_set
+
+
+def _recovery_phase_event(
+    prior_event: dict[str, Any], completed_set: dict[str, Any], next_set: dict[str, Any],
+    event_id: str,
+) -> dict[str, Any]:
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": prior_event["journal_id"],
+        "event_id": event_id, "sequence": prior_event["sequence"] + 1,
+        "event_type": "recovery.phase_advanced",
+        "executor_instance_id": prior_event["executor_instance_id"],
+        "executor_epoch": prior_event["executor_epoch"],
+        "executor_build_sigil": prior_event["executor_build_sigil"],
+        "recorded_at": f"2026-08-06T00:00:0{prior_event['sequence']}Z", "observed_at": None,
+        "entity_revisions": [{"entity_kind": "RECOVERY", "entity_id": "RY-ONE",
+                              "preceding_revision": prior_event["sequence"] - 3,
+                              "next_revision": prior_event["sequence"] - 2}],
+        "causation_event_id": None, "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"recovery_id": "RY-ONE", "from_phase": completed_set["phase"],
+                    "to_phase": next_set["phase"],
+                    "completed_action_set_sigil": completed_set["action_set_sigil"],
+                    "next_action_set_sigil": next_set["action_set_sigil"],
+                    "completed_entity_ids": [], "quarantined_entity_ids": []},
+        "previous_event_sigil": prior_event["event_sigil"],
+    }
+    event["event_sigil"] = content_sigil(event)
+    return event
 
 
 def _recovery_action_event(action_set: dict[str, Any]) -> dict[str, Any]:
@@ -950,6 +995,54 @@ def test_recovery_phase_advance_binds_state_and_sealed_action_sets() -> None:
     with pytest.raises(Exception, match="phase advance disagrees"):
         validate_execution_recovery_phase_advance_supplied_action_sets_v1(
             state, event, completed_set, wrong_next,
+        )
+
+
+def test_empty_recovery_phase_replay_projects_each_control_phase() -> None:
+    initial = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    clock_uncertain = _clock_uncertain_event(initial)
+    started_set = _empty_recovery_action_set("STARTED", [initial, clock_uncertain])
+    recovery_started = _recovery_started_event(clock_uncertain)
+    recovery_started["payload"]["initial_action_set_sigil"] = started_set["action_set_sigil"]
+    recovery_started["event_sigil"] = content_sigil({
+        key: member for key, member in recovery_started.items() if key != "event_sigil"
+    })
+    fencing_set = _empty_recovery_action_set("FENCING", [initial, clock_uncertain, recovery_started])
+    fencing = _recovery_phase_event(recovery_started, started_set, fencing_set, "JE-FOUR")
+    reconciling_set = _empty_recovery_action_set(
+        "RECONCILING", [initial, clock_uncertain, recovery_started, fencing],
+    )
+    reconciling = _recovery_phase_event(fencing, fencing_set, reconciling_set, "JE-FIVE")
+    finalizing_set = _empty_recovery_action_set(
+        "FINALIZING", [initial, clock_uncertain, recovery_started, fencing, reconciling],
+    )
+    finalizing = _recovery_phase_event(reconciling, reconciling_set, finalizing_set, "JE-SIX")
+
+    state = replay_execution_empty_recovery_phase_prefix_v1(
+        [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
+        [started_set, fencing_set, reconciling_set, finalizing_set],
+    )
+
+    assert state["journal_binding"]["through_sequence"] == 6
+    assert state["recoveries"] == [{
+        "recovery_id": "RY-ONE", "revision": 3, "state": "FINALIZING",
+        "prior_recovery_id": None, "started_event_sigil": recovery_started["event_sigil"],
+        "current_action_set_sigil": finalizing_set["action_set_sigil"],
+        "last_event_id": finalizing["event_id"], "last_event_sigil": finalizing["event_sigil"],
+    }]
+    assert state["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
+
+    malformed = deepcopy(fencing_set)
+    malformed["actions"] = _recovery_action_set()["actions"]
+    malformed["action_set_sigil"] = content_sigil({
+        key: member for key, member in malformed.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="action kind is not allowed|initial empty action sets"):
+        replay_execution_empty_recovery_phase_prefix_v1(
+            [initial, clock_uncertain, recovery_started, fencing, reconciling, finalizing],
+            [started_set, malformed, reconciling_set, finalizing_set],
         )
 
 
