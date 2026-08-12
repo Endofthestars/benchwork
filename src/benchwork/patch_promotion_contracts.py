@@ -134,6 +134,49 @@ def load_patch_bundle_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
     return bundle
 
 
+def validate_patch_promotion_checkpoint_v1(checkpoint: dict[str, Any]) -> None:
+    """Validate local checkpoint/blob closure without resolving target observations."""
+    validate_instance("patch-promotion-checkpoint-1.0.json", checkpoint)
+    _check_nfc(checkpoint)
+    if checkpoint["checkpoint_sigil"] != content_sigil(_without(checkpoint, "checkpoint_sigil")):
+        _fail("Patch Promotion Checkpoint self-Sigil mismatch")
+    if _time(checkpoint["verified_at"]) < _time(checkpoint["created_at"]):
+        _fail("Patch Promotion Checkpoint verified_at precedes created_at")
+
+    affected_paths = [path.encode("utf-8") for path in checkpoint["affected_paths"]]
+    entries = checkpoint["entries"]
+    entry_paths = [entry["path_bytes"].encode("utf-8") for entry in entries]
+    if affected_paths != sorted(affected_paths) or len(set(affected_paths)) != len(affected_paths):
+        _fail("Patch Promotion Checkpoint affected_paths must be sorted and unique")
+    if entry_paths != sorted(entry_paths) or len(set(entry_paths)) != len(entry_paths):
+        _fail("Patch Promotion Checkpoint entries must be sorted and unique by path_bytes")
+    if entry_paths != affected_paths:
+        _fail("Patch Promotion Checkpoint entries are not the exact affected path set")
+
+    expected_blobs: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        expected = _entry_payload(entry["preimage"])
+        actual = entry["checkpoint_blob"]
+        if (actual is None) != (expected is None):
+            _fail("Patch Promotion Checkpoint Blob presence disagrees with preimage kind")
+        if actual is not None:
+            if actual != expected:
+                _fail("Patch Promotion Checkpoint Blob disagrees with preimage")
+            previous = expected_blobs.setdefault(actual["sigil"], actual)
+            if previous != actual:
+                _fail("Patch Promotion Checkpoint reuses one Blob Sigil with inconsistent metadata")
+    blobs = checkpoint["checkpoint_blobs"]
+    _require_sorted_unique_blobs(blobs, "checkpoint_blobs")
+    if {blob["sigil"]: blob for blob in blobs} != expected_blobs:
+        _fail("Patch Promotion Checkpoint blobs are not the exact preimage Blob set")
+
+
+def load_patch_promotion_checkpoint_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    checkpoint = _load_strict_object(raw, "Patch Promotion Checkpoint")
+    validate_patch_promotion_checkpoint_v1(checkpoint)
+    return checkpoint
+
+
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate one closed self-authenticating Promotion Journal Event."""
     validate_instance("patch-promotion-journal-event-1.0.json", event)
