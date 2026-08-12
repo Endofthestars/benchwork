@@ -118,6 +118,31 @@ def _event_unsigned() -> dict[str, Any]:
     }
 
 
+def _clock_uncertain_event(initial: dict[str, Any]) -> dict[str, Any]:
+    event = {
+        "schema_version": "execution-journal-event/1.0", "journal_id": initial["journal_id"],
+        "event_id": "JE-TWO", "sequence": 2, "event_type": "executor.clock_uncertain",
+        "executor_instance_id": initial["executor_instance_id"],
+        "executor_epoch": initial["executor_epoch"],
+        "executor_build_sigil": initial["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:01Z", "observed_at": None,
+        "entity_revisions": [{
+            "entity_kind": "EXECUTOR", "entity_id": initial["executor_instance_id"],
+            "preceding_revision": 0, "next_revision": 1,
+        }],
+        "causation_event_id": None, "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {
+            "last_trusted_utc": initial["recorded_at"],
+            "detected_utc": "2026-08-06T00:00:01Z", "monotonic_status": "RESET",
+            "divergence_seconds": 0, "affected_lease_ids": [],
+        },
+        "previous_event_sigil": initial["event_sigil"],
+    }
+    event["event_sigil"] = content_sigil(event)
+    return event
+
+
 def _owner() -> dict[str, Any]:
     return {
         "job_id": JOB_ID,
@@ -508,17 +533,20 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     with pytest.raises(Exception, match="execution-journal-event"):
         replay_execution_initial_prefix_v1([wrong_initial_event])
 
-    valid_later_event = build_execution_journal_event_v1(_event_unsigned(), context={
-        "ordinary_l12_suffix": True,
-        "ordinary_l12_anchor": True,
-        "l12_idempotency_key_sigil": SIGIL,
-    })
-    valid_later_event["previous_event_sigil"] = event["event_sigil"]
-    valid_later_event["event_sigil"] = content_sigil(
-        {key: member for key, member in valid_later_event.items() if key != "event_sigil"}
+    clock_uncertain = _clock_uncertain_event(event)
+    reduced = replay_execution_journal_prefix_v1([event, clock_uncertain])
+    assert reduced["executor"]["clock_state"] == "UNCERTAIN"
+    assert reduced["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN"]
+    assert reduced["executor"]["clock_uncertain_event_id"] == "JE-TWO"
+    assert reduced["journal_binding"]["through_event_sigil"] == clock_uncertain["event_sigil"]
+
+    changed_anchor = deepcopy(clock_uncertain)
+    changed_anchor["payload"]["last_trusted_utc"] = "2026-08-06T00:00:01Z"
+    changed_anchor["event_sigil"] = content_sigil(
+        {key: member for key, member in changed_anchor.items() if key != "event_sigil"}
     )
-    with pytest.raises(Exception, match="reducer is unavailable"):
-        replay_execution_journal_prefix_v1([event, valid_later_event])
+    with pytest.raises(Exception, match="trusted-time anchor"):
+        replay_execution_journal_prefix_v1([event, changed_anchor])
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )

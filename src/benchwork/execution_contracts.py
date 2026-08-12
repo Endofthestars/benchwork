@@ -500,6 +500,54 @@ def replay_execution_initial_prefix_v1(
     return state
 
 
+def _reduce_executor_clock_uncertain_after_initial_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Reduce the no-live-authority clock gate immediately after ISR3."""
+    executor = state["executor"]
+    if event["event_type"] != "executor.clock_uncertain":
+        _fail("internal reducer dispatch does not match executor clock uncertainty")
+    if (
+        event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+    ):
+        _fail("Clock uncertainty Event disagrees with replayed Executor identity")
+    if executor["clock_state"] != "TRUSTED" or executor["authority_gates"]:
+        _fail("Clock uncertainty Event requires an ungated trusted Executor")
+    revision = event["entity_revisions"]
+    expected_revision = [{
+        "entity_kind": "EXECUTOR", "entity_id": executor["executor_instance_id"],
+        "preceding_revision": executor["revision"], "next_revision": executor["revision"] + 1,
+    }]
+    if revision != expected_revision:
+        _fail("Clock uncertainty Event has invalid Executor revision effect")
+    payload = event["payload"]
+    if payload["last_trusted_utc"] != executor["last_trusted_utc"]:
+        _fail("Clock uncertainty Event disagrees with replayed trusted-time anchor")
+    if payload["affected_lease_ids"]:
+        _fail("Clock uncertainty reducer requires no live Lease authority")
+    if any(state[member] for member in (
+        "workers", "worker_sessions", "jobs", "attempts", "leases", "log_streams",
+        "deadlines", "idempotency_records", "recoveries",
+    )):
+        _fail("Clock uncertainty reducer requires the initial empty projections")
+    reduced = {key: value for key, value in state.items() if key != "state_sigil"}
+    reduced_executor = {**executor,
+        "revision": executor["revision"] + 1,
+        "clock_state": "UNCERTAIN",
+        "clock_uncertain_event_id": event["event_id"],
+        "authority_gates": ["CLOCK_UNCERTAIN"],
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }
+    reduced["executor"] = reduced_executor
+    reduced["journal_binding"] = {
+        "journal_id": event["journal_id"], "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"], "through_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -534,9 +582,24 @@ def replay_execution_journal_prefix_v1(
             or head["last_event_sigil"] != last["event_sigil"]
         ):
             _fail("Execution Journal Head disagrees with replay prefix")
-    if len(events) != 1:
-        _fail("Execution Journal replay reducer is unavailable for later Events")
-    return replay_execution_initial_prefix_v1(events, head=head)
+    initial_state = replay_execution_initial_prefix_v1([events[0]])
+    if len(events) == 1:
+        if head is not None:
+            validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
+        return initial_state
+    if len(events) == 2 and events[1]["event_type"] == "executor.clock_uncertain":
+        state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
+        if head is not None:
+            last = events[1]
+            if (
+                head["journal_id"] != state["journal_binding"]["journal_id"]
+                or head["last_sequence"] != last["sequence"]
+                or head["last_event_id"] != last["event_id"]
+                or head["last_event_sigil"] != last["event_sigil"]
+            ):
+                _fail("Execution Journal Head disagrees with replay prefix")
+        return state
+    _fail("Execution Journal replay reducer is unavailable for later Events")
 
 
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
