@@ -375,6 +375,18 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     with pytest.raises(Exception, match="Lease Worker does not match"):
         load_execution_state_v1(json.dumps(mismatched_lease_worker))
 
+    mismatched_worker_binding = deepcopy(state)
+    mismatched_worker_binding["worker_sessions"][0]["worker_binding_sigil"] = SIGIL_B
+    _reseal_state(mismatched_worker_binding)
+    with pytest.raises(Exception, match="binding Sigil does not match"):
+        load_execution_state_v1(json.dumps(mismatched_worker_binding))
+
+    excess_lease_expiry = deepcopy(state)
+    excess_lease_expiry["leases"][0]["expiry_due_at"] = "2026-08-06T00:00:01Z"
+    _reseal_state(excess_lease_expiry)
+    with pytest.raises(Exception, match="exceeds its maximum expiry"):
+        load_execution_state_v1(json.dumps(excess_lease_expiry))
+
 
 def test_state_locally_binds_log_stream_closure_projections() -> None:
     state = _state_with_session_and_lease()

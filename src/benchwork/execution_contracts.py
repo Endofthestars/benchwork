@@ -270,6 +270,8 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             _fail("Worker-Session projection has no matching Worker")
         if session_id not in worker["worker_session_ids"]:
             _fail("Worker-Session projection is missing from its Worker")
+        if session["worker_binding_sigil"] != worker["worker_binding_sigil"]:
+            _fail("Worker-Session binding Sigil does not match its Worker")
         capacity = session["capacity"]
         if capacity is not None and session["capacity_in_use"] > capacity:
             _fail("Worker-Session capacity_in_use exceeds capacity")
@@ -305,6 +307,8 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         tombstone_members = (lease["tombstone_generation"], lease["tombstone_event_sigil"])
         if (all(member is not None for member in tombstone_members)) != terminal:
             _fail("Lease tombstone fields disagree with terminal lease state")
+        if _parse_time(lease["expiry_due_at"]) > _parse_time(lease["maximum_expiry_due_at"]):
+            _fail("Lease expiry due time exceeds its maximum expiry")
         try:
             session = sessions_by_id[lease["worker_session_id"]]
         except KeyError:
