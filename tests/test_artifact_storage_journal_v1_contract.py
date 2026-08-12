@@ -1123,6 +1123,51 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="Open Intent disagrees"):
         validate_artifact_storage_state_v1(wrong_open_journal)
 
+    quarantine_state = deepcopy(state)
+    quarantine = {
+        "quarantine_id": "SQ-ONE", "owner_kind": "TRANSFER_ATTEMPT", "owner_id": "SA-ONE",
+        "state": "INTENT_RECORDED", "source_object": object_ref,
+        "destination_object": object_ref,
+        "source_cleanup": {"state": "NOT_REQUIRED", "staging_object": None,
+                           "evidence_sigil": None, "reason": None},
+        "reservation": _transfer_attempt()["reservation"],
+        "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+        "revision": 1, "last_event_sigil": SIGIL, "record_sigil": "",
+    }
+    quarantine["record_sigil"] = content_sigil({
+        key: member for key, member in quarantine.items() if key != "record_sigil"
+    })
+    quarantine_state["quarantines"] = [quarantine]
+    quarantine_state["open_intents"] = [{
+        "intent_kind": "QUARANTINE_MOVE", "intent_id": "SQ-ONE", "owner_id": "SA-ONE",
+        "source_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+                         "event_sigil": SIGIL}, "intent_sigil": SIGIL, "revision": 1,
+        "last_event_sigil": SIGIL, "authorization_expires_at": None,
+        "source_object": object_ref, "target_object": object_ref,
+    }]
+    quarantine_state["state_sigil"] = content_sigil({
+        key: member for key, member in quarantine_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(quarantine_state)
+
+    mismatched_quarantine_owner = deepcopy(quarantine_state)
+    mismatched_quarantine_owner["open_intents"][0]["owner_id"] = "SA-OTHER"
+    mismatched_quarantine_owner["state_sigil"] = content_sigil({
+        key: member for key, member in mismatched_quarantine_owner.items()
+        if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Quarantine move Intent disagrees"):
+        validate_artifact_storage_state_v1(mismatched_quarantine_owner)
+
+    missing_quarantine_intent = deepcopy(quarantine_state)
+    missing_quarantine_intent["open_intents"] = []
+    missing_quarantine_intent["state_sigil"] = content_sigil({
+        key: member for key, member in missing_quarantine_intent.items()
+        if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Quarantine move Intent disagrees"):
+        validate_artifact_storage_state_v1(missing_quarantine_intent)
+
     selected_unknown = deepcopy(ordered)
     selected_unknown["transfer_requests"][0]["selected_attempt_id"] = "SA-UNKNOWN"
     selected_unknown["state_sigil"] = content_sigil({

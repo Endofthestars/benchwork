@@ -863,6 +863,23 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     open_intent_ids = [value["intent_id"] for value in state["open_intents"]]
     if len(set(open_intent_ids)) != len(open_intent_ids):
         _fail("Artifact Storage State open-intent IDs must be globally unique")
+    quarantine_intents = {
+        intent["intent_id"]: intent for intent in state["open_intents"]
+        if intent["intent_kind"] == "QUARANTINE_MOVE"
+    }
+    for quarantine in state["quarantines"]:
+        intent = quarantine_intents.pop(quarantine["quarantine_id"], None)
+        intent_recorded = quarantine["state"] == "INTENT_RECORDED"
+        if (intent_recorded != (intent is not None)):
+            _fail("Artifact Storage State Quarantine move Intent disagrees with projection")
+        if intent is not None and (
+            intent["owner_id"] != quarantine["owner_id"]
+            or intent["source_object"] != quarantine["source_object"]
+            or intent["target_object"] != quarantine["destination_object"]
+        ):
+            _fail("Artifact Storage State Quarantine move Intent disagrees with projection")
+    if quarantine_intents:
+        _fail("Artifact Storage State Quarantine move Intent lacks a projection")
     intents_by_owner: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for intent in state["open_intents"]:
         intents_by_owner.setdefault((intent["intent_kind"], intent["owner_id"]), []).append(intent)
