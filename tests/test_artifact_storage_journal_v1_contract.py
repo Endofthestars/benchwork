@@ -53,6 +53,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_reference_intent_v1,
     validate_artifact_storage_reference_set_v1,
     validate_artifact_storage_state_supplied_control_records_v1,
+    validate_artifact_storage_state_supplied_reference_sets_v1,
     validate_artifact_storage_tail_evidence_v1,
     validate_canonical_reference_commit_supplied_facts_v1,
     validate_canonical_reference_release_supplied_facts_v1,
@@ -1358,6 +1359,73 @@ def test_storage_replay_projects_exact_registered_reference_set() -> None:
         "last_event_sigil": registered["event_sigil"],
     }]
 
+    policy = _retention_policy()
+    policy["scope"] = {
+        "kind": "REFERENCE_SET",
+        "reference_set_id": reference_set["reference_set_id"],
+        "reference_set_sigil": reference_set["reference_set_sigil"],
+    }
+    retention_registered = _next_event(registered)
+    retention_registered.update({
+        "event_id": "SE-RETENTION", "sequence": 4,
+        "event_type": "retention.policy_registered",
+        "entity_revisions": [{
+            "entity_type": "RETENTION_POLICY", "entity_id": policy["policy_id"],
+            "previous_revision": None, "next_revision": 1,
+        }],
+        "quota_effects": [],
+    })
+    policy["registered_at"] = retention_registered["recorded_at"]
+    policy["record_sigil"] = content_sigil({
+        key: value for key, value in policy.items() if key != "record_sigil"
+    })
+    retention_registered["payload"] = {"policy": {
+        "schema_version": policy["schema_version"], "record_id": policy["policy_id"],
+        "record_sigil": policy["record_sigil"],
+    }}
+    retention_registered["event_sigil"] = content_sigil({
+        key: value for key, value in retention_registered.items() if key != "event_sigil"
+    })
+    scoped_state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered, retention_registered],
+        supplied_reference_sets=[reference_set], supplied_retention_policies=[policy],
+    )
+    assert scoped_state["retention_policies"][0]["record_sigil"] == policy["record_sigil"]
+
+    wrong_scope_policy = deepcopy(policy)
+    wrong_scope_policy["scope"]["reference_set_sigil"] = SIGIL_B
+    wrong_scope_policy["record_sigil"] = content_sigil({
+        key: value for key, value in wrong_scope_policy.items() if key != "record_sigil"
+    })
+    wrong_scope_event = deepcopy(retention_registered)
+    wrong_scope_event["payload"]["policy"]["record_sigil"] = wrong_scope_policy["record_sigil"]
+    wrong_scope_event["event_sigil"] = content_sigil({
+        key: value for key, value in wrong_scope_event.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="scope is not locally closed"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, wrong_scope_event],
+            supplied_reference_sets=[reference_set],
+            supplied_retention_policies=[wrong_scope_policy],
+        )
+
+    extra_set = deepcopy(reference_set)
+    extra_set["extractor"]["extractor_sigil"] = SIGIL_B
+    extra_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(extra_set)
+    extra_set["registration_event_id"] = "SE-" + content_sigil([
+        "artifact-storage-reference-set-registration-event-id/1.0",
+        extra_set["reference_set_id"],
+    ]).removeprefix("sha256:").upper()
+    extra_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in extra_set.items() if key != "reference_set_sigil"
+    })
+    with pytest.raises(AthanorError, match="do not exactly match State projections"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered, retention_registered],
+            supplied_reference_sets=[reference_set, extra_set],
+            supplied_retention_policies=[policy],
+        )
+
     distinct_set = deepcopy(reference_set)
     distinct_set["extractor"]["extractor_sigil"] = SIGIL_B
     distinct_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(
@@ -1863,6 +1931,7 @@ def test_retention_policy_and_hold_projection_matrix() -> None:
         key: member for key, member in state.items() if key != "state_sigil"
     })
     validate_artifact_storage_state_supplied_retention_policies_v1(state, policies=[policy])
+    validate_artifact_storage_state_supplied_reference_sets_v1(state, reference_sets=[])
 
     invalid_hold = deepcopy(state)
     invalid_hold["holds"][0]["release_authorization_sigil"] = SIGIL_B  # type: ignore[index]

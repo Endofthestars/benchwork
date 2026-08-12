@@ -637,6 +637,29 @@ def validate_artifact_storage_state_supplied_retention_policies_v1(
         _fail("Artifact Storage supplied Retention Policies do not exactly match State projections")
 
 
+def validate_artifact_storage_state_supplied_reference_sets_v1(
+    state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
+) -> None:
+    """Compare State Reference Set projections with exact supplied records."""
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, tuple[str, str]] = {}
+    for reference_set in reference_sets:
+        validate_artifact_storage_reference_set_v1(reference_set)
+        reference_set_id = reference_set["reference_set_id"]
+        if reference_set_id in supplied:
+            _fail("Artifact Storage supplied Reference Sets have duplicate IDs")
+        supplied[reference_set_id] = (
+            reference_set["reference_set_sigil"], reference_set["source"]["identity"],
+        )
+    for projection in state["reference_sets"]:
+        if supplied.get(projection["reference_set_id"]) != (
+            projection["reference_set_sigil"], projection["source_identity"],
+        ):
+            _fail("Artifact Storage State Reference Set projection lacks matching supplied record")
+    if set(supplied) != {projection["reference_set_id"] for projection in state["reference_sets"]}:
+        _fail("Artifact Storage supplied Reference Sets do not exactly match State projections")
+
+
 def validate_artifact_storage_state_supplied_control_records_v1(
     state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
     reference_intents: list[dict[str, Any]],
@@ -647,21 +670,9 @@ def validate_artifact_storage_state_supplied_control_records_v1(
     resolution, graph closure, Storage replay, and Chronicle authority.
     """
     validate_artifact_storage_state_v1(state)
-    set_pairs: dict[str, tuple[str, str]] = {}
-    for reference_set in reference_sets:
-        validate_artifact_storage_reference_set_v1(reference_set)
-        if reference_set["reference_set_id"] in set_pairs:
-            _fail("Artifact Storage supplied Reference Sets have duplicate IDs")
-        set_pairs[reference_set["reference_set_id"]] = (
-            reference_set["reference_set_sigil"], reference_set["source"]["identity"],
-        )
-    for projection in state["reference_sets"]:
-        expected = set_pairs.get(projection["reference_set_id"])
-        if expected != (projection["reference_set_sigil"], projection["source_identity"]):
-            _fail("Artifact Storage State Reference Set projection lacks matching supplied record")
-    projected_set_ids = {projection["reference_set_id"] for projection in state["reference_sets"]}
-    if set(set_pairs) != projected_set_ids:
-        _fail("Artifact Storage supplied Reference Sets do not exactly match State projections")
+    validate_artifact_storage_state_supplied_reference_sets_v1(
+        state, reference_sets=reference_sets
+    )
     intent_pairs: dict[str, str] = {}
     for intent in reference_intents:
         validate_artifact_storage_reference_intent_v1(intent)
@@ -1302,20 +1313,29 @@ def _reduce_artifact_storage_retention_policy_registered_v1(
     """Project an exact active-Store PROJECT retention-policy registration.
 
     This is deliberately narrower than policy applicability: it accepts only a
-    PROJECT scope which is locally closed against this Storage State.  BLOB and
-    Reference Set scopes need their exact projected objects, PROGRAM needs an
-    external Program-to-Project resolver, and INITIALIZING requires the two
-    RFC-fixed policies.  Those branches remain unavailable rather than
-    treating a self-Sigiled policy as authorization.
+    PROJECT scope closed to this State or a REFERENCE_SET scope closed to an
+    already projected exact State object. BLOB scope still needs a separately
+    replayed Blob lifecycle and PROGRAM needs an external Program-to-Project
+    resolver. INITIALIZING requires the two RFC-fixed policies. Those branches
+    remain unavailable rather than treating a self-Sigiled policy as
+    authorization.
     """
     validate_artifact_retention_policy_v1(policy)
     payload = event["payload"]
     if state["store_status"] != "ACTIVE":
         _fail("Artifact Storage Retention Policy registration requires an active Store")
-    if (
-        policy["scope"].get("kind") != "PROJECT"
-        or policy["scope"].get("project_id") != state["project_id"]
-    ):
+    scope = policy["scope"]
+    scope_is_closed = (
+        scope["kind"] == "PROJECT" and scope["project_id"] == state["project_id"]
+    ) or (
+        scope["kind"] == "REFERENCE_SET"
+        and any(
+            projection["reference_set_id"] == scope["reference_set_id"]
+            and projection["reference_set_sigil"] == scope["reference_set_sigil"]
+            for projection in state["reference_sets"]
+        )
+    )
+    if not scope_is_closed:
         _fail("Artifact Storage Retention Policy scope is not locally closed to State project")
     if any(item["policy_id"] == policy["policy_id"] for item in state["retention_policies"]):
         _fail("Artifact Storage Retention Policy registration duplicates a State projection")
@@ -1915,6 +1935,10 @@ def replay_artifact_storage_journal_prefix_v1(
     if supplied_retention_policies is not None:
         validate_artifact_storage_state_supplied_retention_policies_v1(
             state, policies=supplied_retention_policies
+        )
+    if supplied_reference_sets is not None:
+        validate_artifact_storage_state_supplied_reference_sets_v1(
+            state, reference_sets=supplied_reference_sets
         )
     return state
 
