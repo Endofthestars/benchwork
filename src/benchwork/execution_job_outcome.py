@@ -548,6 +548,25 @@ def _validate_reason_order_and_local_predicates(outcome: dict[str, Any]) -> None
         "ATTEMPT_ABSENT": outcome["selected_attempt_binding"]["kind"] == "NONE",
     }
     required_predicates: dict[str, bool] = {}
+    selected_attempt_id = outcome["selected_attempt_binding"].get("attempt_id")
+    required_predicates["ATTEMPT_AUTHORIZATION_INVALID"] = any(
+        (
+            summary["attempt_authorization_requirement"]["kind"] == "NONE"
+            and summary["attempt_authorization_state"]["kind"] != "NONE"
+        )
+        or (
+            summary["attempt_authorization_requirement"]["kind"] == "REQUIRED"
+            and summary["attempt_authorization_state"]["kind"] == "NONE"
+        )
+        or (
+            summary["attempt_authorization_state"]["kind"] == "PENDING"
+            and (
+                summary["attempt_id"] == selected_attempt_id
+                or summary["terminal_state"] == "SUCCEEDED"
+            )
+        )
+        for summary in outcome["attempt_summaries"]
+    )
     if outcome["selected_attempt_binding"]["kind"] == "SELECTED":
         selected_id = outcome["selected_attempt_binding"]["attempt_id"]
         summary = next(row for row in outcome["attempt_summaries"] if row["attempt_id"] == selected_id)

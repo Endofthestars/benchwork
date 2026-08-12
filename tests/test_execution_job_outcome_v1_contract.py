@@ -346,6 +346,26 @@ def test_selected_outcome_cannot_omit_locally_evident_authority_loss() -> None:
         validate_execution_job_outcome_v1(missing_reason)
 
 
+def test_selected_outcome_cannot_omit_invalid_attempt_authorization_matrix_reason() -> None:
+    outcome, _ = _selected()
+    outcome["attempt_summaries"][0]["attempt_authorization_requirement"] = {
+        "kind": "NONE", "effects": [],
+    }
+    outcome["attempt_summaries"][0]["attempt_authorization_state"] = {"kind": "PENDING"}
+    outcome["selected_attempt_binding"]["attempt_authorization_state"] = {"kind": "PENDING"}
+    _seal(outcome)
+    with pytest.raises(AthanorError, match="ATTEMPT_AUTHORIZATION_INVALID"):
+        validate_execution_job_outcome_v1(outcome)
+
+    outcome["ineligibility_reasons"] = [
+        "JOB_NOT_SUCCEEDED", "ATTEMPT_NOT_SUCCEEDED", "COMPLETION_NOT_ESTABLISHED",
+        "ATTEMPT_AUTHORIZATION_INVALID", "OUTPUT_INVALID", "ASSURANCE_UNMET",
+        "STORAGE_OBSERVATION_INVALID",
+    ]
+    _seal(outcome)
+    validate_execution_job_outcome_v1(outcome)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
