@@ -926,6 +926,13 @@ def validate_execution_storage_root_manifest_v1(manifest: dict[str, Any]) -> Non
         claimed_blob = entry["claimed_blob"]
         if (origin_kind == "NOT_STORED") != (claimed_blob is None):
             _fail("Execution Storage Root Manifest claimed Blob disagrees with origin")
+        subject_blob = _execution_storage_subject_blob_ref_v1(subject)
+        if (
+            subject_blob is not None
+            and origin_kind in {"COMMITTED_BLOB", "QUARANTINE"}
+            and subject_blob != claimed_blob
+        ):
+            _fail("Execution Storage Root Manifest claimed Blob disagrees with subject")
         if origin_kind == "COMMITTED_BLOB":
             expected_blobs.append(claimed_blob)
     expected_blobs.sort(key=lambda blob: (blob["blob_sigil"], blob["size_bytes"]))
@@ -933,6 +940,15 @@ def validate_execution_storage_root_manifest_v1(manifest: dict[str, Any]) -> Non
         _fail("Execution Storage Root Manifest Blob refs disagree with committed entries")
     if (manifest["protection_plan"]["kind"] == "NONE") != (not expected_blobs):
         _fail("Execution Storage Root Manifest protection plan disagrees with Blob refs")
+
+
+def _execution_storage_subject_blob_ref_v1(subject: dict[str, Any]) -> dict[str, Any] | None:
+    kind = subject["kind"]
+    if kind in {"ATTEMPT_OUTPUT", "LOG_STREAM", "RESOURCE_EVIDENCE"}:
+        return {"blob_sigil": subject["blob_sigil"], "size_bytes": subject["byte_size"]}
+    if kind == "TERMINAL_SOURCE":
+        return subject["storage_blob"]
+    return None
 
 
 def load_execution_storage_root_manifest_v1(raw: str | bytes | bytearray) -> dict[str, Any]:

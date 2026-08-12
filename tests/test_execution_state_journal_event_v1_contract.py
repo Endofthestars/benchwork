@@ -1220,6 +1220,52 @@ def test_storage_root_manifest_closes_local_owner_and_blob_integrity() -> None:
     with pytest.raises(Exception, match="Blob refs"):
         validate_execution_storage_root_manifest_v1(missing_blob)
 
+    output_manifest = deepcopy(manifest)
+    output_manifest.update({
+        "root_kind": "ATTEMPT_OUTPUT", "attempt_id": "AT-ONE",
+        "owner_binding": {
+            "kind": "ATTEMPT_OUTPUT", "job_binding_sigil": SIGIL, "attempt_binding_sigil": SIGIL,
+            "result_binding": {"kind": "NONE"}, "log_set_sigil": SIGIL, "output_set_sigil": SIGIL,
+            "control_evidence_set_binding": {"kind": "PENDING"},
+            "terminal_source_binding": {"kind": "NOT_APPLICABLE"}, "quarantine_plan_sigil": SIGIL,
+        },
+    })
+    output_subject = {
+        "kind": "ATTEMPT_OUTPUT", "logical_name": "output", "schema_id": "result/1.0",
+        "schema_sigil": SIGIL, "staging_reference_sigil": SIGIL, "byte_size": 1, "blob_sigil": SIGIL_B,
+    }
+    output_entry = deepcopy(committed_blob["entries"][0])
+    output_entry["storage_subject_id"] = SIGIL
+    output_entry["subject"] = output_subject
+    output_entry["claimed_blob"] = {"blob_sigil": SIGIL_B, "size_bytes": 1}
+    output_entry["entry_sigil"] = content_sigil({
+        key: member for key, member in output_entry.items() if key != "entry_sigil"
+    })
+    output_manifest["entries"] = [output_entry]
+    output_manifest["blob_refs"] = [output_entry["claimed_blob"]]
+    output_manifest["protection_plan"] = {
+        **committed_blob["protection_plan"],
+        "hold_lifetime": {"kind": "OUTPUT_RETENTION", "maximum_duration_seconds": 0},
+    }
+    output_manifest["manifest_id"] = derive_execution_storage_root_manifest_id_v1(output_manifest)
+    output_manifest["manifest_sigil"] = content_sigil({
+        key: member for key, member in output_manifest.items() if key != "manifest_sigil"
+    })
+    validate_execution_storage_root_manifest_v1(output_manifest)
+
+    mismatched_output_blob = deepcopy(output_manifest)
+    mismatched_output_blob["entries"][0]["claimed_blob"] = {"blob_sigil": SIGIL, "size_bytes": 2}
+    mismatched_output_blob["entries"][0]["entry_sigil"] = content_sigil({
+        key: member for key, member in mismatched_output_blob["entries"][0].items() if key != "entry_sigil"
+    })
+    mismatched_output_blob["blob_refs"] = [mismatched_output_blob["entries"][0]["claimed_blob"]]
+    mismatched_output_blob["manifest_sigil"] = content_sigil({
+        key: member for key, member in mismatched_output_blob.items() if key != "manifest_sigil"
+    })
+    with pytest.raises(Exception, match="claimed Blob disagrees with subject"):
+        validate_execution_storage_root_manifest_v1(mismatched_output_blob)
+
+
 
 def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None:
     receipt = _receipt()
