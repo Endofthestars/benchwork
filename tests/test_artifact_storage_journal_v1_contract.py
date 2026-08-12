@@ -348,6 +348,23 @@ def test_storage_replay_completes_an_empty_recovery_to_its_frozen_origin() -> No
             [initial, activation, started, wrong_origin]
         )
 
+    later_rejection = _next_event(completed)
+    later_rejection.update({
+        "event_id": "SE-FIVE", "sequence": 5,
+        "recorded_at": "2026-08-06T00:00:04Z", "epoch": 2,
+        "entity_revisions": [], "quota_effects": [], "observed_at": None,
+        "payload": {
+            "message_class": "test", "message_sigil": None,
+            "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+        },
+    })
+    later_rejection["event_sigil"] = content_sigil({
+        key: value for key, value in later_rejection.items() if key != "event_sigil"
+    })
+    assert replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, started, completed, later_rejection]
+    )["applied_event_count"] == 5
+
 
 def test_storage_replay_applies_empty_clock_gate_round_trip() -> None:
     initial = _initial_replay_event()

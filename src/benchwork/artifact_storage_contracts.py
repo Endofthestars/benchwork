@@ -991,82 +991,36 @@ def _reduce_artifact_storage_message_rejected_v1(
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Replay installed Storage Journal reducers, failing closed for all others."""
+    """Replay installed Storage Journal reducers, failing closed for all others.
+
+    This is deliberately a dispatcher over the installed reducer set rather
+    than a catalog of fixed-length prefixes. It still rejects every Event type
+    without a reducer and grants no append or Storage authority.
+    """
     validate_artifact_storage_journal_prefix_v1(events)
     state = replay_artifact_storage_initial_prefix_v1([events[0]])
-    if len(events) == 1:
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[0], state["state_sigil"])
-        return state
-    if len(events) == 2 and events[1]["event_type"] == "storage.activation_completed":
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[1], state["state_sigil"])
-        return state
-    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed" and events[2]["event_type"] == "storage.epoch_started":
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_epoch_started_v1(state, events[2])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
-        return state
-    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed" and events[2]["event_type"] == "storage.message_rejected":
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_message_rejected_v1(state, events[2])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
-        return state
-    if len(events) == 3 and [event["event_type"] for event in events[1:]] == [
-        "storage.activation_completed", "storage.recovery_started",
-    ]:
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(
-                head, events[2], state["state_sigil"]
-            )
-        return state
-    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
-        "storage.activation_completed", "storage.recovery_started",
-        "storage.recovery_completed",
-    ]:
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
-        state = _reduce_artifact_storage_recovery_completed_v1(state, events[3])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(
-                head, events[3], state["state_sigil"]
-            )
-        return state
-    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
-        "storage.activation_completed", "storage.recovery_started", "storage.epoch_started",
-    ]:
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_recovery_started_v1(state, events[2])
-        state = _reduce_artifact_storage_epoch_started_v1(state, events[3])
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(
-                head, events[3], state["state_sigil"]
-            )
-        return state
-    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed":
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        if events[2]["event_type"] == "storage.clock_uncertain":
-            state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
+    for event in events[1:]:
+        if event["event_type"] == "storage.activation_completed":
+            state = _reduce_artifact_storage_activation_v1(state, event)
+        elif event["event_type"] == "storage.epoch_started":
+            state = _reduce_artifact_storage_epoch_started_v1(state, event)
+        elif event["event_type"] == "storage.clock_uncertain":
+            state = _reduce_artifact_storage_clock_gate_v1(state, event, restoring=False)
+        elif event["event_type"] == "storage.clock_restored":
+            state = _reduce_artifact_storage_clock_gate_v1(state, event, restoring=True)
+        elif event["event_type"] == "storage.recovery_started":
+            state = _reduce_artifact_storage_recovery_started_v1(state, event)
+        elif event["event_type"] == "storage.recovery_completed":
+            state = _reduce_artifact_storage_recovery_completed_v1(state, event)
+        elif event["event_type"] == "storage.message_rejected":
+            state = _reduce_artifact_storage_message_rejected_v1(state, event)
         else:
-            _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
-        return state
-    if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
-        "storage.activation_completed", "storage.clock_uncertain", "storage.clock_restored",
-    ]:
-        state = _reduce_artifact_storage_activation_v1(state, events[1])
-        state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
-        state = _reduce_artifact_storage_clock_gate_v1(state, events[3], restoring=True)
-        if head is not None:
-            validate_artifact_storage_journal_head_supplied_event_v1(head, events[3], state["state_sigil"])
-        return state
-    _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
+            _fail("Artifact Storage Journal replay reducer is unavailable for this Event")
+    if head is not None:
+        validate_artifact_storage_journal_head_supplied_event_v1(
+            head, events[-1], state["state_sigil"]
+        )
+    return state
 
 
 def _state_identity(value: dict[str, Any], collection: str) -> str | tuple[str, str]:
