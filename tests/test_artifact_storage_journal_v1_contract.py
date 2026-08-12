@@ -1094,6 +1094,18 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="active Recovery disagrees"):
         validate_artifact_storage_state_v1(stale_recovery)
 
+    unprojected_active_recovery = deepcopy(recovering)
+    unprojected_active_recovery.update({
+        "store_status": "INITIALIZING", "active_recovery_id": None,
+        "recovery_origin_status": None,
+    })
+    unprojected_active_recovery["state_sigil"] = content_sigil({
+        key: member for key, member in unprojected_active_recovery.items()
+        if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="nonrecovering Store retains"):
+        validate_artifact_storage_state_v1(unprojected_active_recovery)
+
     wrong_open_sigil = deepcopy(open_ids)
     wrong_open_sigil["open_intents"] = [wrong_open_sigil["open_intents"][0]]
     wrong_open_sigil["open_intents"][0]["intent_sigil"] = SIGIL_B

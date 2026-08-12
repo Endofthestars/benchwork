@@ -762,6 +762,10 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
         or active_recovery["epoch_ids"][-1] != state["current_epoch"]
     ):
         _fail("Artifact Storage State active Recovery disagrees with Store projection")
+    if state["store_status"] != "RECOVERING" and any(
+        recovery["state"] == "ACTIVE" for recovery in recoveries.values()
+    ):
+        _fail("Artifact Storage State nonrecovering Store retains an active Recovery")
     for collection, schema_name in _STATE_WRAPPER_SCHEMAS.items():
         for wrapper in state[collection]:
             record = wrapper["record"]
