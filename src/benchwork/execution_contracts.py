@@ -970,6 +970,35 @@ def _active_lease_for_attempt_v1(
     return matches[0]
 
 
+def _lease_named_by_event_v1(
+    state: dict[str, Any], event: dict[str, Any], label: str
+) -> dict[str, Any]:
+    """Return the one Lease revision target named by an Event."""
+    lease_ids = [
+        revision["entity_id"]
+        for revision in event["entity_revisions"]
+        if revision["entity_kind"] == "LEASE"
+    ]
+    if len(lease_ids) != 1:
+        _fail(f"{label} requires exactly one Lease revision target")
+    matches = [lease for lease in state["leases"] if lease["lease_id"] == lease_ids[0]]
+    if len(matches) != 1:
+        _fail(f"{label} names an unknown Lease")
+    return matches[0]
+
+
+def _session_for_lease_v1(state: dict[str, Any], lease: dict[str, Any], label: str) -> dict[str, Any]:
+    """Return the uniquely bound Session for one Lease."""
+    matches = [
+        session
+        for session in state["worker_sessions"]
+        if session["worker_session_id"] == lease["worker_session_id"]
+    ]
+    if len(matches) != 1:
+        _fail(f"{label} requires the Lease Worker Session")
+    return matches[0]
+
+
 _ASSURANCE_LEVEL_RANK_V1 = {
     "SANCTUM-A0": 0,
     "SANCTUM-A1": 1,
@@ -1213,7 +1242,7 @@ def _reduce_lease_offered_v1(state: dict[str, Any], event: dict[str, Any], lease
     ]
     payload = event["payload"]
     if (
-        event["event_type"] != "lease.offered" or attempt["attempt_id"] != _current_attempt_v1(state, "Lease offer")["attempt_id"] or attempt["state"] != "READY" or attempt["lease_id"] is not None or attempt["worker_session_binding"] != {"kind": "NONE"} or session["state"] not in {"READY", "BUSY"}
+        event["event_type"] != "lease.offered" or attempt["attempt_id"] != _current_attempt_v1(state, "Lease offer")["attempt_id"] or attempt["state"] != "READY" or attempt["lease_id"] is not None or attempt["worker_session_binding"] != {"kind": "NONE"} or any(item["attempt_id"] == attempt["attempt_id"] and item["state"] in {"OFFERED", "ACTIVE"} for item in state["leases"]) or session["state"] not in {"READY", "BUSY"}
         or session["capacity"] is None or session["capacity_in_use"] >= session["capacity"]
         or lease["job_id"] != attempt["job_id"] or lease["attempt_id"] != attempt["attempt_id"]
         or lease["fencing_generation"] != attempt["fencing_generation"]
@@ -1328,9 +1357,8 @@ def _reduce_result_ingress_received_v1(
     """
     validate_execution_result_ingress_receipt_v1(receipt)
     validate_execution_result_ingress_event_intent_v1(intent)
-    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
-        _fail("Result ingress reducer requires one running Attempt and active Lease")
-    attempt, lease = state["attempts"][0], state["leases"][0]
+    attempt = _current_attempt_v1(state, "Result ingress reducer")
+    lease = _active_lease_for_attempt_v1(state, attempt, "Result ingress reducer")
     executor, payload = state["executor"], event["payload"]
     owner = receipt["owner_binding"]
     receipt_binding = {
@@ -1370,13 +1398,13 @@ def _reduce_result_ingress_received_v1(
     ):
         _fail("Result ingress Event disagrees with running Attempt or supplied Receipt")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
         "result_intake": {"kind": "RECEIVED", "result_ingress_receipt_binding": receipt_binding,
             "observation_evidence_subject_sigil": expected_payload["observation_evidence_subject_sigil"],
             "result_sigil": receipt["result_sigil"], "received_at": receipt["received_at"],
             "ingress_event_intent_id": intent["ingress_event_intent_id"], "ingress_event_id": event["event_id"],
             "ingress_event_sigil": event["event_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
@@ -1385,9 +1413,8 @@ def _reduce_result_accepted_v1(
 ) -> dict[str, Any]:
     """Accept a received Result only from MATCHED supplied Observation Evidence."""
     validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
-    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
-        _fail("Result acceptance reducer requires one running Attempt and active Lease")
-    attempt, lease = state["attempts"][0], state["leases"][0]
+    attempt = _current_attempt_v1(state, "Result acceptance reducer")
+    lease = _active_lease_for_attempt_v1(state, attempt, "Result acceptance reducer")
     executor, payload, intake = state["executor"], event["payload"], attempt["result_intake"]
     disposition = {"result_ingress_receipt_binding": intake["result_ingress_receipt_binding"],
         "observation_evidence_subject_sigil": intake["observation_evidence_subject_sigil"],
@@ -1410,11 +1437,11 @@ def _reduce_result_accepted_v1(
     result = {"kind": "ACCEPTED", "result_sigil": intake["result_sigil"],
         "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"],
         "disposition_sequence": event["sequence"]}
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
         "result_intake": {**intake, "kind": "DISPOSED", "observation_evidence_id": evidence["observation_evidence_id"],
             "observation_evidence_sigil": evidence["observation_evidence_sigil"], "outcome": "ACCEPTED",
             "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
@@ -1423,9 +1450,9 @@ def _reduce_result_rejected_v1(
 ) -> dict[str, Any]:
     """Freeze the first non-matching Result disposition before draining."""
     validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
-    if len(state["attempts"]) != 1:
-        _fail("Result rejection reducer requires one running Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Result rejection reducer"
+    ), event["payload"], state["executor"]
     intake = attempt["result_intake"]
     disposition = {"result_ingress_receipt_binding": intake["result_ingress_receipt_binding"],
         "observation_evidence_subject_sigil": intake["observation_evidence_subject_sigil"],
@@ -1451,19 +1478,19 @@ def _reduce_result_rejected_v1(
     result = {"kind": "REJECTED", "message_sigil": payload["message_sigil"],
         "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"],
         "disposition_sequence": event["sequence"], "reason_codes": payload["reason_codes"]}
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
         "result_intake": {**intake, "kind": "DISPOSED", "observation_evidence_id": evidence["observation_evidence_id"],
             "observation_evidence_sigil": evidence["observation_evidence_sigil"], "outcome": "REJECTED",
             "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
 def _reduce_late_result_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Retain a late/conflicting Result rejection without rewriting disposition."""
-    if len(state["attempts"]) != 1:
-        _fail("Late Result rejection reducer requires one Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Late Result rejection reducer"
+    ), event["payload"], state["executor"]
     result = attempt["result_binding"]
     terminal_states = {"SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "POLICY_VIOLATED", "LEASE_EXPIRED", "LOST", "FENCED", "REJECTED"}
     historical = result.get("disposition_event_id") if result["kind"] != "NONE" else None
@@ -1480,8 +1507,8 @@ def _reduce_late_result_rejected_v1(state: dict[str, Any], event: dict[str, Any]
     ):
         _fail("Late Result rejection Event disagrees with historical Attempt disposition")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
@@ -1490,9 +1517,9 @@ def _reduce_log_chunk_committed_v1(
 ) -> dict[str, Any]:
     """Append one supplied immutable Log Chunk to its exact open stream."""
     validate_instance("execution-log-chunk-1.0.json", chunk)
-    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
-        _fail("Log chunk reducer requires one Attempt and Lease")
-    attempt, lease, payload, executor = state["attempts"][0], state["leases"][0], event["payload"], state["executor"]
+    attempt = _current_attempt_v1(state, "Log chunk reducer")
+    lease = _active_lease_for_attempt_v1(state, attempt, "Log chunk reducer")
+    payload, executor = event["payload"], state["executor"]
     matches = [stream for stream in state["log_streams"] if stream["log_stream_id"] == payload["log_stream_id"]]
     if len(matches) != 1:
         _fail("Log chunk Event has no unique Log-stream projection")
@@ -1819,9 +1846,7 @@ def _reduce_log_truncated_v1(state: dict[str, Any], event: dict[str, Any]) -> di
 
 def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close a running Attempt after its immutable result disposition."""
-    if len(state["attempts"]) != 1:
-        _fail("Attempt draining reducer requires one running Attempt")
-    attempt, payload = state["attempts"][0], event["payload"]
+    attempt, payload = _current_attempt_v1(state, "Attempt draining reducer"), event["payload"]
     executor = state["executor"]
     result = attempt["result_binding"]
     if result["kind"] == "ACCEPTED":
@@ -1845,16 +1870,16 @@ def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) ->
     ):
         _fail("Attempt draining Event disagrees with Result disposition")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "DRAINING",
-        "completion_anchor_binding": anchor, "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1, "state": "DRAINING",
+        "completion_anchor_binding": anchor, "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
 def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Freeze the terminal-source disposition before cleanup progresses."""
-    if len(state["attempts"]) != 1:
-        _fail("Attempt cleaning reducer requires one draining Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Attempt cleaning reducer"
+    ), event["payload"], state["executor"]
     if (
         event["event_type"] != "attempt.cleaning" or attempt["state"] not in {"DRAINING", "STOPPING"}
         or event["executor_instance_id"] != executor["executor_instance_id"]
@@ -1865,9 +1890,9 @@ def _reduce_attempt_cleaning_v1(state: dict[str, Any], event: dict[str, Any]) ->
     ):
         _fail("Attempt cleaning Event disagrees with draining Attempt")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "CLEANING",
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1, "state": "CLEANING",
         "terminal_source_binding": payload["terminal_source_binding"], "last_event_id": event["event_id"],
-        "last_event_sigil": event["event_sigil"]}]
+        "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
@@ -1878,9 +1903,9 @@ _STOP_PROGRESS_STEPS_V1 = {
 
 def _reduce_attempt_stop_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record one bounded termination action while the Attempt is stopping."""
-    if len(state["attempts"]) != 1:
-        _fail("Stop progress reducer requires one stopping Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Stop progress reducer"
+    ), event["payload"], state["executor"]
     if (
         event["event_type"] != "attempt.stop_progressed" or attempt["state"] != "STOPPING"
         or payload["step"] not in _STOP_PROGRESS_STEPS_V1
@@ -1891,8 +1916,8 @@ def _reduce_attempt_stop_progressed_v1(state: dict[str, Any], event: dict[str, A
     ):
         _fail("Stop progress Event disagrees with stopping Attempt")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
     return build_execution_state_v1(reduced)
 
 
@@ -1909,9 +1934,9 @@ _ACCOUNTING_CAPTURE_FINALIZATION_KEYS_V1 = {
 
 def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Replay cleanup, including the single immutable accounting capture."""
-    if len(state["attempts"]) != 1:
-        _fail("Cleanup progress reducer requires one Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Cleanup progress reducer"
+    ), event["payload"], state["executor"]
     is_capture = payload["step"] == "ACCOUNTING_CAPTURED"
     finalization = payload["finalization_bindings"]
     capture_valid = (
@@ -1954,7 +1979,7 @@ def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) 
             "terminalization_storage_manifest_binding": finalization["terminalization_storage_manifest_binding"],
             "output_root_protection": finalization["output_root_protection"],
         })
-    reduced["attempts"] = [updated]
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], updated)
     return build_execution_state_v1(reduced)
 
 
@@ -1967,13 +1992,13 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
     intentionally does not settle the Job budget, evaluate assurance, or
     accept an Outcome.
     """
-    if len(state["attempts"]) != 1 or len(state["jobs"]) != 1:
-        _fail("Attempt terminal reducer requires one Job and one Attempt")
+    if len(state["jobs"]) != 1:
+        _fail("Attempt terminal reducer requires one Job")
     terminal_state = _ATTEMPT_TERMINAL_EVENT_STATES_V1.get(event["event_type"])
     if terminal_state is None:
         _fail("Attempt terminal reducer received a nonterminal Event")
     attempt, job, payload, executor = (
-        state["attempts"][0], state["jobs"][0], event["payload"], state["executor"]
+        _current_attempt_v1(state, "Attempt terminal reducer"), state["jobs"][0], event["payload"], state["executor"]
     )
     evidence = payload["attempt_terminal_evidence"]
     expected_revision = [{
@@ -2019,7 +2044,7 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
     if terminal_state == "SUCCEEDED" and evidence["completion_anchor_binding"]["kind"] == "NOT_ESTABLISHED":
         _fail("Succeeded Attempt terminal Event requires an established completion anchor")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
         **attempt,
         "revision": attempt["revision"] + 1,
         "state": terminal_state,
@@ -2036,7 +2061,7 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
             "terminal_sequence": event["sequence"], "terminal_recorded_at": event["recorded_at"],
         },
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    }]
+    })
     reduced["deadlines"] = [
         deadline for deadline in state["deadlines"]
         if not (
@@ -2051,10 +2076,10 @@ def _reduce_job_budget_settled_v1(
     state: dict[str, Any], event: dict[str, Any], immutable_attempt: dict[str, Any]
 ) -> dict[str, Any]:
     """Settle one terminal Attempt from its sealed reservation and accounting payload."""
-    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1:
-        _fail("Budget settlement reducer requires one Job and one Attempt")
+    if len(state["jobs"]) != 1:
+        _fail("Budget settlement reducer requires one Job")
     job, attempt, payload, executor = (
-        state["jobs"][0], state["attempts"][0], event["payload"], state["executor"]
+        state["jobs"][0], _current_attempt_v1(state, "Budget settlement reducer"), event["payload"], state["executor"]
     )
     validate_execution_attempt_v1(immutable_attempt)
     reservation = immutable_attempt["budget_reservation"]
@@ -2128,7 +2153,7 @@ def _reduce_job_budget_settled_v1(
     reduced = _advance_journal_binding_v1(state, event)
     reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "budget_ledger": ledger,
                         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["attempts"] = [{
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
         **attempt, "revision": attempt["revision"] + 1,
         "accounting_capture_binding": attempt["accounting_capture_binding"],
         "budget_settlement_binding": {"kind": "SETTLED", "event_id": event["event_id"],
@@ -2137,7 +2162,7 @@ def _reduce_job_budget_settled_v1(
                                       "accounting_capture_event_sigil": payload["accounting_capture_event_sigil"],
                                       "usage_status": payload["usage_status"]},
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    }]
+    })
     return build_execution_state_v1(reduced)
 
 
@@ -2205,10 +2230,13 @@ def _reduce_attempt_assurance_evaluated_v1(
         "attempt_summaries": [*job["attempt_summaries"], summary],
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
     }]
-    reduced["attempts"] = [{
-        **candidate, "revision": candidate["revision"] + 1, "attempt_assurance_binding": assurance,
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
-    } if candidate["attempt_id"] == attempt["attempt_id"] else candidate for candidate in state["attempts"]]
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
+        **attempt,
+        "revision": attempt["revision"] + 1,
+        "attempt_assurance_binding": assurance,
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    })
     return build_execution_state_v1(reduced)
 
 
@@ -2420,9 +2448,13 @@ def _reduce_job_terminal_v1(state: dict[str, Any], event: dict[str, Any]) -> dic
 
 def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close active Worker authority and publish its higher fence tombstone."""
-    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1 or len(state["worker_sessions"]) != 1:
-        _fail("Lease release reducer requires one Job, Attempt, Lease, and Session")
-    job, attempt, lease, session = state["jobs"][0], state["attempts"][0], state["leases"][0], state["worker_sessions"][0]
+    if len(state["jobs"]) != 1:
+        _fail("Lease release reducer requires one Job")
+    job, lease = state["jobs"][0], _lease_named_by_event_v1(state, event, "Lease release")
+    attempts = [item for item in state["attempts"] if item["attempt_id"] == lease["attempt_id"]]
+    if len(attempts) != 1:
+        _fail("Lease release requires the Lease Attempt")
+    attempt, session = attempts[0], _session_for_lease_v1(state, lease, "Lease release")
     executor, payload = state["executor"], event["payload"]
     expected_revisions = [
         {"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1},
@@ -2432,7 +2464,7 @@ def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> d
     ]
     final_floor = attempt["fencing_generation"] + 1
     if (
-        event["event_type"] != "lease.released" or lease["state"] != "ACTIVE"
+        event["event_type"] != "lease.released" or attempt["attempt_id"] != _current_attempt_v1(state, "Lease release")["attempt_id"] or lease["state"] != "ACTIVE"
         or attempt["lease_id"] != lease["lease_id"] or session["capacity_in_use"] < 1
         or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
         or event["causation_event_id"] != attempt["last_event_id"] or event["entity_revisions"] != expected_revisions
@@ -2442,24 +2474,26 @@ def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> d
         _fail("Lease release Event disagrees with active Lease authority")
     reduced = _advance_journal_binding_v1(state, event)
     capacity_after = session["capacity_in_use"] - 1
-    reduced["worker_sessions"] = [{**session, "revision": session["revision"] + 1,
+    reduced["worker_sessions"] = [{**candidate, "revision": candidate["revision"] + 1,
         "state": "READY" if capacity_after == 0 else "BUSY", "capacity_in_use": capacity_after,
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]]
     reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "fence_floor": final_floor,
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
         "lease_terminal_binding": {"kind": "TERMINAL", "lease_id": lease["lease_id"], "lease_state": "RELEASED",
             "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
             "final_fence_floor": final_floor, "tombstone_event_sigil": payload["tombstone_publication_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1, "state": "RELEASED",
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
+    reduced["leases"] = [{**candidate, "revision": candidate["revision"] + 1, "state": "RELEASED",
         "next_heartbeat_due_at": None, "tombstone_generation": final_floor,
         "tombstone_event_sigil": payload["tombstone_publication_sigil"], "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"], "terminal_event_binding": {
             "kind": "PRESENT", "terminal_state": "RELEASED", "terminal_event_id": event["event_id"],
             "terminal_event_sigil": event["event_sigil"], "terminal_sequence": event["sequence"],
             "terminal_recorded_at": event["recorded_at"],
-        }}]
+        }} if candidate["lease_id"] == lease["lease_id"] else candidate for candidate in state["leases"]]
     reduced["deadlines"] = [item for item in state["deadlines"] if not (
         item["entity_id"] in {lease["lease_id"], session["worker_session_id"]}
         and item["deadline_kind"] in {"LEASE_EXPIRY", "HEARTBEAT_TIMEOUT"}
@@ -2469,9 +2503,13 @@ def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> d
 
 def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Expire offered or active authority without implicitly stopping the Attempt."""
-    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1 or len(state["worker_sessions"]) != 1:
-        _fail("Lease expiry reducer requires one Job, Attempt, Lease, and Session")
-    job, attempt, lease, session = state["jobs"][0], state["attempts"][0], state["leases"][0], state["worker_sessions"][0]
+    if len(state["jobs"]) != 1:
+        _fail("Lease expiry reducer requires one Job")
+    job, lease = state["jobs"][0], _lease_named_by_event_v1(state, event, "Lease expiry")
+    attempts = [item for item in state["attempts"] if item["attempt_id"] == lease["attempt_id"]]
+    if len(attempts) != 1:
+        _fail("Lease expiry requires the Lease Attempt")
+    attempt, session = attempts[0], _session_for_lease_v1(state, lease, "Lease expiry")
     executor, payload = state["executor"], event["payload"]
     active = lease["state"] == "ACTIVE"
     expected_revisions = [
@@ -2485,7 +2523,7 @@ def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     capacity_after = session["capacity_in_use"] - 1 if active else session["capacity_in_use"]
     final_floor = attempt["fencing_generation"] + 1
     if (
-        event["event_type"] != "lease.expired" or lease["state"] not in {"OFFERED", "ACTIVE"}
+        event["event_type"] != "lease.expired" or attempt["attempt_id"] != _current_attempt_v1(state, "Lease expiry")["attempt_id"] or lease["state"] not in {"OFFERED", "ACTIVE"}
         or attempt["lease_id"] != lease["lease_id"] or (active and session["capacity_in_use"] < 1)
         or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
         or event["causation_event_id"] != attempt["last_event_id"] or event["entity_revisions"] != expected_revisions
@@ -2496,25 +2534,27 @@ def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     ):
         _fail("Lease expiry Event disagrees with Lease authority or deadline")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["worker_sessions"] = [{**session, "revision": session["revision"] + 1,
+    reduced["worker_sessions"] = [{**candidate, "revision": candidate["revision"] + 1,
         "state": "READY" if capacity_after == 0 else "BUSY", "capacity_in_use": capacity_after,
         "next_heartbeat_due_at": None if active else session["next_heartbeat_due_at"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]]
     reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "fence_floor": final_floor,
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
         "lease_terminal_binding": {"kind": "TERMINAL", "lease_id": lease["lease_id"], "lease_state": "EXPIRED",
             "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
             "final_fence_floor": final_floor, "tombstone_event_sigil": payload["tombstone_publication_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1, "state": "EXPIRED",
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
+    reduced["leases"] = [{**candidate, "revision": candidate["revision"] + 1, "state": "EXPIRED",
         "next_heartbeat_due_at": None, "tombstone_generation": final_floor,
         "tombstone_event_sigil": payload["tombstone_publication_sigil"], "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"], "terminal_event_binding": {
             "kind": "PRESENT", "terminal_state": "EXPIRED", "terminal_event_id": event["event_id"],
             "terminal_event_sigil": event["event_sigil"], "terminal_sequence": event["sequence"],
             "terminal_recorded_at": event["recorded_at"],
-        }}]
+        }} if candidate["lease_id"] == lease["lease_id"] else candidate for candidate in state["leases"]]
     reduced["deadlines"] = [item for item in state["deadlines"] if not (
         (item["entity_id"] == lease["lease_id"] and item["deadline_kind"] in {"LEASE_CLAIM_DEADLINE", "LEASE_EXPIRY"})
         or (active and item["entity_id"] == session["worker_session_id"] and item["deadline_kind"] == "HEARTBEAT_TIMEOUT")
@@ -2524,9 +2564,13 @@ def _reduce_lease_expired_v1(state: dict[str, Any], event: dict[str, Any]) -> di
 
 def _reduce_lease_revoked_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close offered or active authority after a previously recorded stop."""
-    if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1 or len(state["worker_sessions"]) != 1:
-        _fail("Lease revocation reducer requires one Job, Attempt, Lease, and Session")
-    job, attempt, lease, session = state["jobs"][0], state["attempts"][0], state["leases"][0], state["worker_sessions"][0]
+    if len(state["jobs"]) != 1:
+        _fail("Lease revocation reducer requires one Job")
+    job, lease = state["jobs"][0], _lease_named_by_event_v1(state, event, "Lease revocation")
+    attempts = [item for item in state["attempts"] if item["attempt_id"] == lease["attempt_id"]]
+    if len(attempts) != 1:
+        _fail("Lease revocation requires the Lease Attempt")
+    attempt, session = attempts[0], _session_for_lease_v1(state, lease, "Lease revocation")
     executor, payload, cause = state["executor"], event["payload"], event["payload"]["transition_cause"]
     active = lease["state"] == "ACTIVE"
     first_stop = attempt["first_stop_or_fence_binding"]
@@ -2539,7 +2583,7 @@ def _reduce_lease_revoked_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     capacity_after = session["capacity_in_use"] - 1 if active else session["capacity_in_use"]
     final_floor = attempt["fencing_generation"] + 1
     if (
-        event["event_type"] != "lease.revoked" or lease["state"] not in {"OFFERED", "ACTIVE"}
+        event["event_type"] != "lease.revoked" or attempt["attempt_id"] != _current_attempt_v1(state, "Lease revocation")["attempt_id"] or lease["state"] not in {"OFFERED", "ACTIVE"}
         or attempt["state"] != "STOPPING" or first_stop.get("kind") != "PRESENT"
         or attempt["lease_id"] != lease["lease_id"] or (active and session["capacity_in_use"] < 1)
         or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
@@ -2551,25 +2595,27 @@ def _reduce_lease_revoked_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     ):
         _fail("Lease revocation Event disagrees with latched stop or Lease authority")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["worker_sessions"] = [{**session, "revision": session["revision"] + 1,
+    reduced["worker_sessions"] = [{**candidate, "revision": candidate["revision"] + 1,
         "state": "READY" if capacity_after == 0 else "BUSY", "capacity_in_use": capacity_after,
         "next_heartbeat_due_at": None if active else session["next_heartbeat_due_at"],
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]]
     reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "fence_floor": final_floor,
         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {**attempt, "revision": attempt["revision"] + 1,
         "lease_terminal_binding": {"kind": "TERMINAL", "lease_id": lease["lease_id"], "lease_state": "REVOKED",
             "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
             "final_fence_floor": final_floor, "tombstone_event_sigil": payload["tombstone_publication_sigil"]},
-        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
-    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1, "state": "REVOKED",
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]})
+    reduced["leases"] = [{**candidate, "revision": candidate["revision"] + 1, "state": "REVOKED",
         "next_heartbeat_due_at": None, "tombstone_generation": final_floor,
         "tombstone_event_sigil": payload["tombstone_publication_sigil"], "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"], "terminal_event_binding": {
             "kind": "PRESENT", "terminal_state": "REVOKED", "terminal_event_id": event["event_id"],
             "terminal_event_sigil": event["event_sigil"], "terminal_sequence": event["sequence"],
             "terminal_recorded_at": event["recorded_at"],
-        }}]
+        }} if candidate["lease_id"] == lease["lease_id"] else candidate for candidate in state["leases"]]
     reduced["deadlines"] = [item for item in state["deadlines"] if not (
         (item["entity_id"] == lease["lease_id"] and item["deadline_kind"] in {"LEASE_CLAIM_DEADLINE", "LEASE_EXPIRY"})
         or (active and item["entity_id"] == session["worker_session_id"] and item["deadline_kind"] == "HEARTBEAT_TIMEOUT")
@@ -3407,14 +3453,22 @@ def _reduce_job_attempt_allocated_v1(
         _fail("Attempt allocation reducer requires exactly one queued Job")
     job = state["jobs"][0]
     executor = state["executor"]
+    prior_attempts = state["attempts"]
+    prior_attempt_ids = {item["attempt_id"] for item in prior_attempts}
+    prior_log_ids = {item["log_stream_id"] for item in state["log_streams"]}
+    expected_retry_ordinal = len(prior_attempts) + 1
     if (
         job["state"] != "QUEUED"
-        or state["attempts"]
-        or state["log_streams"]
+        or job["current_attempt_id"] is not None
+        or set(job["attempt_ids"]) != prior_attempt_ids
+        or len(job["attempt_summaries"]) != len(prior_attempts)
+        or any(item["state"] not in _ATTEMPT_TERMINAL_EVENT_STATES_V1.values() for item in prior_attempts)
         or attempt["job_id"] != job["job_id"]
         or attempt["job_binding_sigil"] != job["job_binding_sigil"]
-        or attempt["retry_ordinal"] != 1
-        or attempt["fencing_generation"] != 1
+        or attempt["attempt_id"] in prior_attempt_ids
+        or attempt["retry_ordinal"] != expected_retry_ordinal
+        or attempt["fencing_generation"] != job["fencing_counter"] + 1
+        or any(log_id in prior_log_ids for log_id in attempt["log_stream_ids"].values())
         or event["executor_instance_id"] != executor["executor_instance_id"]
         or event["executor_epoch"] != executor["executor_epoch"]
         or event["executor_build_sigil"]
@@ -3471,7 +3525,7 @@ def _reduce_job_attempt_allocated_v1(
             **job,
             "revision": job["revision"] + 1,
             "state": "ACTIVE",
-            "attempt_ids": [attempt["attempt_id"]],
+            "attempt_ids": [*job["attempt_ids"], attempt["attempt_id"]],
             "current_attempt_id": attempt["attempt_id"],
             "fencing_counter": attempt["fencing_generation"],
             "fence_floor": attempt["fencing_generation"],
@@ -3482,6 +3536,7 @@ def _reduce_job_attempt_allocated_v1(
         }
     ]
     reduced["attempts"] = [
+        *prior_attempts,
         {
             "attempt_id": attempt["attempt_id"],
             "revision": 0,
@@ -3523,6 +3578,8 @@ def _reduce_job_attempt_allocated_v1(
         }
     ]
     reduced["log_streams"] = [
+        *state["log_streams"],
+        *[
         {
             "log_stream_id": log_ids[stream],
             "revision": 0,
@@ -3538,7 +3595,8 @@ def _reduce_job_attempt_allocated_v1(
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
         }
-        for stream in ("STDOUT", "STDERR", "STRUCTURED")
+            for stream in ("STDOUT", "STDERR", "STRUCTURED")
+        ],
     ]
     reduced["deadlines"] = [
         *state["deadlines"],
@@ -3571,9 +3629,9 @@ def _reduce_attempt_preflight_started_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
     """Reduce a CREATED Attempt after its immutable bindings have been rechecked."""
-    if event["event_type"] != "attempt.preflight_started" or len(state["attempts"]) != 1:
-        _fail("Attempt preflight reducer requires exactly one created Attempt")
-    attempt = state["attempts"][0]
+    if event["event_type"] != "attempt.preflight_started":
+        _fail("Attempt preflight reducer received the wrong Event")
+    attempt = _current_attempt_v1(state, "Attempt preflight reducer")
     executor = state["executor"]
     if (
         attempt["state"] != "CREATED"
@@ -3597,7 +3655,7 @@ def _reduce_attempt_preflight_started_v1(
     ):
         _fail("Attempt preflight Event disagrees with created Attempt projection")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = [
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"],
         {
             **attempt,
             "revision": attempt["revision"] + 1,
@@ -3605,7 +3663,7 @@ def _reduce_attempt_preflight_started_v1(
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
         }
-    ]
+    )
     reduced["journal_binding"] = {
         "journal_id": event["journal_id"],
         "through_sequence": event["sequence"],
@@ -3634,9 +3692,9 @@ def _reduce_attempt_preflight_progressed_v1(
     mutable progress field, so this reducer validates ordering and the allowed
     step without promoting the evidence to authority.
     """
-    if len(state["attempts"]) != 1:
-        _fail("Preflight progress reducer requires one Attempt")
-    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    attempt, payload, executor = _current_attempt_v1(
+        state, "Preflight progress reducer"
+    ), event["payload"], state["executor"]
     if (
         event["event_type"] != "attempt.preflight_progressed"
         or attempt["state"] != "PREFLIGHTING"
@@ -3656,12 +3714,12 @@ def _reduce_attempt_preflight_progressed_v1(
     ):
         _fail("Preflight progress Event disagrees with preflighting Attempt")
     reduced = _advance_journal_binding_v1(state, event)
-    reduced["attempts"] = [{
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"], {
         **attempt,
         "revision": attempt["revision"] + 1,
         "last_event_id": event["event_id"],
         "last_event_sigil": event["event_sigil"],
-    }]
+    })
     return build_execution_state_v1(reduced)
 
 
@@ -3669,9 +3727,9 @@ def _reduce_attempt_preflight_passed_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
     """Reduce a completed preflight while retaining only its immutable root bindings."""
-    if event["event_type"] != "attempt.preflight_passed" or len(state["attempts"]) != 1:
-        _fail("Attempt preflight-pass reducer requires exactly one preflighting Attempt")
-    attempt = state["attempts"][0]
+    if event["event_type"] != "attempt.preflight_passed":
+        _fail("Attempt preflight-pass reducer received the wrong Event")
+    attempt = _current_attempt_v1(state, "Attempt preflight-pass reducer")
     executor = state["executor"]
     roots = event["payload"]["input_storage_roots"]
     if (
@@ -3700,7 +3758,7 @@ def _reduce_attempt_preflight_passed_v1(
     if len(roots) > 1:
         _fail("Attempt preflight-pass Event has too many input storage roots")
     reduced = {key: value for key, value in state.items() if key != "state_sigil"}
-    reduced["attempts"] = [
+    reduced["attempts"] = _replace_attempt_v1(state, attempt["attempt_id"],
         {
             **attempt,
             "revision": attempt["revision"] + 1,
@@ -3709,7 +3767,7 @@ def _reduce_attempt_preflight_passed_v1(
             "last_event_id": event["event_id"],
             "last_event_sigil": event["event_sigil"],
         }
-    ]
+    )
     reduced["journal_binding"] = {
         "journal_id": event["journal_id"],
         "through_sequence": event["sequence"],
