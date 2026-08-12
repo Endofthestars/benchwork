@@ -304,6 +304,36 @@ def test_storage_replay_applies_empty_clock_gate_round_trip() -> None:
         replay_artifact_storage_journal_prefix_v1([initial, activation, wrong_anchor])
 
 
+def test_storage_replay_advances_a_no_recovery_epoch() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{"entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1, "next_revision": 2}]
+    activation["payload"] = {"legacy_protection_ids": [], "activation_evidence_sigil": SIGIL, "clock": initial["payload"]["clock"]}
+    activation["quota_effects"] = []
+    activation["event_sigil"] = content_sigil({key: value for key, value in activation.items() if key != "event_sigil"})
+    epoch = _next_event(activation)
+    epoch.update({
+        "event_id": "SE-THREE", "sequence": 3, "event_type": "storage.epoch_started", "epoch": 2,
+        "recorded_at": "2026-08-06T00:00:02Z", "observed_at": "2026-08-06T00:00:01Z",
+        "entity_revisions": [{"entity_type": "STORE", "entity_id": "STORE", "previous_revision": 2, "next_revision": 3}],
+        "quota_effects": [],
+        "payload": {"previous_epoch": 1, "next_epoch": 2, "active_recovery_id": None,
+                    "tail_recovery": None, "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+                    "clock": {**initial["payload"]["clock"], "utc": "2026-08-06T00:00:01Z"}},
+    })
+    epoch["event_sigil"] = content_sigil({key: value for key, value in epoch.items() if key != "event_sigil"})
+    state = replay_artifact_storage_journal_prefix_v1([initial, activation, epoch])
+    assert state["current_epoch"] == 2
+    assert state["clock_anchor"] == epoch["payload"]["clock"]
+
+    wrong_epoch = deepcopy(epoch)
+    wrong_epoch["payload"]["next_epoch"] = 3
+    wrong_epoch["event_sigil"] = content_sigil({key: value for key, value in wrong_epoch.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="epoch Event"):
+        replay_artifact_storage_journal_prefix_v1([initial, activation, wrong_epoch])
+
+
 def _reference_set() -> dict[str, object]:
     reference_set: dict[str, object] = {
         "schema_version": "artifact-storage-reference-set/1.0", "reference_set_id": "",

@@ -804,6 +804,42 @@ def _reduce_artifact_storage_clock_gate_v1(
     return reduced
 
 
+def _reduce_artifact_storage_epoch_started_v1(
+    state: dict[str, Any], event: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply an ordinary no-Recovery coordinator epoch restart."""
+    if event["event_type"] != "storage.epoch_started" or state["store_status"] not in {"INITIALIZING", "ACTIVE"}:
+        _fail("Artifact Storage epoch reducer has an invalid source state or Event")
+    payload = event["payload"]
+    if (
+        event["journal_id"] != state["journal_id"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["epoch"] != payload["next_epoch"]
+        or payload["previous_epoch"] != state["current_epoch"]
+        or payload["next_epoch"] != state["current_epoch"] + 1
+        or payload["active_recovery_id"] is not None
+        or payload["tail_recovery"] is not None
+        or event["entity_revisions"] != [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": event["sequence"] - 1, "next_revision": event["sequence"],
+        }]
+    ):
+        _fail("Artifact Storage epoch Event disagrees with prior State")
+    if event["observed_at"] != payload["clock"]["utc"]:
+        _fail("Artifact Storage epoch observed_at disagrees with clock")
+    if _parse_time(payload["clock"]["utc"]) < _parse_time(state["clock_anchor"]["utc"]):
+        _fail("Artifact Storage epoch clock regresses")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "current_epoch": payload["next_epoch"], "clock_anchor": payload["clock"],
+        "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -818,6 +854,12 @@ def replay_artifact_storage_journal_prefix_v1(
         state = _reduce_artifact_storage_activation_v1(state, events[1])
         if head is not None:
             validate_artifact_storage_journal_head_supplied_event_v1(head, events[1], state["state_sigil"])
+        return state
+    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed" and events[2]["event_type"] == "storage.epoch_started":
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_epoch_started_v1(state, events[2])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
         return state
     if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed":
         state = _reduce_artifact_storage_activation_v1(state, events[1])
