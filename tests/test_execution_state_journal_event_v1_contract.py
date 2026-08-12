@@ -1053,6 +1053,21 @@ def test_empty_recovery_phase_replay_projects_each_control_phase() -> None:
     }]
     assert state["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
 
+    one_step = replay_execution_supplied_state_suffix_v1(
+        replay_execution_journal_prefix_v1([initial, clock_uncertain, recovery_started]),
+        [fencing],
+        supplied_recovery_action_sets=[started_set, fencing_set],
+    )
+    assert one_step["recoveries"][0]["state"] == "FENCING"
+    assert one_step["recoveries"][0]["current_action_set_sigil"] == fencing_set["action_set_sigil"]
+    assert one_step["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
+
+    with pytest.raises(Exception, match="requires exactly one"):
+        replay_execution_supplied_state_suffix_v1(
+            replay_execution_journal_prefix_v1([initial, clock_uncertain, recovery_started]),
+            [fencing], supplied_recovery_action_sets=[started_set],
+        )
+
     malformed = deepcopy(fencing_set)
     malformed["actions"] = _recovery_action_set()["actions"]
     malformed["action_set_sigil"] = content_sigil({
