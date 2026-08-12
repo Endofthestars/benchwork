@@ -360,6 +360,10 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             session["lease_ids"], key=lambda value: _unsigned_ascii(value, "Lease ID")
         ):
             _fail("Worker-Session lease_ids are not unsigned-ASCII sorted")
+    if {
+        session_id for worker in state["workers"] for session_id in worker["worker_session_ids"]
+    } != set(sessions_by_id):
+        _fail("Worker projection session IDs do not exactly match Worker-Session projections")
     lease_ids = [lease["lease_id"] for lease in state["leases"]]
     if len(lease_ids) != len(set(lease_ids)):
         _fail("duplicate Lease projection identity")
@@ -390,6 +394,10 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
             _fail("Lease Worker does not match its Worker-Session")
         if lease["lease_id"] not in session["lease_ids"]:
             _fail("Lease projection is missing from its Worker-Session")
+    if {
+        lease_id for session in state["worker_sessions"] for lease_id in session["lease_ids"]
+    } != set(lease_ids):
+        _fail("Worker-Session lease IDs do not exactly match Lease projections")
     log_stream_ids: set[str] = set()
     for log_stream in state["log_streams"]:
         log_stream_id = log_stream["log_stream_id"]

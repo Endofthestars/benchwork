@@ -1260,7 +1260,7 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     missing_session = deepcopy(state)
     missing_session["worker_sessions"] = []
     _reseal_state(missing_session)
-    with pytest.raises(Exception, match="no matching Worker-Session"):
+    with pytest.raises(Exception, match="session IDs do not exactly match|no matching Worker-Session"):
         load_execution_state_v1(json.dumps(missing_session))
 
     mismatched_lease_worker = deepcopy(state)
@@ -1280,6 +1280,18 @@ def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
     _reseal_state(excess_lease_expiry)
     with pytest.raises(Exception, match="exceeds its maximum expiry"):
         load_execution_state_v1(json.dumps(excess_lease_expiry))
+
+    orphan_session = deepcopy(state)
+    orphan_session["workers"][0]["worker_session_ids"].append("WS-" + "1" * 26)
+    _reseal_state(orphan_session)
+    with pytest.raises(Exception, match="session IDs do not exactly match"):
+        load_execution_state_v1(json.dumps(orphan_session))
+
+    orphan_lease = deepcopy(state)
+    orphan_lease["worker_sessions"][0]["lease_ids"].append("LS-" + "1" * 26)
+    _reseal_state(orphan_lease)
+    with pytest.raises(Exception, match="lease IDs do not exactly match"):
+        load_execution_state_v1(json.dumps(orphan_lease))
 
 
 def test_state_locally_binds_log_stream_closure_projections() -> None:
