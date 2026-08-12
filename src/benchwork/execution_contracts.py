@@ -3339,11 +3339,16 @@ def replay_execution_journal_prefix_v1(
     supplied_attempts: list[dict[str, Any]] | None = None,
     supplied_workers: list[dict[str, Any]] | None = None,
     supplied_worker_sessions: list[dict[str, Any]] | None = None,
+    supplied_leases: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_receipts: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
+    supplied_observation_evidence: list[dict[str, Any]] | None = None,
+    supplied_log_chunks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
+    """Verify a v1 Journal prefix with the installed supplied-facts reducers.
 
     Prefix integrity is checked before reducer dispatch.  A syntactically valid
-    Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
+    Event outside the explicitly installed reducer set
     fails closed rather than being interpreted as a no-op or guessed transition.
     ``recovery_action_sets`` is required only for the action-free
     Recovery control path; it is not an authority to derive or execute actions.
@@ -3360,6 +3365,20 @@ def replay_execution_journal_prefix_v1(
         if supplied_workers is not None or supplied_worker_sessions is not None:
             _fail(
                 "Execution Journal replay cannot combine Recovery action sets and supplied Worker records"
+            )
+        if any(
+            value is not None
+            for value in (
+                supplied_leases,
+                supplied_result_ingress_receipts,
+                supplied_result_ingress_intents,
+                supplied_observation_evidence,
+                supplied_log_chunks,
+            )
+        ):
+            _fail(
+                "Execution Journal replay cannot combine empty Recovery action sets "
+                "and unrelated supplied records"
             )
         empty_recovery_types = [
             "executor.epoch_started",
@@ -3381,110 +3400,19 @@ def replay_execution_journal_prefix_v1(
             recovery_action_sets,
             head=head,
         )
-    validate_execution_journal_prefix_wire_v1(events, head=head)
-    initial_state = replay_execution_initial_prefix_v1([events[0]])
-    if len(events) == 1:
-        if head is not None:
-            validate_execution_initial_state_supplied_facts_v1(events[0], initial_state, head)
-        return initial_state
-    worker_prefix = [event["event_type"] for event in events[1:]]
-    if worker_prefix and worker_prefix[0] == "worker.definition_registered":
-        if len(events) > 5:
-            _fail("Worker/Session replay supports only the installed registration prefix")
-        worker_id = events[1]["entity_revisions"][0]["entity_id"]
-        worker = _find_supplied_v1(supplied_workers, worker_id, "worker_id", "Worker registration")
-        state = _reduce_worker_registered_v1(initial_state, events[1], worker)
-        if len(events) >= 3:
-            state = _reduce_worker_enabled_v1(state, events[2])
-        if len(events) >= 4:
-            session_id = events[3]["entity_revisions"][0]["entity_id"]
-            session = _find_supplied_v1(
-                supplied_worker_sessions,
-                session_id,
-                "worker_session_id",
-                "Worker Session registration",
-            )
-            validate_execution_worker_session_supplied_worker_v1(session, worker)
-            state = _reduce_worker_session_registered_v1(state, events[3], session)
-        if len(events) == 5:
-            state = _reduce_worker_session_ready_v1(state, events[4])
-        if head is not None and (
-            head["journal_id"] != state["journal_binding"]["journal_id"]
-            or head["last_sequence"] != events[-1]["sequence"]
-            or head["last_event_id"] != events[-1]["event_id"]
-            or head["last_event_sigil"] != events[-1]["event_sigil"]
-        ):
-            _fail("Execution Journal Head disagrees with replay prefix")
-        return state
-    if len(events) in {2, 3, 4, 5, 6} and events[1]["event_type"] == "job.submitted":
-        if supplied_jobs is None or len(supplied_jobs) != 1:
-            _fail("Job submission replay requires exactly one supplied Job")
-        state = _reduce_job_submitted_v1(initial_state, events[1], supplied_jobs[0])
-        if len(events) == 3:
-            state = _reduce_job_queued_v1(state, events[2])
-        if len(events) == 4:
-            if (
-                events[2]["event_type"] != "job.queued"
-                or supplied_attempts is None
-                or len(supplied_attempts) != 1
-            ):
-                _fail("Attempt allocation replay requires one supplied Attempt after job.queued")
-            state = _reduce_job_queued_v1(state, events[2])
-            state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
-        if len(events) == 5:
-            if (
-                events[2]["event_type"] != "job.queued"
-                or supplied_attempts is None
-                or len(supplied_attempts) != 1
-            ):
-                _fail("Attempt preflight replay requires one supplied Attempt after allocation")
-            state = _reduce_job_queued_v1(state, events[2])
-            state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
-            state = _reduce_attempt_preflight_started_v1(state, events[4])
-        if len(events) == 6:
-            if (
-                events[2]["event_type"] != "job.queued"
-                or supplied_attempts is None
-                or len(supplied_attempts) != 1
-            ):
-                _fail(
-                    "Attempt preflight-pass replay requires one supplied Attempt after allocation"
-                )
-            state = _reduce_job_queued_v1(state, events[2])
-            state = _reduce_job_attempt_allocated_v1(state, events[3], supplied_attempts[0])
-            state = _reduce_attempt_preflight_started_v1(state, events[4])
-            state = _reduce_attempt_preflight_passed_v1(state, events[5])
-        if head is not None and (
-            head["journal_id"] != state["journal_binding"]["journal_id"]
-            or head["last_sequence"] != events[-1]["sequence"]
-            or head["last_event_id"] != events[-1]["event_id"]
-            or head["last_event_sigil"] != events[-1]["event_sigil"]
-        ):
-            _fail("Execution Journal Head disagrees with replay prefix")
-        return state
-    if supplied_jobs is not None:
-        _fail("supplied Jobs are unsupported for this Execution Journal replay prefix")
-    if supplied_attempts is not None:
-        _fail("supplied Attempts are unsupported for this Execution Journal replay prefix")
-    if supplied_workers is not None or supplied_worker_sessions is not None:
-        _fail("supplied Worker records are unsupported for this Execution Journal replay prefix")
-    if len(events) >= 2 and events[1]["event_type"] == "executor.clock_uncertain":
-        state = _reduce_executor_clock_uncertain_after_initial_v1(initial_state, events[1])
-        if len(events) == 3 and events[2]["event_type"] == "recovery.started":
-            state = _reduce_recovery_started_after_clock_uncertain_v1(state, events[2])
-        elif len(events) != 2:
-            _fail("Execution Journal replay reducer is unavailable for later Events")
-        if head is not None:
-            last = events[-1]
-            if (
-                head["journal_id"] != state["journal_binding"]["journal_id"]
-                or head["last_sequence"] != last["sequence"]
-                or head["last_event_id"] != last["event_id"]
-                or head["last_event_sigil"] != last["event_sigil"]
-            ):
-                _fail("Execution Journal Head disagrees with replay prefix")
-        return state
-    _fail("Execution Journal replay reducer is unavailable for later Events")
+    return replay_execution_journal_supplied_facts_v1(
+        events,
+        head=head,
+        supplied_jobs=supplied_jobs,
+        supplied_attempts=supplied_attempts,
+        supplied_workers=supplied_workers,
+        supplied_worker_sessions=supplied_worker_sessions,
+        supplied_leases=supplied_leases,
+        supplied_result_ingress_receipts=supplied_result_ingress_receipts,
+        supplied_result_ingress_intents=supplied_result_ingress_intents,
+        supplied_observation_evidence=supplied_observation_evidence,
+        supplied_log_chunks=supplied_log_chunks,
+    )
 
 
 def replay_execution_journal_supplied_facts_v1(
@@ -3543,22 +3471,16 @@ def replay_execution_journal_supplied_facts_v1(
         elif event["event_type"] == "worker_session.ready":
             state = _reduce_worker_session_ready_v1(state, event)
         elif event["event_type"] == "job.submitted":
-            job = _find_supplied_v1(
-                supplied_jobs,
-                event["payload"]["job_binding_sigil"],
-                "job_binding_sigil",
-                "Job submission",
-            )
+            if supplied_jobs is None or len(supplied_jobs) != 1:
+                _fail("Job submission replay requires exactly one supplied immutable record")
+            job = supplied_jobs[0]
             state = _reduce_job_submitted_v1(state, event, job)
         elif event["event_type"] == "job.queued":
             state = _reduce_job_queued_v1(state, event)
         elif event["event_type"] == "job.attempt_allocated":
-            attempt = _find_supplied_v1(
-                supplied_attempts,
-                event["payload"]["attempt_binding_sigil"],
-                "attempt_binding_sigil",
-                "Attempt allocation",
-            )
+            if supplied_attempts is None or len(supplied_attempts) != 1:
+                _fail("Attempt allocation replay requires exactly one supplied immutable record")
+            attempt = supplied_attempts[0]
             state = _reduce_job_attempt_allocated_v1(state, event, attempt)
         elif event["event_type"] == "attempt.authorization_bound":
             immutable_attempt = _find_supplied_v1(

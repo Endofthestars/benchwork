@@ -899,7 +899,7 @@ def test_recovery_action_set_anchors_to_its_supplied_prefix() -> None:
     validate_execution_recovery_action_set_supplied_prefix_v1(
         later_action_set, [initial, clock_uncertain, recovery_started, later],
     )
-    with pytest.raises(Exception, match="reducer is unavailable"):
+    with pytest.raises(Exception, match="requires supplied immutable records"):
         replay_execution_journal_prefix_v1([initial, clock_uncertain, recovery_started, later])
 
 

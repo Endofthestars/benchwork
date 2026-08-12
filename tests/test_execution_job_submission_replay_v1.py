@@ -375,7 +375,7 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
 
     wrong_supplied = deepcopy(attempt)
     wrong_supplied["attempt_binding_sigil"] = SIGIL
-    with pytest.raises(AthanorError, match="requires exactly one"):
+    with pytest.raises(AthanorError, match="self-Sigil mismatch"):
         replay_execution_journal_supplied_facts_v1(
             [INITIAL, event, queued, allocated, preflight, preflight_passed],
             supplied_jobs=[job], supplied_attempts=[wrong_supplied],
@@ -868,5 +868,5 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     )
     with pytest.raises(AthanorError, match="does not exactly copy"):
         replay_execution_journal_prefix_v1([INITIAL, event], supplied_jobs=[altered])
-    with pytest.raises(AthanorError, match="requires exactly one supplied Job"):
+    with pytest.raises(AthanorError, match="requires exactly one supplied immutable record"):
         replay_execution_journal_prefix_v1([INITIAL, event])
