@@ -441,6 +441,14 @@ def validate_execution_journal_event_v1(event: dict[str, Any], *, context: dict[
     revisions = [(item["entity_kind"], item["entity_id"]) for item in event["entity_revisions"]]
     if revisions != sorted(revisions) or len(revisions) != len(set(revisions)):
         _fail("entity_revisions are not strictly sorted and unique")
+    for revision in event["entity_revisions"]:
+        preceding = revision["preceding_revision"]
+        following = revision["next_revision"]
+        if preceding is None:
+            if following != 0:
+                _fail("created entity revision must be null then zero")
+        elif following not in (preceding, preceding + 1):
+            _fail("entity revision must be unchanged or advance by exactly one")
     if event["sequence"] == 1:
         if event["previous_event_sigil"] is not None:
             _fail("sequence-one Event must have null previous_event_sigil")

@@ -358,6 +358,15 @@ def test_event_round_trip_unknown_duplicate_and_jew_matrix_helpers() -> None:
     extra["event_sigil"] = content_sigil({key: value for key, value in extra.items() if key != "event_sigil"})
     with pytest.raises(Exception):
         load_execution_journal_event_v1(json.dumps(extra), context=context)
+    for preceding, following, expected in ((None, 1, "null then zero"), (1, 3, "exactly one")):
+        invalid_revision = _event_unsigned()
+        invalid_revision["entity_revisions"][0]["preceding_revision"] = preceding
+        invalid_revision["entity_revisions"][0]["next_revision"] = following
+        invalid_revision["event_sigil"] = content_sigil(
+            {key: value for key, value in invalid_revision.items() if key != "event_sigil"}
+        )
+        with pytest.raises(Exception, match=expected):
+            load_execution_journal_event_v1(json.dumps(invalid_revision), context=context)
     raw = (FIXTURES / "execution-journal-event-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_journal_event_v1(raw)
