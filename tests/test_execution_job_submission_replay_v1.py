@@ -11,6 +11,7 @@ from benchwork.athanor import AthanorError, content_sigil
 from benchwork.execution_contracts import (
     build_execution_journal_event_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_supplied_state_suffix_v1,
     validate_execution_job_v1,
 )
 
@@ -335,6 +336,20 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         supplied_jobs=[job], supplied_attempts=[attempt],
     )
     assert ready_state["attempts"][0]["state"] == "READY"
+
+    combined = deepcopy(ready_state)
+    session_id = "WS-00000000000000000000000000"
+    combined["workers"] = [{"worker_id": "WK-ONE", "revision": 1, "state": "ENABLED", "worker_binding_sigil": SIGIL, "definition_revision": 0, "worker_session_ids": [session_id], "last_event_id": "JE-SIX", "last_event_sigil": preflight_passed["event_sigil"]}]
+    combined["worker_sessions"] = [{"worker_session_id": session_id, "revision": 1, "state": "READY", "worker_id": "WK-ONE", "worker_binding_sigil": SIGIL, "worker_session_binding_sigil": SIGIL, "executor_epoch": 1, "worker_session_heartbeat_policy_id": "WSHP-" + "A" * 64, "worker_session_heartbeat_policy_sigil": SIGIL, "capacity": 1, "capacity_in_use": 0, "last_heartbeat_sequence": None, "last_heartbeat_message_sigil": None, "last_resource_sample_sigil": None, "resource_counter_floors": {"cpu_time_seconds": None, "storage_bytes_written": None, "network_egress_bytes": None}, "next_heartbeat_due_at": "2026-08-06T00:00:30Z", "lease_ids": [], "last_event_id": "JE-SIX", "last_event_sigil": preflight_passed["event_sigil"]}]
+    combined["deadlines"].append({"deadline_kind": "HEARTBEAT_TIMEOUT", "due_at": "2026-08-06T00:00:30Z", "fixed_priority": 30, "entity_id": session_id, "source_event_id": "JE-SIX", "source_event_sigil": preflight_passed["event_sigil"]})
+    combined["deadlines"].sort(key=lambda item: (item["due_at"], item["fixed_priority"], item["entity_id"]))
+    combined["state_sigil"] = content_sigil({key: value for key, value in combined.items() if key != "state_sigil"})
+    lease: dict[str, Any] = {"schema_version": "execution-lease/1.0", "lease_id": "LS-00000000000000000000000000", "job_id": JOB_ID, "attempt_id": "AT-ONE", "worker_id": "WK-ONE", "worker_binding_sigil": SIGIL, "worker_session_id": session_id, "worker_session_binding_sigil": SIGIL, "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "fencing_generation": 1, "offered_at": "2026-08-06T00:00:05Z", "claim_due_at": "2026-08-06T00:00:06Z", "initial_expiry_due_at": "2026-08-06T00:00:07Z", "maximum_expiry_due_at": "2026-08-06T00:00:08Z", "heartbeat_policy": {"heartbeat_interval_seconds": 1, "heartbeat_timeout_seconds": 1}, "lease_credential_digest": SIGIL, "lease_binding_sigil": ""}
+    lease["lease_binding_sigil"] = content_sigil({key: value for key, value in lease.items() if key != "lease_binding_sigil"})
+    offered = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-SEVEN", "sequence": 7, "event_type": "lease.offered", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": lease["offered_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 1, "next_revision": 2}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": None, "next_revision": 0}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"lease_binding_sigil": lease["lease_binding_sigil"], "credential_digest": SIGIL, "claim_due_at": lease["claim_due_at"], "initial_expiry_due_at": lease["initial_expiry_due_at"], "maximum_expiry_due_at": lease["maximum_expiry_due_at"]}, "previous_event_sigil": preflight_passed["event_sigil"]})
+    offered_state = replay_execution_supplied_state_suffix_v1(combined, [offered], supplied_leases=[lease])
+    assert offered_state["leases"][0]["state"] == "OFFERED"
+    assert offered_state["attempts"][0]["lease_id"] == lease["lease_id"]
 
     wrong_attempt = deepcopy(attempt)
     wrong_attempt["retry_ordinal"] = 2
