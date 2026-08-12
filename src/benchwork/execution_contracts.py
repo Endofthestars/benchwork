@@ -1882,11 +1882,6 @@ def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) ->
         "state": terminal_state,
         "storage_observation_binding": evidence["storage_observation_binding"],
         "terminal_source_binding": evidence["terminal_source_binding"],
-        "accounting_capture_binding": {
-            "kind": "CAPTURED", "event_id": evidence["accounting_capture_event_id"],
-            "event_sigil": evidence["accounting_capture_event_sigil"],
-            "usage_status": "UNAVAILABLE", "accounting_evidence_set_sigil": evidence["assurance_input_set_sigil"],
-        },
         "control_evidence_set_binding": evidence["control_evidence_set_binding"],
         "quarantine_binding_set_binding": evidence["quarantine_binding_set_binding"],
         "terminalization_storage_manifest_binding": evidence["terminalization_storage_manifest_binding"],
