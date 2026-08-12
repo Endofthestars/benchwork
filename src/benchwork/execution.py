@@ -58,6 +58,45 @@ TERMINAL_STATES = frozenset(
 )
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, member in pairs:
+        if key in value:
+            raise AthanorError(f"duplicate JSON key: {key}")
+        value[key] = member
+    return value
+
+
+def _reject_nonfinite_json_number(token: str) -> None:
+    raise AthanorError(f"non-finite JSON number is forbidden: {token}")
+
+
+def _validate_local_json_numbers(value: Any) -> None:
+    if isinstance(value, float):
+        raise AthanorError("local JSON float is forbidden")
+    if isinstance(value, dict):
+        for member in value.values():
+            _validate_local_json_numbers(member)
+    elif isinstance(value, list):
+        for member in value:
+            _validate_local_json_numbers(member)
+
+
+def _load_strict_local_json_object(raw: str, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(
+            raw,
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_nonfinite_json_number,
+        )
+    except json.JSONDecodeError as error:
+        raise AthanorError(f"{label} contains invalid JSON") from error
+    if not isinstance(value, dict):
+        raise AthanorError(f"{label} must be an object")
+    _validate_local_json_numbers(value)
+    return value
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -123,8 +162,10 @@ class LocalBlobStore:
             }
             if format_path.exists():
                 try:
-                    actual = json.loads(format_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError as error:
+                    actual = _load_strict_local_json_object(
+                        format_path.read_text(encoding="utf-8"), "managed storage format",
+                    )
+                except (OSError, UnicodeDecodeError) as error:
                     raise AthanorError("managed storage format is invalid") from error
                 if actual != expected:
                     raise AthanorError("managed storage format is incompatible")
@@ -198,8 +239,10 @@ class LocalBlobStore:
             record_path = self._record_path(sigil)
             if record_path.exists():
                 try:
-                    prior = json.loads(record_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as error:
+                    prior = _load_strict_local_json_object(
+                        record_path.read_text(encoding="utf-8"), "Blob record",
+                    )
+                except (OSError, UnicodeDecodeError) as error:
                     raise AthanorError("Blob record is invalid") from error
                 self._validate_record(prior, sigil, len(value))
                 if prior != record:
@@ -220,8 +263,10 @@ class LocalBlobStore:
             raise AthanorError(f"Blob integrity failure: {sigil}")
         record_path = self._record_path(sigil)
         try:
-            record = json.loads(record_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
+            record = _load_strict_local_json_object(
+                record_path.read_text(encoding="utf-8"), "Blob record",
+            )
+        except (OSError, UnicodeDecodeError) as error:
             raise AthanorError(f"Blob record is unavailable or invalid: {sigil}") from error
         self._validate_record(record, sigil, len(value))
         return value
@@ -275,8 +320,10 @@ class ExecutionService:
         event_ids: set[str] = set()
         for line_number, line in enumerate(self._journal_path.read_text(encoding="utf-8").splitlines(), 1):
             try:
-                event = json.loads(line)
-            except json.JSONDecodeError as error:
+                event = _load_strict_local_json_object(
+                    line, f"execution journal Event at line {line_number}",
+                )
+            except UnicodeDecodeError as error:
                 raise AthanorError(f"execution journal contains invalid JSON at line {line_number}") from error
             if not isinstance(event, dict) or set(event) != {
                 "schema_version",

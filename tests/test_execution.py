@@ -336,6 +336,21 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "invalid execution Job cancellation"):
             self.service.observe(job["job_id"])
 
+    def test_local_persistence_rejects_duplicate_keys_and_nonfinite_numbers(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        raw = journal.read_text(encoding="utf-8")
+        duplicated = raw.replace(
+            '"task_id":"TK-001"', '"task_id":"TK-001","task_id":"TK-TWO"', 1,
+        )
+        journal.write_text(duplicated, encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "duplicate JSON key: task_id"):
+            self.service.observe(observation["job"]["job_id"])
+
+        journal.write_text(raw.replace('"payload":{', '"payload":{"ignored":NaN,', 1), encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "non-finite JSON number"):
+            self.service.observe(observation["job"]["job_id"])
+
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)
