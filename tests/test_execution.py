@@ -419,6 +419,19 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_execution_initialize_rejects_malformed_managed_paths(self) -> None:
+        execution = Path(self.directory.name) / ".benchwork" / "execution"
+        execution.parent.mkdir(parents=True)
+        execution.write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "execution storage path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
+        execution.unlink()
+        execution.mkdir()
+        (execution / "locks").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "execution lock path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
     def test_local_journal_rejects_an_unterminated_tail_on_recovery(self) -> None:
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"

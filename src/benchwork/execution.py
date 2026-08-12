@@ -297,11 +297,30 @@ class ExecutionService:
         self._lock_path = self.path / "locks" / "execution.lock"
 
     def initialize(self) -> None:
+        if self.path.exists() and not self.path.is_dir():
+            raise AthanorError("execution storage path is not a directory")
+        locks_path = self.path / "locks"
+        if locks_path.exists() and not locks_path.is_dir():
+            raise AthanorError("execution lock path is not a directory")
         with _exclusive_lock(self._lock_path):
-            self.path.mkdir(parents=True, exist_ok=True)
-            (self.path / "locks").mkdir(parents=True, exist_ok=True)
+            if self.path.exists() and not self.path.is_dir():
+                raise AthanorError("execution storage path is not a directory")
+            try:
+                self.path.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                raise AthanorError("execution storage directory is unavailable") from error
+            locks_path = self.path / "locks"
+            if locks_path.exists() and not locks_path.is_dir():
+                raise AthanorError("execution lock path is not a directory")
+            try:
+                locks_path.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                raise AthanorError("execution lock directory is unavailable") from error
             if not self._journal_path.exists():
-                self._journal_path.touch()
+                try:
+                    self._journal_path.touch()
+                except OSError as error:
+                    raise AthanorError("execution journal is unavailable") from error
             events = self._events_unlocked()
             if not events:
                 instance_id = f"XI-{uuid4().hex.upper()}"
