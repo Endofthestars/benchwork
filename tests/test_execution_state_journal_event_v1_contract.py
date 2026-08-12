@@ -44,6 +44,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_receipt_v1,
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
+    validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_storage_root_manifest_v1,
     validate_execution_root_hold_release_authorization_v1,
     validate_execution_control_evidence_set_v1,
@@ -727,6 +728,29 @@ def test_recovery_action_set_is_strictly_sealed_and_ordered() -> None:
     )
     with pytest.raises(Exception, match="duplicate logical actions"):
         validate_execution_recovery_action_set_v1(self_referential)
+
+
+def test_active_recovery_projection_matches_one_supplied_action_set() -> None:
+    action_set = _recovery_action_set()
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["recoveries"] = [{
+        "recovery_id": action_set["recovery_id"], "revision": 0, "state": "STARTED",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": action_set["action_set_sigil"],
+        "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }]
+    state["executor"]["active_recovery_id"] = action_set["recovery_id"]
+    state["executor"]["authority_gates"] = ["RECOVERY_ACTIVE"]
+    _reseal_state(state)
+    validate_execution_state_supplied_recovery_action_set_v1(state, action_set)
+
+    wrong_set = deepcopy(action_set)
+    wrong_set["recovery_id"] = "RY-TWO"
+    wrong_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_set.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="disagrees with supplied"):
+        validate_execution_state_supplied_recovery_action_set_v1(state, wrong_set)
 
 
 def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:

@@ -845,6 +845,30 @@ def load_execution_recovery_action_set_v1(raw: str | bytes | bytearray) -> dict[
     return action_set
 
 
+def validate_execution_state_supplied_recovery_action_set_v1(
+    state: dict[str, Any], action_set: dict[str, Any],
+) -> None:
+    """Compare an active Recovery projection with one supplied sealed action set.
+
+    This checks an immutable binding only.  It neither establishes the supplied
+    set's durable availability nor treats any action as completed or executable.
+    """
+    validate_execution_state_v1(state)
+    validate_execution_recovery_action_set_v1(action_set)
+    active_recovery_id = state["executor"]["active_recovery_id"]
+    if active_recovery_id is None:
+        _fail("Execution State has no active Recovery action-set binding")
+    recovery = next(
+        item for item in state["recoveries"] if item["recovery_id"] == active_recovery_id
+    )
+    if (
+        action_set["recovery_id"] != recovery["recovery_id"]
+        or action_set["phase"] != recovery["state"]
+        or action_set["action_set_sigil"] != recovery["current_action_set_sigil"]
+    ):
+        _fail("Execution State Recovery projection disagrees with supplied action set")
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([
