@@ -1042,8 +1042,75 @@ def _reduce_artifact_storage_legacy_protection_failed_v1(
     return reduced
 
 
+def _reduce_artifact_storage_reference_set_registered_v1(
+    state: dict[str, Any], event: dict[str, Any], reference_set: dict[str, Any]
+) -> dict[str, Any]:
+    """Project one immutable Reference Set after its exact registration Event.
+
+    The caller supplies the durable record so this reducer can close the
+    Event-to-record relation without claiming source validation, graph closure,
+    Journal append, or Storage authority.
+    """
+    validate_artifact_storage_reference_set_v1(reference_set)
+    payload = event["payload"]
+    if state["store_status"] != "ACTIVE":
+        _fail("Artifact Storage Reference Set registration requires an active Store")
+    if any(
+        item["reference_set_id"] == reference_set["reference_set_id"]
+        for item in state["reference_sets"]
+    ):
+        _fail("Artifact Storage Reference Set registration duplicates a State projection")
+    expected_revisions = [{
+        "entity_type": "REFERENCE_SET",
+        "entity_id": reference_set["reference_set_id"],
+        "previous_revision": None,
+        "next_revision": 1,
+    }]
+    if (
+        event["event_type"] != "reference_set.registered"
+        or event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["quota_effects"]
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] is not None
+        or event["event_id"] != reference_set["registration_event_id"]
+        or event["recorded_at"] != reference_set["created_at"]
+        or payload["reference_set_id"] != reference_set["reference_set_id"]
+        or payload["reference_set_sigil"] != reference_set["reference_set_sigil"]
+        or payload["source_identity"] != reference_set["source"]["identity"]
+        or payload["source_sigil"] != reference_set["source"]["sigil"]
+    ):
+        _fail("Artifact Storage Reference Set registration Event disagrees with record")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "reference_sets": sorted(
+            [
+                *state["reference_sets"],
+                {
+                    "reference_set_id": reference_set["reference_set_id"],
+                    "reference_set_sigil": reference_set["reference_set_sigil"],
+                    "source_identity": reference_set["source"]["identity"],
+                    "revision": 1,
+                    "last_event_sigil": event["event_sigil"],
+                },
+            ],
+            key=lambda item: item["reference_set_id"].encode("ascii"),
+        ),
+        "applied_event_count": event["sequence"],
+        "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+    supplied_reference_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay installed Storage Journal reducers, failing closed for all others.
 
@@ -1070,6 +1137,19 @@ def replay_artifact_storage_journal_prefix_v1(
             state = _reduce_artifact_storage_message_rejected_v1(state, event)
         elif event["event_type"] == "legacy_v1.protection_failed":
             state = _reduce_artifact_storage_legacy_protection_failed_v1(state, event)
+        elif event["event_type"] == "reference_set.registered":
+            if supplied_reference_sets is None:
+                _fail("Reference Set registration replay requires its supplied record")
+            matches = [
+                record
+                for record in supplied_reference_sets
+                if record.get("reference_set_id") == event["payload"]["reference_set_id"]
+            ]
+            if len(matches) != 1:
+                _fail("Reference Set registration replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_reference_set_registered_v1(
+                state, event, matches[0]
+            )
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for this Event")
     if head is not None:

@@ -1020,6 +1020,135 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
         )
 
 
+def test_storage_replay_projects_exact_registered_reference_set() -> None:
+    initial = _initial_replay_event()
+    activation = _next_event(initial)
+    activation.update({
+        "event_type": "storage.activation_completed",
+        "entity_revisions": [{
+            "entity_type": "STORE", "entity_id": "STORE",
+            "previous_revision": 1, "next_revision": 2,
+        }],
+        "payload": {
+            "legacy_protection_ids": [], "activation_evidence_sigil": SIGIL,
+            "clock": initial["payload"]["clock"],
+        },
+        "quota_effects": [],
+    })
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    reference_set = _reference_set()
+    registered = _next_event(activation)
+    registered.update({
+        "event_id": reference_set["registration_event_id"],
+        "sequence": 3,
+        "event_type": "reference_set.registered",
+        "recorded_at": "2026-08-06T00:00:01Z",
+        "observed_at": None,
+        "entity_revisions": [{
+            "entity_type": "REFERENCE_SET",
+            "entity_id": reference_set["reference_set_id"],
+            "previous_revision": None,
+            "next_revision": 1,
+        }],
+        "causation_event_id": None,
+        "idempotency_key_sigil": None,
+        "quota_effects": [],
+        "payload": {
+            "reference_set_id": reference_set["reference_set_id"],
+            "reference_set_sigil": reference_set["reference_set_sigil"],
+            "source_identity": reference_set["source"]["identity"],
+            "source_sigil": reference_set["source"]["sigil"],
+        },
+    })
+    reference_set["created_at"] = registered["recorded_at"]
+    reference_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in reference_set.items()
+        if key != "reference_set_sigil"
+    })
+    registered["payload"]["reference_set_sigil"] = reference_set["reference_set_sigil"]
+    registered["event_sigil"] = content_sigil({
+        key: value for key, value in registered.items() if key != "event_sigil"
+    })
+    state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered], supplied_reference_sets=[reference_set]
+    )
+    assert state["reference_sets"] == [{
+        "reference_set_id": reference_set["reference_set_id"],
+        "reference_set_sigil": reference_set["reference_set_sigil"],
+        "source_identity": reference_set["source"]["identity"],
+        "revision": 1,
+        "last_event_sigil": registered["event_sigil"],
+    }]
+
+    distinct_set = deepcopy(reference_set)
+    distinct_set["extractor"]["extractor_sigil"] = SIGIL_B
+    distinct_set["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(
+        distinct_set
+    )
+    distinct_set["registration_event_id"] = "SE-" + content_sigil([
+        "artifact-storage-reference-set-registration-event-id/1.0",
+        distinct_set["reference_set_id"],
+    ]).removeprefix("sha256:").upper()
+    distinct_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in distinct_set.items()
+        if key != "reference_set_sigil"
+    })
+    second_registered = _next_event(registered)
+    second_registered.update({
+        "event_id": distinct_set["registration_event_id"],
+        "sequence": 4,
+        "event_type": "reference_set.registered",
+        "recorded_at": "2026-08-06T00:00:02Z",
+        "entity_revisions": [{
+            "entity_type": "REFERENCE_SET",
+            "entity_id": distinct_set["reference_set_id"],
+            "previous_revision": None,
+            "next_revision": 1,
+        }],
+        "payload": {
+            "reference_set_id": distinct_set["reference_set_id"],
+            "reference_set_sigil": distinct_set["reference_set_sigil"],
+            "source_identity": distinct_set["source"]["identity"],
+            "source_sigil": distinct_set["source"]["sigil"],
+        },
+    })
+    distinct_set["created_at"] = second_registered["recorded_at"]
+    distinct_set["reference_set_sigil"] = content_sigil({
+        key: value for key, value in distinct_set.items()
+        if key != "reference_set_sigil"
+    })
+    second_registered["payload"]["reference_set_sigil"] = distinct_set[
+        "reference_set_sigil"
+    ]
+    second_registered["event_sigil"] = content_sigil({
+        key: value for key, value in second_registered.items() if key != "event_sigil"
+    })
+    second_state = replay_artifact_storage_journal_prefix_v1(
+        [initial, activation, registered, second_registered],
+        supplied_reference_sets=[reference_set, distinct_set],
+    )
+    assert [item["reference_set_id"] for item in second_state["reference_sets"]] == sorted([
+        reference_set["reference_set_id"], distinct_set["reference_set_id"]
+    ])
+
+    wrong_record = deepcopy(reference_set)
+    wrong_record["source"]["identity"] = "OTHER"
+    wrong_record["reference_set_id"] = derive_artifact_storage_reference_set_id_v1(
+        wrong_record
+    )
+    wrong_record["reference_set_sigil"] = content_sigil({
+        key: value for key, value in wrong_record.items() if key != "reference_set_sigil"
+    })
+    with pytest.raises(AthanorError, match="requires exactly one supplied record"):
+        replay_artifact_storage_journal_prefix_v1(
+            [initial, activation, registered], supplied_reference_sets=[wrong_record]
+        )
+    with pytest.raises(AthanorError, match="requires its supplied record"):
+        replay_artifact_storage_journal_prefix_v1([initial, activation, registered])
+
+
 def test_legacy_protection_is_self_signed_and_matches_state_projection() -> None:
     protection = _legacy_protection()
     validate_artifact_storage_legacy_protection_v1(protection)
