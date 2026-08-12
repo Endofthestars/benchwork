@@ -534,6 +534,22 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     with pytest.raises(Exception, match="active Recovery is missing"):
         load_execution_state_v1(json.dumps(unprojected_recovery))
 
+    invalid_first_recovery = deepcopy(recovery)
+    invalid_first_recovery["recoveries"][0]["prior_recovery_id"] = "RY-" + "B" * 64
+    _reseal_state(invalid_first_recovery)
+    with pytest.raises(Exception, match="first Recovery projection"):
+        load_execution_state_v1(json.dumps(invalid_first_recovery))
+
+    invalid_later_recovery = deepcopy(recovery)
+    invalid_later_recovery["recoveries"].append({
+        "recovery_id": "RY-" + "B" * 64, "revision": 0, "state": "COMPLETED",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": None, "last_event_id": "JE-TWO", "last_event_sigil": SIGIL,
+    })
+    _reseal_state(invalid_later_recovery)
+    with pytest.raises(Exception, match="non-first Recovery projection"):
+        load_execution_state_v1(json.dumps(invalid_later_recovery))
+
     changed_executor = deepcopy(state)
     changed_executor["executor"]["revision"] = 1
     changed_executor["state_sigil"] = content_sigil(

@@ -236,6 +236,13 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     recovery_ids = [recovery["recovery_id"] for recovery in state["recoveries"]]
     if len(recovery_ids) != len(set(recovery_ids)):
         _fail("duplicate Recovery projection identity")
+    if state["recoveries"]:
+        if state["recoveries"][0]["prior_recovery_id"] is not None:
+            _fail("first Recovery projection must not name a prior Recovery")
+        if any(
+            recovery["prior_recovery_id"] is None for recovery in state["recoveries"][1:]
+        ):
+            _fail("non-first Recovery projection must name a prior Recovery")
     active_recoveries = [
         recovery for recovery in state["recoveries"] if recovery["state"] != "COMPLETED"
     ]
