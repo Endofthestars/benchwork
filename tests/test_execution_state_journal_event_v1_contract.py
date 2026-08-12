@@ -1537,8 +1537,27 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
         "current_action_set_sigil": None, "last_event_id": "JE-TWO", "last_event_sigil": SIGIL,
     })
     _reseal_state(invalid_later_recovery)
-    with pytest.raises(Exception, match="non-first Recovery projection"):
+    with pytest.raises(Exception, match="immediately prior Recovery"):
         load_execution_state_v1(json.dumps(invalid_later_recovery))
+
+    mismatched_prior_recovery = deepcopy(recovery)
+    mismatched_prior_recovery["recoveries"][0]["state"] = "COMPLETED"
+    mismatched_prior_recovery["recoveries"].append({
+        "recovery_id": "RY-" + "B" * 64, "revision": 0, "state": "STARTED",
+        "prior_recovery_id": "RY-" + "C" * 64, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": SIGIL, "last_event_id": "JE-TWO", "last_event_sigil": SIGIL,
+    })
+    mismatched_prior_recovery["executor"]["active_recovery_id"] = "RY-" + "B" * 64
+    _reseal_state(mismatched_prior_recovery)
+    with pytest.raises(Exception, match="immediately prior Recovery"):
+        load_execution_state_v1(json.dumps(mismatched_prior_recovery))
+
+    incomplete_prior_recovery = deepcopy(mismatched_prior_recovery)
+    incomplete_prior_recovery["recoveries"][1]["prior_recovery_id"] = recovery_id
+    incomplete_prior_recovery["recoveries"][0]["state"] = "FINALIZING"
+    _reseal_state(incomplete_prior_recovery)
+    with pytest.raises(Exception, match="follows a Recovery that is not completed"):
+        load_execution_state_v1(json.dumps(incomplete_prior_recovery))
 
     changed_executor = deepcopy(state)
     changed_executor["executor"]["revision"] = 1

@@ -303,10 +303,12 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     if state["recoveries"]:
         if state["recoveries"][0]["prior_recovery_id"] is not None:
             _fail("first Recovery projection must not name a prior Recovery")
-        if any(
-            recovery["prior_recovery_id"] is None for recovery in state["recoveries"][1:]
-        ):
-            _fail("non-first Recovery projection must name a prior Recovery")
+        for index, recovery in enumerate(state["recoveries"][1:], 1):
+            prior_recovery = state["recoveries"][index - 1]
+            if recovery["prior_recovery_id"] != prior_recovery["recovery_id"]:
+                _fail("Recovery projection does not name its immediately prior Recovery")
+            if prior_recovery["state"] != "COMPLETED":
+                _fail("Recovery projection follows a Recovery that is not completed")
     active_recoveries = [
         recovery for recovery in state["recoveries"] if recovery["state"] != "COMPLETED"
     ]
