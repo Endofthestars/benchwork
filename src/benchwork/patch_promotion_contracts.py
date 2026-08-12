@@ -238,6 +238,48 @@ def load_patch_promotion_target_guard_v1(raw: str | bytes | bytearray) -> dict[s
     return guard
 
 
+def validate_patch_promotion_authorization_v1(authorization: dict[str, Any]) -> None:
+    """Validate local immutable Authorization bytes, without resolving its Preview."""
+    validate_instance("patch-promotion-authorization-1.0.json", authorization)
+    _check_nfc(authorization)
+    if authorization["authorization_sigil"] != content_sigil(_without(authorization, "authorization_sigil")):
+        _fail("Patch Promotion Authorization self-Sigil mismatch")
+    paths = [path.encode("utf-8") for path in authorization["affected_paths"]]
+    if paths != sorted(paths) or len(paths) != len(set(paths)):
+        _fail("Patch Promotion Authorization affected paths must be sorted and unique")
+    evidence = authorization["validation"]["evidence"]
+    evidence_ids = [item["id"].encode("ascii") for item in evidence]
+    if evidence_ids != sorted(evidence_ids) or len(evidence_ids) != len(set(evidence_ids)):
+        _fail("Patch Promotion Authorization validation evidence must be sorted and unique")
+    if authorization["decision_at"] > authorization["expires_at"]:
+        _fail("Patch Promotion Authorization expires before its decision")
+
+
+def validate_patch_promotion_attempt_v1(attempt: dict[str, Any]) -> None:
+    """Validate one immutable Promotion Attempt without replaying its transitions."""
+    validate_instance("patch-promotion-attempt-1.0.json", attempt)
+    _check_nfc(attempt)
+    if attempt["attempt_sigil"] != content_sigil(_without(attempt, "attempt_sigil")):
+        _fail("Patch Promotion Attempt self-Sigil mismatch")
+
+
+def validate_patch_promotion_attempt_supplied_authorization_v1(
+    attempt: dict[str, Any], authorization: dict[str, Any],
+) -> None:
+    """Bind an allocated Attempt to its exact supplied Authorization document."""
+    validate_patch_promotion_attempt_v1(attempt)
+    validate_patch_promotion_authorization_v1(authorization)
+    if (
+        attempt["authorization"] != {"id": authorization["authorization_id"], "sigil": authorization["authorization_sigil"]}
+        or attempt["operation_sigil"] != authorization["operation_sigil"]
+        or attempt["target"] != authorization["target"]
+        or attempt["target_content_generation"] != authorization["target_content_generation"]
+        or attempt["adapter"] != authorization["adapter"]
+        or attempt["mode"] != authorization["mode"]
+    ):
+        _fail("Patch Promotion Attempt disagrees with supplied Authorization")
+
+
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
     """Validate one closed self-authenticating Promotion Journal Event."""
     validate_instance("patch-promotion-journal-event-1.0.json", event)
