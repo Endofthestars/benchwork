@@ -584,8 +584,12 @@ def validate_artifact_storage_journal_prefix_v1(events: list[dict[str, Any]]) ->
     if not events:
         _fail("Artifact Storage Journal prefix must contain an initial Event")
     previous: dict[str, Any] | None = None
+    event_ids: set[str] = set()
     for expected_sequence, event in enumerate(events, start=1):
         validate_artifact_storage_journal_event_v1(event)
+        if event["event_id"] in event_ids:
+            _fail("Artifact Storage Journal prefix has duplicate Event identity")
+        event_ids.add(event["event_id"])
         if expected_sequence == 1 and event["event_type"] != "storage.initialized":
             _fail("Artifact Storage Journal prefix does not start with storage.initialized")
         if expected_sequence == 1 and event["epoch"] != 1:

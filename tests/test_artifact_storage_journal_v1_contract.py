@@ -944,6 +944,14 @@ def test_storage_journal_prefix_checks_chain_sequence_and_fixed_head() -> None:
     with pytest.raises(AthanorError, match="not contiguous"):
         validate_artifact_storage_journal_prefix_v1([first, gap])
 
+    duplicate_identity = deepcopy(second)
+    duplicate_identity["event_id"] = first["event_id"]
+    duplicate_identity["event_sigil"] = content_sigil({
+        key: member for key, member in duplicate_identity.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="duplicate Event identity"):
+        validate_artifact_storage_journal_prefix_v1([first, duplicate_identity])
+
     not_initialized = _event()
     with pytest.raises(AthanorError, match="does not start"):
         validate_artifact_storage_journal_prefix_v1([not_initialized])
