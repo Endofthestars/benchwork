@@ -1318,14 +1318,46 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         ],
         "causation_event_id": settled["event_id"], "idempotency_key_sigil": None,
         "recovery_action_binding": None,
-        "payload": {"evaluation": "CLAIMED", "assurance_claim_sigil": SIGIL,
+        "payload": {"evaluation": "CLAIMED", "assurance_claim_sigil": supplied_claim["assurance_claim_sigil"],
                     "reason_codes": [], "evidence_set_sigil": SIGIL},
         "previous_event_sigil": settled["event_sigil"],
     })
-    assured_state = replay_execution_supplied_state_suffix_v1(settled_state, [attempt_assurance])
+    assured_state = replay_execution_supplied_state_suffix_v1(
+        settled_state,
+        [attempt_assurance],
+        supplied_jobs=[job],
+        supplied_assurance_claims=[supplied_claim],
+        supplied_accounting_capture_events=[accounting_capture],
+        supplied_budget_settlement_events=[settled],
+    )
     assert assured_state["jobs"][0]["current_attempt_id"] is None
     assert assured_state["attempts"][0]["attempt_assurance_binding"]["kind"] == "CLAIMED"
     assert assured_state["jobs"][0]["attempt_summaries"][0]["attempt_id"] == "AT-ONE"
+
+    with pytest.raises(AthanorError, match="Claimed Attempt assurance"):
+        replay_execution_supplied_state_suffix_v1(settled_state, [attempt_assurance])
+
+    unsatisfied_claim = deepcopy(supplied_claim)
+    unsatisfied_claim["satisfies_request"] = False
+    unsatisfied_claim["assurance_claim_sigil"] = content_sigil(
+        {key: value for key, value in unsatisfied_claim.items() if key != "assurance_claim_sigil"}
+    )
+    unsatisfied_assurance = deepcopy(attempt_assurance)
+    unsatisfied_assurance["payload"]["assurance_claim_sigil"] = unsatisfied_claim[
+        "assurance_claim_sigil"
+    ]
+    unsatisfied_assurance = build_execution_journal_event_v1(
+        {key: value for key, value in unsatisfied_assurance.items() if key != "event_sigil"}
+    )
+    with pytest.raises(AthanorError, match="satisfies its request"):
+        replay_execution_supplied_state_suffix_v1(
+            settled_state,
+            [unsatisfied_assurance],
+            supplied_jobs=[job],
+            supplied_assurance_claims=[unsatisfied_claim],
+            supplied_accounting_capture_events=[accounting_capture],
+            supplied_budget_settlement_events=[settled],
+        )
 
     unmet_attempt_assurance = deepcopy(attempt_assurance)
     unmet_attempt_assurance["payload"].update({
@@ -1456,7 +1488,7 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         "recovery_action_binding": None,
         "payload": {"evaluation": "CLAIMED", "attempt_id": "AT-ONE",
                     "attempt_assurance_event_sigil": attempt_assurance["event_sigil"],
-                    "assurance_claim_sigil": SIGIL, "reason_codes": [],
+                        "assurance_claim_sigil": supplied_claim["assurance_claim_sigil"], "reason_codes": [],
                     "evidence_set_sigil": SIGIL},
         "previous_event_sigil": attempt_assurance["event_sigil"],
     })

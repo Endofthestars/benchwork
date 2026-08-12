@@ -3141,6 +3141,9 @@ def replay_execution_supplied_state_suffix_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
+    supplied_assurance_claims: list[dict[str, Any]] | None = None,
+    supplied_accounting_capture_events: list[dict[str, Any]] | None = None,
+    supplied_budget_settlement_events: list[dict[str, Any]] | None = None,
     supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reduce installed suffix Events from one caller-supplied verified State.
@@ -3257,6 +3260,42 @@ def replay_execution_supplied_state_suffix_v1(
             )
             current = _reduce_job_budget_settled_v1(current, event, immutable_attempt)
         elif event["event_type"] == "attempt.assurance_evaluated":
+            if event["payload"]["evaluation"] == "CLAIMED":
+                attempt_id = event["entity_revisions"][-1]["entity_id"]
+                attempt = _current_attempt_v1(current, "Attempt assurance dispatch")
+                if attempt["attempt_id"] != attempt_id:
+                    _fail("Attempt assurance Event does not name the current Attempt")
+                claim = _find_supplied_v1(
+                    supplied_assurance_claims,
+                    event["payload"]["assurance_claim_sigil"],
+                    "assurance_claim_sigil",
+                    "Claimed Attempt assurance",
+                )
+                capture_event = _find_supplied_v1(
+                    supplied_accounting_capture_events,
+                    attempt["accounting_capture_binding"].get("event_id", ""),
+                    "event_id",
+                    "Claimed Attempt assurance accounting capture",
+                )
+                settlement_event = _find_supplied_v1(
+                    supplied_budget_settlement_events,
+                    attempt["budget_settlement_binding"].get("event_id", ""),
+                    "event_id",
+                    "Claimed Attempt assurance settlement",
+                )
+                validate_sanctum_assurance_claim_supplied_attempt_facts_v1(
+                    claim,
+                    _find_supplied_v1(
+                        supplied_jobs, current["jobs"][0]["job_id"], "job_id",
+                        "Claimed Attempt assurance Job",
+                    ),
+                    current,
+                    attempt_id,
+                    capture_event,
+                    settlement_event,
+                )
+                if not claim["satisfies_request"]:
+                    _fail("Claimed Attempt assurance requires a Claim that satisfies its request")
             current = _reduce_attempt_assurance_evaluated_v1(current, event)
         elif event["event_type"] == "job.assurance_evaluated":
             current = _reduce_job_assurance_evaluated_v1(current, event)
@@ -4212,6 +4251,9 @@ def replay_execution_journal_prefix_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
+    supplied_assurance_claims: list[dict[str, Any]] | None = None,
+    supplied_accounting_capture_events: list[dict[str, Any]] | None = None,
+    supplied_budget_settlement_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify a v1 Journal prefix with the installed supplied-facts reducers.
 
@@ -4242,6 +4284,9 @@ def replay_execution_journal_prefix_v1(
                 supplied_result_ingress_intents,
                 supplied_observation_evidence,
                 supplied_log_chunks,
+                supplied_assurance_claims,
+                supplied_accounting_capture_events,
+                supplied_budget_settlement_events,
             )
         ):
             _fail(
@@ -4280,6 +4325,9 @@ def replay_execution_journal_prefix_v1(
         supplied_result_ingress_intents=supplied_result_ingress_intents,
         supplied_observation_evidence=supplied_observation_evidence,
         supplied_log_chunks=supplied_log_chunks,
+        supplied_assurance_claims=supplied_assurance_claims,
+        supplied_accounting_capture_events=supplied_accounting_capture_events,
+        supplied_budget_settlement_events=supplied_budget_settlement_events,
     )
 
 
@@ -4296,6 +4344,9 @@ def replay_execution_journal_supplied_facts_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
+    supplied_assurance_claims: list[dict[str, Any]] | None = None,
+    supplied_accounting_capture_events: list[dict[str, Any]] | None = None,
+    supplied_budget_settlement_events: list[dict[str, Any]] | None = None,
     supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replay the installed v1 reducer set from caller-supplied immutable facts.
@@ -4396,6 +4447,9 @@ def replay_execution_journal_supplied_facts_v1(
                 supplied_result_ingress_intents=supplied_result_ingress_intents,
                 supplied_observation_evidence=supplied_observation_evidence,
                 supplied_log_chunks=supplied_log_chunks,
+                supplied_assurance_claims=supplied_assurance_claims,
+                supplied_accounting_capture_events=supplied_accounting_capture_events,
+                supplied_budget_settlement_events=supplied_budget_settlement_events,
                 supplied_recovery_action_sets=supplied_recovery_action_sets,
             )
     return state
