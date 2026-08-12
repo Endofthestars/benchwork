@@ -1568,6 +1568,32 @@ def _reduce_lease_tombstone_republished_v1(state: dict[str, Any], event: dict[st
     return build_execution_state_v1(reduced)
 
 
+_LEASE_REJECTED_MESSAGE_KINDS_V1 = {
+    "LEASE_CLAIM", "LEASE_HEARTBEAT", "LEASE_RENEWAL", "LEASE_RELEASE",
+}
+
+
+def _reduce_lease_message_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Append a non-mutating rejection of a Lease control message."""
+    if len(state["leases"]) != 1:
+        _fail("Lease message rejection reducer requires one Lease")
+    lease, payload, executor = state["leases"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "lease.message_rejected"
+        or payload["message_kind"] not in _LEASE_REJECTED_MESSAGE_KINDS_V1
+        or not payload["reason_codes"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != lease["executor_epoch"]
+        or event["causation_event_id"] != lease["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1}]
+    ):
+        _fail("Lease message rejection Event disagrees with Lease projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["leases"] = [{**lease, "revision": lease["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_stop_after_lease_expiry_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1733,6 +1759,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_revoked_v1(current, event)
         elif event["event_type"] == "lease.tombstone_republished":
             current = _reduce_lease_tombstone_republished_v1(current, event)
+        elif event["event_type"] == "lease.message_rejected":
+            current = _reduce_lease_message_rejected_v1(current, event)
         elif event["event_type"] == "attempt.stop_latched":
             current = _reduce_attempt_stop_after_lease_expiry_v1(current, event)
         elif event["event_type"] == "attempt.stop_progressed":

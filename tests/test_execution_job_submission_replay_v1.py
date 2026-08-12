@@ -387,6 +387,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert republished_state["leases"][0]["revision"] == 3
     assert republished_state["leases"][0]["state"] == "REVOKED"
 
+    rejected_lease_message = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LEASEREJECT", "sequence": 11, "event_type": "lease.message_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 3, "next_revision": 4}], "causation_event_id": republished["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"message_kind": "LEASE_HEARTBEAT", "message_sigil": SIGIL, "identity_binding": {"kind": "NONE"}, "reason_codes": ["LEASE_TERMINAL"], "historical_disposition_event_id": None}, "previous_event_sigil": republished["event_sigil"]})
+    lease_message_state = replay_execution_supplied_state_suffix_v1(republished_state, [rejected_lease_message])
+    assert lease_message_state["leases"][0]["state"] == "REVOKED"
+    assert lease_message_state["leases"][0]["revision"] == 4
+
+    wrong_lease_message = deepcopy(rejected_lease_message)
+    wrong_lease_message["payload"]["message_kind"] = "CANCEL_REQUEST"
+    wrong_lease_message = build_execution_journal_event_v1({key: value for key, value in wrong_lease_message.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(republished_state, [wrong_lease_message])
+
     wrong_republish = deepcopy(republished)
     wrong_republish["payload"]["tombstone_generation"] = 3
     wrong_republish = build_execution_journal_event_v1({key: value for key, value in wrong_republish.items() if key != "event_sigil"})
