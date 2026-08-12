@@ -17,18 +17,17 @@ from benchwork.execution_contracts import (
     expected_event_causation_v1,
     expected_event_idempotency_v1,
     load_execution_journal_event_v1,
+    load_execution_journal_head_v1,
     load_execution_observation_evidence_v1,
     load_execution_request_v1,
     load_execution_result_ingress_receipt_v1,
     load_execution_state_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
+    validate_execution_journal_head_v1,
     validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
 )
-from benchwork.schema_validation import validate_instance
-
-
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
 FIXTURES = ROOT / "tests" / "fixtures" / "phase3" / "rfc0012"
@@ -284,7 +283,8 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     assert load_execution_journal_event_v1(json.dumps(event)) == event
     assert load_execution_state_v1(json.dumps(state)) == state
-    validate_instance("execution-journal-head-1.0.json", head)
+    validate_execution_journal_head_v1(head)
+    assert load_execution_journal_head_v1(json.dumps(head)) == head
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )
@@ -308,6 +308,15 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     with pytest.raises(Exception, match="executor build self-Sigil"):
         load_execution_state_v1(json.dumps(tampered))
+
+    invalid_head = deepcopy(head)
+    invalid_head["last_sequence"] = 2
+    with pytest.raises(Exception, match="Head self-Sigil"):
+        load_execution_journal_head_v1(json.dumps(invalid_head))
+    with pytest.raises(Exception, match="duplicate JSON key"):
+        load_execution_journal_head_v1(
+            b'{"schema_version":"execution-journal-head/1.0","schema_version":"x"}'
+        )
 
 
 def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -> None:

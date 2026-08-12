@@ -232,6 +232,20 @@ def build_execution_state_v1(unsigned_state: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
+def validate_execution_journal_head_v1(head: dict[str, Any]) -> None:
+    """Validate the closed Head cache record, never its claimed Journal prefix."""
+    validate_instance("execution-journal-head-1.0.json", head)
+    _check_nfc(head)
+    if head["head_sigil"] != content_sigil(_without(head, "head_sigil")):
+        _fail("Execution Journal Head self-Sigil mismatch")
+
+
+def load_execution_journal_head_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    head = _load_strict_object(raw, "Execution Journal Head")
+    validate_execution_journal_head_v1(head)
+    return head
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([
