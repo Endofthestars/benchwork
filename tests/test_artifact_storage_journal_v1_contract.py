@@ -12,6 +12,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_storage_disposition_v1,
     load_artifact_gc_plan_v1,
     load_artifact_provenance_v1,
+    load_artifact_provenance_policy_v1,
     load_artifact_storage_backend_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
@@ -30,6 +31,8 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_disposition_v1,
     validate_artifact_gc_plan_v1,
     validate_artifact_provenance_v1,
+    validate_artifact_provenance_policy_v1,
+    validate_artifact_storage_state_supplied_provenance_policies_v1,
     validate_artifact_storage_backend_v1,
     validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
@@ -364,6 +367,24 @@ def _backend_profile() -> dict[str, object]:
     return profile
 
 
+def _provenance_policy() -> dict[str, object]:
+    policy: dict[str, object] = {
+        "schema_version": "artifact-provenance-policy/1.0", "provenance_policy_id": "SPP-ONE",
+        "policy_version": "1.0", "scope": {"kind": "PROJECT", "project_id": "PROJECT"},
+        "allowed_directions": ["INGEST"], "allowed_purposes": ["ARTIFACT_IMPORT"],
+        "allowed_source_kinds": ["EXTERNAL"], "allowed_destination_kinds": ["MANAGED_BACKEND"],
+        "allowed_relations": ["IMPORTED"], "execution_requirement": "OPTIONAL",
+        "allowed_verification_methods": ["FULL_READBACK_SHA256"],
+        "minimum_verification_evidence": 1, "transformation_mode": "NONE_ONLY",
+        "required_retention_policy_ids": [], "authorization_sigil": SIGIL,
+        "registered_at": STAMP, "record_sigil": "",
+    }
+    policy["record_sigil"] = content_sigil({
+        key: member for key, member in policy.items() if key != "record_sigil"
+    })
+    return policy
+
+
 def _recovery_marker() -> dict[str, object]:
     marker: dict[str, object] = {
         "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
@@ -666,6 +687,26 @@ def test_backend_profile_is_self_signed_and_canonically_orders_methods() -> None
     })
     with pytest.raises(AthanorError, match="verification methods are not sorted"):
         validate_artifact_storage_backend_v1(unordered)
+
+
+def test_provenance_policy_is_self_signed_and_matches_state_projection() -> None:
+    policy = _provenance_policy()
+    validate_artifact_provenance_policy_v1(policy)
+    assert load_artifact_provenance_policy_v1(json.dumps(policy)) == policy
+
+    state = _state()
+    state["provenance_policies"] = [{
+        "provenance_policy_id": policy["provenance_policy_id"],
+        "record_sigil": policy["record_sigil"], "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_supplied_provenance_policies_v1(state, policies=[policy])
+
+    missing = deepcopy(state)
+    with pytest.raises(AthanorError, match="Provenance Policy projection lacks"):
+        validate_artifact_storage_state_supplied_provenance_policies_v1(missing, policies=[])
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

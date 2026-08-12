@@ -365,6 +365,40 @@ def load_artifact_storage_backend_v1(raw: str | bytes | bytearray) -> dict[str, 
     return backend
 
 
+def validate_artifact_provenance_policy_v1(policy: dict[str, Any]) -> None:
+    """Validate a Provenance Policy record without deciding Transfer admission."""
+    validate_instance("artifact-provenance-policy-1.0.json", policy)
+    _check_nfc_and_numbers(policy)
+    if policy["record_sigil"] != content_sigil(_without(policy, "record_sigil")):
+        _fail("Artifact Provenance Policy self-Sigil mismatch")
+
+
+def load_artifact_provenance_policy_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    policy = _load_strict_object(raw, "Artifact Provenance Policy")
+    validate_artifact_provenance_policy_v1(policy)
+    return policy
+
+
+def validate_artifact_storage_state_supplied_provenance_policies_v1(
+    state: dict[str, Any], *, policies: list[dict[str, Any]],
+) -> None:
+    """Compare State Provenance Policy projections with supplied record bytes."""
+    validate_artifact_storage_state_v1(state)
+    supplied: dict[str, str] = {}
+    for policy in policies:
+        validate_artifact_provenance_policy_v1(policy)
+        if policy["provenance_policy_id"] in supplied:
+            _fail("Artifact Storage supplied Provenance Policies have duplicate IDs")
+        supplied[policy["provenance_policy_id"]] = policy["record_sigil"]
+    for projection in state["provenance_policies"]:
+        if supplied.get(projection["provenance_policy_id"]) != projection["record_sigil"]:
+            _fail("Artifact Storage State Provenance Policy projection lacks matching supplied record")
+    if set(supplied) != {
+        projection["provenance_policy_id"] for projection in state["provenance_policies"]
+    }:
+        _fail("Artifact Storage supplied Provenance Policies do not exactly match State projections")
+
+
 def validate_artifact_storage_state_supplied_provenance_v1(
     state: dict[str, Any], *, records: list[dict[str, Any]],
 ) -> None:
