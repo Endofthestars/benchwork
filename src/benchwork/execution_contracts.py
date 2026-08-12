@@ -1822,6 +1822,93 @@ def _reduce_cleanup_progressed_v1(state: dict[str, Any], event: dict[str, Any]) 
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_terminal_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Project one sealed Attempt terminal Event without deriving its evidence.
+
+    Terminalization evidence is already part of the closed Event payload.  The
+    reducer only checks that it is compatible with the immediately preceding
+    Attempt projection and copies those immutable bindings into State.  It
+    intentionally does not settle the Job budget, evaluate assurance, or
+    accept an Outcome.
+    """
+    if len(state["attempts"]) != 1 or len(state["jobs"]) != 1:
+        _fail("Attempt terminal reducer requires one Job and one Attempt")
+    terminal_state = _ATTEMPT_TERMINAL_EVENT_STATES_V1.get(event["event_type"])
+    if terminal_state is None:
+        _fail("Attempt terminal reducer received a nonterminal Event")
+    attempt, job, payload, executor = (
+        state["attempts"][0], state["jobs"][0], event["payload"], state["executor"]
+    )
+    evidence = payload["attempt_terminal_evidence"]
+    expected_revision = [{
+        "entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"],
+        "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1,
+    }]
+    copied = (
+        "result_binding", "attempt_authorization_state", "completion_anchor_binding",
+        "worker_session_binding", "lease_terminal_binding", "first_stop_or_fence_binding",
+        "storage_observation_binding", "terminal_source_binding",
+        "control_evidence_set_binding", "quarantine_binding_set_binding",
+        "terminalization_storage_manifest_binding", "output_root_protection",
+    )
+    prior_lease_terminal = attempt["lease_terminal_binding"]
+    evidence_lease_terminal = evidence["lease_terminal_binding"]
+    if (
+        attempt["state"] not in {"DRAINING", "STOPPING", "CLEANING"}
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != expected_revision
+        or payload["fencing_generation"] != attempt["fencing_generation"]
+        or payload["final_fence_floor"] < job["fence_floor"]
+        or payload["final_fence_floor"] < payload["fencing_generation"]
+        or (prior_lease_terminal is not None and evidence_lease_terminal != prior_lease_terminal)
+        or (prior_lease_terminal is None and evidence_lease_terminal != {"kind": "NONE"})
+        or any(evidence[member] != attempt[member] for member in copied if member in {
+            "result_binding", "attempt_authorization_state", "completion_anchor_binding",
+            "worker_session_binding", "first_stop_or_fence_binding",
+            "terminal_source_binding",
+        })
+    ):
+        _fail("Attempt terminal Event disagrees with preceding Attempt projection")
+    if terminal_state == "SUCCEEDED" and evidence["completion_anchor_binding"]["kind"] == "NOT_ESTABLISHED":
+        _fail("Succeeded Attempt terminal Event requires an established completion anchor")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{
+        **attempt,
+        "revision": attempt["revision"] + 1,
+        "state": terminal_state,
+        "storage_observation_binding": evidence["storage_observation_binding"],
+        "terminal_source_binding": evidence["terminal_source_binding"],
+        "accounting_capture_binding": {
+            "kind": "CAPTURED", "event_id": evidence["accounting_capture_event_id"],
+            "event_sigil": evidence["accounting_capture_event_sigil"],
+            "usage_status": "UNAVAILABLE", "accounting_evidence_set_sigil": evidence["assurance_input_set_sigil"],
+        },
+        "control_evidence_set_binding": evidence["control_evidence_set_binding"],
+        "quarantine_binding_set_binding": evidence["quarantine_binding_set_binding"],
+        "terminalization_storage_manifest_binding": evidence["terminalization_storage_manifest_binding"],
+        "output_root_protection": evidence["output_root_protection"],
+        "output_storage_roots": payload["output_storage_roots"],
+        "terminal_event_binding": {
+            "kind": "PRESENT", "terminal_state": terminal_state,
+            "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
+            "terminal_sequence": event["sequence"], "terminal_recorded_at": event["recorded_at"],
+        },
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["deadlines"] = [
+        deadline for deadline in state["deadlines"]
+        if not (
+            deadline["entity_id"] == attempt["attempt_id"]
+            and deadline["deadline_kind"] in {"ATTEMPT_DEADLINE", "CANCELLATION_GRACE"}
+        )
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close active Worker authority and publish its higher fence tombstone."""
     if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1 or len(state["worker_sessions"]) != 1:
@@ -2440,6 +2527,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_attempt_cleaning_v1(current, event)
         elif event["event_type"] == "attempt.cleanup_progressed":
             current = _reduce_cleanup_progressed_v1(current, event)
+        elif event["event_type"] in _ATTEMPT_TERMINAL_EVENT_STATES_V1:
+            current = _reduce_attempt_terminal_v1(current, event)
         elif event["event_type"] == "lease.released":
             current = _reduce_lease_released_v1(current, event)
         elif event["event_type"] == "lease.expired":
