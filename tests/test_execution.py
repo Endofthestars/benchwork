@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import cast
+from unittest.mock import patch
 
 from benchwork.athanor import Athanor, AthanorError, content_sigil
 from benchwork.execution import ExecutionService, LocalBlobStore
@@ -56,6 +57,11 @@ class LocalBlobStoreTest(unittest.TestCase):
         blob.write_bytes(b"modified")
         with self.assertRaisesRegex(AthanorError, "integrity failure"):
             self.store.read_bytes(record["blob_sigil"])
+
+    def test_storage_fails_closed_when_directory_sync_fails(self) -> None:
+        with patch("benchwork.execution._fsync_directory", side_effect=AthanorError("directory sync failed")):
+            with self.assertRaisesRegex(AthanorError, "directory sync failed"):
+                self.store.initialize()
 
     def test_storage_rejects_incompatible_format(self) -> None:
         self.store.initialize()

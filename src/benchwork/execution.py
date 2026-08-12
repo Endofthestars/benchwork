@@ -101,6 +101,17 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _fsync_directory(path: Path) -> None:
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        raise AthanorError("managed storage directory sync failed") from error
+
+
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -116,6 +127,7 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
+        _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -134,6 +146,7 @@ def _atomic_bytes(path: Path, value: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
+        _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -486,6 +499,7 @@ class ExecutionService:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
+        _fsync_directory(self._journal_path.parent)
         self._write_head_unlocked([*events, event])
         return event
 
