@@ -98,6 +98,21 @@ _CONTROL_DIMENSION_ORDER = (
     "ENVIRONMENT_CREDENTIAL", "LOG_OUTPUT_CAPTURE", "RUNTIME_INPUT_OUTPUT_IDENTITY",
     "CANCELLATION_FENCING", "TERMINATION_CLEANUP",
 )
+_CONTROL_PHASE_ORDER = ("PREFLIGHT", "RUNTIME", "TERMINATION", "CLEANUP")
+_CONTROL_PHASE_RANK = {value: rank for rank, value in enumerate(_CONTROL_PHASE_ORDER)}
+_CONTROL_EVIDENCE_KIND_ORDER = (
+    "TASK_BINDING", "CAPABILITY_BINDING", "SNAPSHOT_BINDING", "WARD_DECISION",
+    "APPROVAL_RECEIPT", "BACKEND_CONFIGURATION", "HOST_IDENTITY", "POLICY_RESOLUTION",
+    "BASE_IDENTITY", "INPUT_IDENTITY", "MATERIALIZATION_IDENTITY", "ENVIRONMENT_CONSTRUCTION",
+    "FILESYSTEM_POLICY", "NETWORK_POLICY", "EXECUTABLE_SELECTION", "PROCESS_TREE",
+    "WALL_TIME_ENFORCEMENT", "RESOURCE_ACCOUNTING", "CREDENTIAL_NONINHERITANCE",
+    "LOG_CAPTURE", "OUTPUT_VALIDATION", "STORAGE_OBSERVATION", "FENCE_TOMBSTONE",
+    "TERMINATION", "HANDLE_REVOCATION", "CLEANUP", "QUARANTINE",
+    "TERMINAL_SOURCE_VERIFICATION", "CONFORMANCE_FIXTURE",
+)
+_CONTROL_EVIDENCE_KIND_RANK = {
+    value: rank for rank, value in enumerate(_CONTROL_EVIDENCE_KIND_ORDER)
+}
 _AUTHORITY_GATE_ORDER = ("INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "RECOVERY_ACTIVE")
 _AUTHORITY_GATE_RANK = {value: rank for rank, value in enumerate(_AUTHORITY_GATE_ORDER)}
 _DEADLINE_PRIORITY = {
@@ -1091,6 +1106,219 @@ def load_execution_quarantine_binding_set_v1(raw: str | bytes | bytearray) -> di
     binding_set = _load_strict_object(raw, "Execution Quarantine Binding Set")
     validate_execution_quarantine_binding_set_v1(binding_set)
     return binding_set
+
+
+def derive_execution_output_storage_observation_set_id_v1(
+    observation_set: dict[str, Any],
+) -> str:
+    """Derive the immutable OS-ID from its terminal Attempt inputs."""
+    digest = content_sigil([
+        "execution-output-storage-observation-set-id/1.0",
+        observation_set["job_id"], observation_set["attempt_id"],
+        observation_set["attempt_binding_sigil"], observation_set["result_binding"],
+        observation_set["log_closure_sigil"], observation_set["output_closure_sigil"],
+        observation_set["control_evidence_set_binding"],
+        observation_set["quarantine_binding_set_binding"],
+        observation_set["terminalization_storage_manifest_binding"],
+        observation_set["output_root_protection"], observation_set["terminal_source_binding"],
+    ]).removeprefix("sha256:").upper()
+    return f"OS-{digest}"
+
+
+def _observation_member_blob_refs_v1(member: dict[str, Any]) -> list[str]:
+    kind = member["kind"]
+    if kind in {"ATTEMPT_OUTPUT", "RESOURCE_EVIDENCE"}:
+        return [member["blob_sigil"]]
+    if kind == "LOG_STREAM":
+        return [member["content"]["blob_sigil"]]
+    if kind == "TERMINAL_SOURCE":
+        return [member["storage_blob"]["blob_sigil"]]
+    return []
+
+
+def _validate_observation_storage_v1(
+    storage: dict[str, Any], blob_sigil: str, size_bytes: int,
+    storage_event: dict[str, Any],
+) -> None:
+    kind = storage["kind"]
+    if kind == "NONE":
+        _fail("Output Storage Observation member with a claimed Blob cannot use NONE storage")
+    if kind == "BLOB":
+        if storage["blob_sigil"] != blob_sigil or storage["size_bytes"] != size_bytes:
+            _fail("Output Storage Observation BLOB storage disagrees with member Blob")
+        if storage["terminal_storage_status"] != storage["availability"]:
+            _fail("Output Storage Observation BLOB terminal status disagrees with availability")
+        integrity = storage["integrity_event_sigils"]
+        if integrity != sorted(integrity, key=lambda value: _unsigned_ascii(value, "integrity Event Sigil")):
+            _fail("Output Storage Observation integrity Event Sigils are not unsigned-ASCII sorted")
+        available_at = storage["availability_as_of"]
+        if (
+            available_at["journal_id"] != storage_event["journal_id"]
+            or available_at["sequence"] > storage_event["sequence"]
+        ):
+            _fail("Output Storage Observation availability is outside the frozen Storage prefix")
+        return
+    if storage["claimed_blob_sigil"] != blob_sigil or storage["claimed_size_bytes"] != size_bytes:
+        _fail("Output Storage Observation Quarantine storage disagrees with member Blob")
+    if kind == "QUARANTINE_TERMINAL_NEGATIVE":
+        if storage["origin_event"]["sequence"] > storage["observation_event"]["sequence"]:
+            _fail("Output Storage Observation Quarantine observation predates its origin")
+        observed = storage["observation_event"]
+    else:
+        observed = storage["quarantine_event"]
+    if (
+        observed["journal_id"] != storage_event["journal_id"]
+        or observed["sequence"] > storage_event["sequence"]
+    ):
+        _fail("Output Storage Observation Quarantine is outside the frozen Storage prefix")
+
+
+def validate_execution_output_storage_observation_set_v1(
+    observation_set: dict[str, Any],
+) -> None:
+    """Validate an OS document locally, never resolving Storage or Execution history."""
+    validate_instance("execution-output-storage-observation-set-1.0.json", observation_set)
+    _check_nfc(observation_set)
+    if observation_set["observation_set_id"] != derive_execution_output_storage_observation_set_id_v1(observation_set):
+        _fail("Execution Output Storage Observation Set ID mismatch")
+    if observation_set["observation_set_sigil"] != content_sigil(
+        _without(observation_set, "observation_set_sigil")
+    ):
+        _fail("Execution Output Storage Observation Set self-Sigil mismatch")
+    protection = observation_set["output_root_protection"]
+    if protection["kind"] not in {"NO_HOLD", "HELD"}:
+        _fail("Output Storage Observation requires a terminal output-root protection branch")
+    if protection["terminalization_storage_manifest_binding"] != observation_set[
+        "terminalization_storage_manifest_binding"
+    ]:
+        _fail("Output Storage Observation protection disagrees with terminalization manifest")
+
+    members = observation_set["members"]
+    cursor = 0
+    result_kind = observation_set["result_binding"]["kind"]
+    if members[cursor]["kind"] == "ATTEMPT_OUTPUTS_NONE":
+        expected_reason = {
+            "NONE": "NO_RESULT", "REJECTED": "RESULT_REJECTED",
+        }.get(result_kind, "OUTPUT_ARRAY_EMPTY")
+        if members[cursor]["reason"] != expected_reason:
+            _fail("Output Storage Observation output sentinel disagrees with Result binding")
+        cursor += 1
+    else:
+        start = cursor
+        while cursor < len(members) and members[cursor]["kind"] == "ATTEMPT_OUTPUT":
+            cursor += 1
+        outputs = members[start:cursor]
+        if not outputs or result_kind != "ACCEPTED":
+            _fail("Output Storage Observation output members require an accepted Result")
+        output_keys = [
+            (_unsigned_ascii(member["logical_name"], "output logical name"), member["blob_sigil"])
+            for member in outputs
+        ]
+        if output_keys != sorted(output_keys) or len(set(output_keys)) != len(output_keys):
+            _fail("Output Storage Observation output members are not uniquely sorted")
+
+    logs = members[cursor:cursor + 3]
+    if len(logs) != 3 or [member["kind"] for member in logs] != ["LOG_STREAM"] * 3:
+        _fail("Output Storage Observation must contain exactly three Log streams")
+    if [member["stream"] for member in logs] != ["STDOUT", "STDERR", "STRUCTURED"]:
+        _fail("Output Storage Observation Log streams are not in fixed order")
+    if len({member["log_stream_id"] for member in logs}) != 3:
+        _fail("Output Storage Observation Log stream IDs must be unique")
+    for log in logs:
+        content = log["content"]
+        if content["kind"] == "EMPTY":
+            if log["final_sequence"] is not None or log["captured_bytes"] != 0:
+                _fail("Output Storage Observation empty Log has non-empty closure")
+        elif log["final_sequence"] is None or log["captured_bytes"] == 0:
+            _fail("Output Storage Observation captured Log lacks a non-empty closure")
+    cursor += 3
+
+    if cursor >= len(members):
+        _fail("Output Storage Observation omits its resource-evidence group")
+    if members[cursor]["kind"] == "RESOURCE_EVIDENCE_NONE":
+        cursor += 1
+    else:
+        start = cursor
+        while cursor < len(members) and members[cursor]["kind"] == "RESOURCE_EVIDENCE":
+            cursor += 1
+        resources = members[start:cursor]
+        if not resources:
+            _fail("Output Storage Observation resource-evidence group is invalid")
+        keys = [
+            (_unsigned_ascii(member["control_evidence_id"], "control evidence ID"),
+             _CONTROL_PHASE_RANK[member["phase"]],
+             _CONTROL_EVIDENCE_KIND_RANK[member["evidence_kind"]],
+             member["phase_evidence_entry_sigil"])
+            for member in resources
+        ]
+        if keys != sorted(keys) or len(set(keys)) != len(keys):
+            _fail("Output Storage Observation resource evidence is not uniquely sorted")
+
+    terminal_members = members[cursor:]
+    if len(terminal_members) != 1:
+        _fail("Output Storage Observation must end with one terminal-source member")
+    terminal = terminal_members[0]
+    terminal_binding = observation_set["terminal_source_binding"]
+    if terminal["kind"] == "TERMINAL_SOURCE_NOT_APPLICABLE":
+        if terminal_binding["kind"] != "NOT_APPLICABLE":
+            _fail("Output Storage Observation terminal-source sentinel disagrees with binding")
+    elif terminal["kind"] == "TERMINAL_SOURCE_NONE":
+        if (
+            terminal_binding["kind"] != "QUARANTINED"
+            or any(terminal_binding[field] is not None for field in (
+                "terminal_source_identity", "terminal_source_sigil", "storage_blob",
+            ))
+            or terminal_binding["file_count"] != 0
+            or terminal_binding["byte_count"] != 0
+            or terminal["reason_codes"] != terminal_binding["reason_codes"]
+        ):
+            _fail("Output Storage Observation terminal-source NONE disagrees with binding")
+    else:
+        if terminal_binding["kind"] not in {"VERIFIED", "QUARANTINED"}:
+            _fail("Output Storage Observation terminal source lacks a compatible binding")
+        copied = (
+            "terminal_source_identity", "terminal_source_sigil", "storage_blob",
+            "retention_policy_sigil", "file_count", "byte_count",
+        )
+        if any(terminal[field] != terminal_binding[field] for field in copied):
+            _fail("Output Storage Observation terminal source disagrees with binding")
+        if terminal["disposition"] != terminal_binding["kind"]:
+            _fail("Output Storage Observation terminal source disposition disagrees with binding")
+        if terminal_binding["kind"] == "VERIFIED" and terminal["storage"]["kind"] != "BLOB":
+            _fail("Output Storage Observation verified terminal source requires BLOB storage")
+
+    for member in members:
+        kind = member["kind"]
+        if kind in {"ATTEMPT_OUTPUT", "RESOURCE_EVIDENCE"}:
+            _validate_observation_storage_v1(
+                member["storage"], member["blob_sigil"], member["byte_size"],
+                observation_set["storage_event"],
+            )
+        elif kind == "LOG_STREAM":
+            _validate_observation_storage_v1(
+                member["content"]["storage"], member["content"]["blob_sigil"],
+                member["captured_bytes"], observation_set["storage_event"],
+            )
+        elif kind == "TERMINAL_SOURCE":
+            _validate_observation_storage_v1(
+                member["storage"], member["storage_blob"]["blob_sigil"],
+                member["storage_blob"]["size_bytes"], observation_set["storage_event"],
+            )
+
+    expected_blob_sigils = sorted({
+        blob_sigil for member in members
+        for blob_sigil in _observation_member_blob_refs_v1(member)
+    }, key=lambda value: _unsigned_ascii(value, "Blob Sigil"))
+    if observation_set["blob_sigils"] != expected_blob_sigils:
+        _fail("Output Storage Observation Blob Sigils disagree with members")
+
+
+def load_execution_output_storage_observation_set_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    observation_set = _load_strict_object(raw, "Execution Output Storage Observation Set")
+    validate_execution_output_storage_observation_set_v1(observation_set)
+    return observation_set
 
 
 def derive_observation_evidence_subject_sigil_v1(

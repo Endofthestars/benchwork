@@ -17,6 +17,7 @@ from benchwork.execution_contracts import (
     derive_execution_root_hold_release_authorization_id_v1,
     derive_execution_control_evidence_set_id_v1,
     derive_execution_quarantine_binding_set_id_v1,
+    derive_execution_output_storage_observation_set_id_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
@@ -32,6 +33,7 @@ from benchwork.execution_contracts import (
     load_execution_root_hold_release_authorization_v1,
     load_execution_control_evidence_set_v1,
     load_execution_quarantine_binding_set_v1,
+    load_execution_output_storage_observation_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
@@ -46,6 +48,7 @@ from benchwork.execution_contracts import (
     validate_execution_root_hold_release_authorization_v1,
     validate_execution_control_evidence_set_v1,
     validate_execution_quarantine_binding_set_v1,
+    validate_execution_output_storage_observation_set_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -426,6 +429,70 @@ def _quarantine_binding_set() -> dict[str, Any]:
         key: member for key, member in binding_set.items() if key != "quarantine_binding_set_sigil"
     })
     return binding_set
+
+
+def _output_storage_observation_set() -> dict[str, Any]:
+    storage_event = {
+        "journal_id": "SJ-ONE", "event_id": "SE-ONE", "sequence": 1,
+        "event_sigil": SIGIL,
+    }
+    blob_storage = {
+        "kind": "BLOB", "terminal_storage_status": "AVAILABLE", "blob_sigil": SIGIL,
+        "size_bytes": 0, "blob_record_sigil": SIGIL_B, "availability": "AVAILABLE",
+        "availability_as_of": storage_event, "availability_basis_sigil": SIGIL,
+        "integrity_event_sigils": [], "quarantine": {"kind": "NONE"},
+        "replica": {"kind": "NONE"},
+    }
+    origin = {
+        "kind": "COMMITTED_BLOB", "transfer": {
+            "transfer_id": "ST-ONE", "transfer_attempt_id": "SA-ONE",
+            "request_record_sigil": SIGIL, "attempt_record_sigil": SIGIL_B,
+            "terminal_event": storage_event,
+        }, "provenance_id": "PROVENANCE", "provenance_sigil": SIGIL,
+        "blob_record_sigil": SIGIL_B, "terminal_event": storage_event,
+    }
+    members = [{"kind": "ATTEMPT_OUTPUTS_NONE", "reason": "NO_RESULT"}]
+    for stream in ("STDOUT", "STDERR", "STRUCTURED"):
+        members.append({
+            "kind": "LOG_STREAM", "storage_subject_id": SIGIL,
+            "manifest_entry_sigil": SIGIL_B, "stream": stream,
+            "log_stream_id": f"LG-{stream}", "final_sequence": None,
+            "captured_bytes": 0, "dropped_bytes": 0, "truncated": False,
+            "stream_set_sigil": SIGIL, "closure_event_id": "JE-ONE",
+            "closure_event_sigil": SIGIL_B, "storage_origin": origin,
+            "content": {"kind": "EMPTY", "blob_sigil": SIGIL, "storage": blob_storage},
+        })
+    members.extend([
+        {"kind": "RESOURCE_EVIDENCE_NONE"},
+        {"kind": "TERMINAL_SOURCE_NOT_APPLICABLE"},
+    ])
+    manifest = {
+        "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "A" * 64,
+        "storage_root_manifest_sigil": SIGIL,
+    }
+    observation_set = {
+        "schema_version": "execution-output-storage-observation-set/1.0",
+        "observation_set_id": "", "job_id": JOB_ID, "attempt_id": "AT-ONE",
+        "attempt_binding_sigil": SIGIL, "result_binding": {"kind": "NONE"},
+        "log_closure_sigil": SIGIL, "output_closure_sigil": SIGIL_B,
+        "control_evidence_set_binding": {
+            "kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64,
+            "control_evidence_set_sigil": SIGIL,
+        }, "quarantine_binding_set_binding": {
+            "kind": "FROZEN", "quarantine_binding_set_id": "QBS-" + "A" * 64,
+            "quarantine_binding_set_sigil": SIGIL,
+        }, "terminalization_storage_manifest_binding": manifest,
+        "output_root_protection": {
+            "kind": "NO_HOLD", "terminalization_storage_manifest_binding": manifest,
+        }, "terminal_source_binding": {"kind": "NOT_APPLICABLE"},
+        "storage_event": storage_event, "storage_state_sigil": SIGIL,
+        "members": members, "blob_sigils": [SIGIL], "observation_set_sigil": "",
+    }
+    observation_set["observation_set_id"] = derive_execution_output_storage_observation_set_id_v1(observation_set)
+    observation_set["observation_set_sigil"] = content_sigil({
+        key: member for key, member in observation_set.items() if key != "observation_set_sigil"
+    })
+    return observation_set
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1466,6 +1533,66 @@ def test_quarantine_binding_set_closes_frozen_owner_and_self_identity() -> None:
     })
     with pytest.raises(Exception, match="origin disagrees with Quarantine owner"):
         validate_execution_quarantine_binding_set_v1(mismatched_owner)
+
+
+def test_output_storage_observation_set_closes_id_members_and_blob_union() -> None:
+    observation_set = _output_storage_observation_set()
+    validate_execution_output_storage_observation_set_v1(observation_set)
+    assert load_execution_output_storage_observation_set_v1(json.dumps(observation_set)) == observation_set
+
+    stale_id = deepcopy(observation_set)
+    stale_id["observation_set_id"] = "OS-" + "A" * 64
+    stale_id["observation_set_sigil"] = content_sigil({
+        key: member for key, member in stale_id.items() if key != "observation_set_sigil"
+    })
+    with pytest.raises(Exception, match="Observation Set ID mismatch"):
+        validate_execution_output_storage_observation_set_v1(stale_id)
+
+    wrong_log_order = deepcopy(observation_set)
+    wrong_log_order["members"][1], wrong_log_order["members"][2] = (
+        wrong_log_order["members"][2], wrong_log_order["members"][1]
+    )
+    wrong_log_order["observation_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_log_order.items() if key != "observation_set_sigil"
+    })
+    with pytest.raises(Exception, match="Log streams are not in fixed order"):
+        validate_execution_output_storage_observation_set_v1(wrong_log_order)
+
+    missing_blob = deepcopy(observation_set)
+    missing_blob["blob_sigils"] = []
+    missing_blob["observation_set_sigil"] = content_sigil({
+        key: member for key, member in missing_blob.items() if key != "observation_set_sigil"
+    })
+    with pytest.raises(Exception, match="Blob Sigils disagree"):
+        validate_execution_output_storage_observation_set_v1(missing_blob)
+
+    mismatched_protection = deepcopy(observation_set)
+    mismatched_protection["output_root_protection"] = {
+        "kind": "NO_HOLD",
+        "terminalization_storage_manifest_binding": {
+            "kind": "FROZEN", "storage_root_manifest_id": "ESM-" + "B" * 64,
+            "storage_root_manifest_sigil": SIGIL_B,
+        },
+    }
+    mismatched_protection["observation_set_id"] = derive_execution_output_storage_observation_set_id_v1(
+        mismatched_protection
+    )
+    mismatched_protection["observation_set_sigil"] = content_sigil({
+        key: member for key, member in mismatched_protection.items() if key != "observation_set_sigil"
+    })
+    with pytest.raises(Exception, match="protection disagrees"):
+        validate_execution_output_storage_observation_set_v1(mismatched_protection)
+
+    pending_protection = deepcopy(observation_set)
+    pending_protection["output_root_protection"] = {"kind": "PENDING"}
+    pending_protection["observation_set_id"] = derive_execution_output_storage_observation_set_id_v1(
+        pending_protection
+    )
+    pending_protection["observation_set_sigil"] = content_sigil({
+        key: member for key, member in pending_protection.items() if key != "observation_set_sigil"
+    })
+    with pytest.raises(Exception, match="requires a terminal output-root protection"):
+        validate_execution_output_storage_observation_set_v1(pending_protection)
 
 
 
