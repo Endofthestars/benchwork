@@ -153,7 +153,13 @@ class LocalBlobStore:
     def initialize(self) -> None:
         with _exclusive_lock(self._lock_path):
             for name in ("records", "blobs", "staging", "quarantine", "locks", "recovery"):
-                (self.path / name).mkdir(parents=True, exist_ok=True)
+                directory = self.path / name
+                if directory.exists() and not directory.is_dir():
+                    raise AthanorError(f"managed storage path is not a directory: {name}")
+                try:
+                    directory.mkdir(parents=True, exist_ok=True)
+                except OSError as error:
+                    raise AthanorError(f"managed storage directory is unavailable: {name}") from error
             format_path = self.path / "format.json"
             expected = {
                 "schema_version": "benchwork-local-artifact-storage-format/0.1",
@@ -161,6 +167,8 @@ class LocalBlobStore:
                 "layout": "BENCHWORK_LOCAL_STORAGE_V1",
             }
             if format_path.exists():
+                if not format_path.is_file():
+                    raise AthanorError("managed storage format is invalid")
                 try:
                     actual = _load_strict_local_json_object(
                         format_path.read_text(encoding="utf-8"), "managed storage format",
@@ -314,6 +322,8 @@ class ExecutionService:
     def _events_unlocked(self) -> list[dict[str, Any]]:
         if not self._journal_path.exists():
             return []
+        if not self._journal_path.is_file():
+            raise AthanorError("execution journal is unreadable")
         events: list[dict[str, Any]] = []
         previous: str | None = None
         previous_recorded_at: datetime | None = None

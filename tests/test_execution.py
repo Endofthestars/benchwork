@@ -64,6 +64,13 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "format is incompatible"):
             self.store.initialize()
 
+    def test_storage_rejects_colliding_managed_paths(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        storage.mkdir(parents=True)
+        (storage / "blobs").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "path is not a directory: blobs"):
+            self.store.initialize()
+
     def test_deduplication_rejects_resealed_or_conflicting_blob_metadata(self) -> None:
         first = self.store.import_bytes(b"phase-three", media_type="text/plain")
         record_path = (
@@ -368,6 +375,14 @@ class ExecutionServiceTest(unittest.TestCase):
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
         journal.write_bytes(b"\xff\xfe")
+        with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_local_journal_rejects_a_directory_at_its_file_path(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.unlink()
+        journal.mkdir()
         with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
             self.service.observe(observation["job"]["job_id"])
 
