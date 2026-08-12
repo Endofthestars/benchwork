@@ -356,6 +356,39 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "invalid execution Job cancellation"):
             self.service.observe(job["job_id"])
 
+    def test_resealed_local_payload_scalars_reject_bool_and_unhashable_values(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        job = observation["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[2]["payload"]["expected_job_revision"] = True
+        for index in range(2, len(events)):
+            if index > 2:
+                events[index]["previous_event_sigil"] = events[index - 1]["event_sigil"]
+            events[index]["event_sigil"] = content_sigil({
+                key: value for key, value in events[index].items() if key != "event_sigil"
+            })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "cancellation payload is invalid"):
+            self.service.observe(job["job_id"])
+
+        journal.unlink()
+        observation = self.service.start(_specification(), "start-002")
+        job = observation["job"]
+        self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[-1]["payload"]["state"] = []
+        events[-1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[-1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "terminal payload is invalid"):
+            self.service.observe(job["job_id"])
+
     def test_local_persistence_rejects_duplicate_keys_and_nonfinite_numbers(self) -> None:
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"

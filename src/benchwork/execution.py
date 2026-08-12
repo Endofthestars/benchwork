@@ -569,6 +569,8 @@ class ExecutionService:
             elif event_type == "job.queued":
                 if set(payload) != {"job_id"}:
                     raise AthanorError("execution Job queue payload is invalid")
+                if not isinstance(payload["job_id"], str):
+                    raise AthanorError("execution Job queue payload is invalid")
                 job = jobs.get(payload["job_id"])
                 if job is None or job["state"] != "SUBMITTED":
                     raise AthanorError("invalid execution Job queue transition")
@@ -579,6 +581,13 @@ class ExecutionService:
                     "job_id", "job_binding_sigil", "expected_job_revision",
                     "idempotency_key_sigil", "reason",
                 }:
+                    raise AthanorError("execution Job cancellation payload is invalid")
+                if (
+                    not isinstance(payload["job_id"], str)
+                    or not isinstance(payload["expected_job_revision"], int)
+                    or isinstance(payload["expected_job_revision"], bool)
+                    or payload["expected_job_revision"] < 1
+                ):
                     raise AthanorError("execution Job cancellation payload is invalid")
                 job = jobs.get(payload["job_id"])
                 key = payload["idempotency_key_sigil"]
@@ -607,6 +616,13 @@ class ExecutionService:
                     "idempotency_key_sigil", "reason",
                 }:
                     raise AthanorError("execution terminal cancellation payload is invalid")
+                if (
+                    not isinstance(payload["job_id"], str)
+                    or not isinstance(payload["expected_job_revision"], int)
+                    or isinstance(payload["expected_job_revision"], bool)
+                    or payload["expected_job_revision"] < 1
+                ):
+                    raise AthanorError("execution terminal cancellation payload is invalid")
                 job = jobs.get(payload["job_id"])
                 key = payload["idempotency_key_sigil"]
                 if (
@@ -627,6 +643,8 @@ class ExecutionService:
                 cancellations[scope] = dict(payload)
             elif event_type == "job.terminal":
                 if set(payload) != {"job_id", "state", "reason"}:
+                    raise AthanorError("execution Job terminal payload is invalid")
+                if not isinstance(payload["job_id"], str) or not isinstance(payload["state"], str):
                     raise AthanorError("execution Job terminal payload is invalid")
                 job = jobs.get(payload["job_id"])
                 state = payload["state"]
