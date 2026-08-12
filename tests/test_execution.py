@@ -121,6 +121,34 @@ class ExecutionServiceTest(unittest.TestCase):
         self.assertEqual(outcome["terminal_state"], "CANCELLED")
         self.assertFalse(outcome["eligible_for_acceptance"])
 
+    def test_restart_recovers_idempotency_cancellation_and_terminal_outcome(self) -> None:
+        first = self.service.start(_specification(), "start-001")
+        job = first["job"]
+
+        restarted = ExecutionService(Path(self.directory.name))
+        replayed_start = restarted.start(_specification(), "start-001")
+        self.assertEqual(replayed_start["job"], job)
+        self.assertEqual(restarted.observe(job["job_id"])["job"], job)
+
+        cancelled = restarted.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        final_job = cancelled["job"]
+        self.assertEqual(final_job["state"], "CANCELLED")
+
+        recovered = ExecutionService(Path(self.directory.name))
+        outcome = recovered.get_outcome(job["job_id"])
+        self.assertEqual(outcome["terminal_state"], "CANCELLED")
+        self.assertEqual(outcome["terminal_event_sigil"], final_job["terminal_event_sigil"])
+        self.assertEqual(
+            recovered.cancel(
+                job["job_id"], job["job_binding_sigil"], final_job["revision"],
+                "cancel-001", "operator requested cancellation",
+            )["job"],
+            final_job,
+        )
+
     def test_changed_request_under_same_task_key_is_a_conflict(self) -> None:
         self.service.start(_specification(), "start-001")
         with self.assertRaisesRegex(AthanorError, "idempotency conflict"):
