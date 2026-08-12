@@ -4444,6 +4444,1491 @@ Outcome, and negative evidence remain unchanged.
   store, policy source, Chronicle, canonical projections, or any part of
   `.benchwork/`.
 
+## Approved 2026-08-06 Result Authority Closure AC2–AC4 v0.1
+
+The user approved AC1 through AC4 as one synchronized cross-RFC decision
+bundle. RFC-0013 owns AC1's namespace replacement-index root, row, protected
+Head, checked replacement, and visibility rules. This RFC owns the following
+AC2–AC4 OWR subject domains, authority/role mapping, and mutually dependent
+authority-substrate family. Partial implementation, a caller-supplied trust
+fact, or a Schema-valid record grants no Result authority.
+
+## AC2 — private OWR EIA subject domains
+
+For an OWE manifest, `OwnerBinding` and `decoded_observation` mean the exact
+closed objects already owned by the OWR/OWE contracts. RFC-0012 selects:
+
+```text
+owner_binding_sigil = Sigil([
+  "execution-output-writer-revocation-owner-binding/1.0",
+  OwnerBinding
+])
+
+decoded_observation_sigil = Sigil([
+  "execution-output-writer-revocation-decoded-observation/1.0",
+  decoded_observation
+])
+```
+
+The OWE's EIA `subject` equals, byte-for-byte:
+
+```text
+{
+  subject_kind: "OUTPUT_WRITER_REVOCATION",
+  raw_evidence_id: OWE.raw_evidence_id,
+  raw_evidence_kind: OWE.kind,
+  owner_binding_sigil: the first derivation above,
+  decoded_observation_sigil: the second derivation above
+}
+```
+
+The `PRODUCER` EIA may bind only the closed `PRODUCER_REVOCATION` decoded
+branch; the `VERIFIER` EIA may bind only `VERIFIER_CONFIRMATION`. The two OWR
+domains are distinct from the existing Observation Evidence domains. A bare
+Sigil equality, the Observation domain, a self-Sigil of either enclosing
+record, or a caller-supplied subject is invalid.
+
+AC2 defines deterministic subject identity only. It neither authenticates the
+subject nor authorizes the EIA or OWR.
+
+## AC3 — OWR authority and role mapping
+
+For both OWR raw-evidence records, EIA `authority_binding` is exactly:
+
+```text
+{
+  authority_kind: "OUTPUT_WRITER_REVOCATION_OWNER",
+  authority_id: rederived OWR ID,
+  authority_sigil: owner_binding_sigil
+}
+```
+
+The EIA consumer does not resolve an enclosing OWR to obtain that ID. It
+mechanically rederives
+`"OWR-" + UPPER_HEX(SHA256(canonical_json([
+"execution-output-writer-revocation-evidence-id/1.0", OwnerBinding.job_id,
+OwnerBinding.attempt_id, OwnerBinding.output_handle_id])))` from the complete
+AC2-bound OwnerBinding and requires equality. Its preimage does not depend on
+either EIA or the OWR self-Sigil. Using `OWR.revocation_evidence_sigil` would
+create a cycle and is forbidden. `output_handle_id`, a mutable owner
+projection, or a profile ID cannot substitute for the authority ID.
+
+The complete evidence-role matrix is:
+
+| OWE kind | Required decoded branch | Required EIA/OWE role | Allowed role kinds |
+| --- | --- | --- | --- |
+| `PRODUCER` | `PRODUCER_REVOCATION` | exact OWR `producer_identity` | `EXECUTOR_SUPERVISOR`, `ENFORCEMENT_BACKEND` |
+| `VERIFIER` | `VERIFIER_CONFIRMATION` | exact OWR `verifier_identity` | `HOST_VERIFIER`, `INDEPENDENT_BACKEND_VERIFIER` |
+
+The OWE identity and decoded-branch identity are byte-for-byte equal to the
+selected OWR identity. EIA uses its differently named closed wire and is the
+mechanical mapping `{role_kind: OWR identity.kind, identity_id: OWR
+identity.identity_id, implementation_version: OWR
+identity.implementation_version, implementation_sigil: OWR
+identity.implementation_sigil}`; no renaming other than `kind -> role_kind` is
+allowed. The producer and verifier have
+different identity IDs, implementation Sigils, process-instance identities,
+role-controller domains, issuer-controller domains, credential domains,
+collection-context Sigils,
+authentication IDs, decoder implementation Sigils, and issuer
+`(registry_id, key_id, key_generation)` tuples. Neither may resolve to the
+Worker or Worker Session. The installed AC4 profile and registry snapshot must
+authorize the exact complete row; string inequality alone is not independence.
+
+AC3 closes authority selection and role ownership. It does not establish that
+a role, issuer, key, proof, decoder, generation, or writer inventory is
+trusted; AC4 and its later executable implementation do that.
+
+## AC4 — OWR authority substrate family
+
+AC4 selects five mutually dependent closed control records plus seven resolver
+operations. They form one synchronized decision: no subset is OWR authority.
+
+### AC4.1 independent OWR profile
+
+`execution-output-writer-revocation-evidence-profile/1.0` has exactly:
+
+```text
+schema_version
+evidence_profile_id
+evidence_profile_version
+subject_kind
+producer_implementations
+verifier_implementations
+allowed_role_pairs
+decoder_profiles
+raw_media_profiles
+authentication_profiles
+proof_profiles
+sealed_generation_profiles
+raw_store_profile_binding
+anti_replay_profile_binding
+writer_inventory_profile_sigil
+revocation_profile_sigil
+independence_profile_sigil
+maximum_writer_handles
+maximum_raw_payload_bytes
+profile_sigil
+```
+
+The first four values are respectively the Schema constant,
+`EXECUTION_OUTPUT_WRITER_REVOCATION`, `1.0`, and
+`OUTPUT_WRITER_REVOCATION`. `maximum_writer_handles` is exactly 4,096.
+`maximum_raw_payload_bytes` is PositiveU63. Each array has 1..4,096 entries,
+is strictly sorted by the tuple printed below, and is unique by complete
+canonical JSON.
+
+Implementation entries are exactly
+`{role_kind, implementation_version, implementation_sigil}` and use only the
+AC3 side's role kinds. A role-pair entry is exactly
+`{producer_role_kind, verifier_role_kind}` and never permits one identity or
+implementation on both sides.
+
+A decoder entry is exactly:
+
+```text
+{
+  evidence_kind,
+  decoder_binding,
+  media_type,
+  maximum_input_bytes,
+  maximum_output_bytes,
+  maximum_cpu_time_milliseconds,
+  maximum_memory_bytes,
+  maximum_recursion_depth,
+  decoded_contract_sigil
+}
+```
+
+All five limits are PositiveU63. A raw-media entry is exactly
+`{evidence_kind, media_type, maximum_input_bytes}`. An authentication entry is
+exactly `{evidence_kind, role_kind, authority_kind, issuer_kind, registry_id,
+registry_version, registry_snapshot_sigil, allowed_key_profile_sigil,
+verification_profile_sigil, allowed_proof_kind}`. `authority_kind` is constant
+`OUTPUT_WRITER_REVOCATION_OWNER`; proof kind is `SIGNATURE` or `ATTESTATION`.
+
+`proof_profiles` is a closed union. A signature entry is exactly
+`{proof_kind: "SIGNATURE", algorithm: "ED25519", media_type:
+"application/vnd.benchwork.ed25519-signature", size_bytes: 64,
+verification_profile_sigil}`. An attestation entry is exactly:
+
+```text
+{
+  proof_kind: "ATTESTATION",
+  attestation_profile_id,
+  verification_algorithm_id,
+  media_type,
+  root_media_type,
+  maximum_input_bytes,
+  maximum_root_bytes,
+  maximum_output_bytes,
+  maximum_cpu_time_milliseconds,
+  maximum_memory_bytes,
+  maximum_recursion_depth,
+  claims_decoder_binding,
+  nonce_domain_sigil,
+  challenge_profile_sigil,
+  root_profile_sigil,
+  verification_profile_sigil
+}
+```
+
+All attestation limits are PositiveU63. The profile fixes the algorithm,
+claims decoder, nonce/challenge domain, root class, and verification
+implementation; it cannot
+delegate any of them to attestation payload bytes. The EIA proof branch,
+authentication row, registry key/material row, and selected proof-profile row
+must have the same proof kind, attestation profile ID when applicable, media
+type, and verification-profile Sigil. Every proof payload is read through the
+same AC4.3 immutable resolver before verification. Signature bytes retain the
+canonical exact 64-octet rule.
+
+A sealed-generation entry is exactly:
+
+```text
+{
+  generation_kind,
+  backend_profile_sigil,
+  exact_generation_read_profile_sigil,
+  write_rejection_profile_sigil,
+  immutability_profile_sigil
+}
+```
+
+`generation_kind` is `BACKEND_GENERATION` or `OPAQUE_SEALED_GENERATION`.
+In both branches, `backend_profile_sigil` equals the OWR generation binding's
+same-named member and authorizes the complete backend ID, object-identity, and
+exact-generation resolver class. No mutable latest read is an allowed profile.
+
+`raw_store_profile_binding` is exactly `{raw_store_id, raw_store_version,
+resolver_implementation_sigil, head_resolver_implementation_sigil,
+monotonic_anchor_profile_sigil}` and
+selects the one installed AC4.3
+append-only content index and descriptor-relative resolver. It deliberately
+does not bind a mutable latest root Sigil: every historical entry is immutable,
+and the exact payload descriptor selects the entry. `anti_replay_profile_binding`
+is exactly `{anti_replay_store_id, anti_replay_store_version,
+resolver_implementation_sigil, head_resolver_implementation_sigil,
+monotonic_anchor_profile_sigil}` and
+selects the one installed AC4.4 index and
+checked replacement implementation. Both IDs and versions are protocol
+identifiers; all four implementation Sigils are resolved as installed code,
+not caller instructions.
+
+Sort tuples are: implementations by `(role rank, version, Sigil)`; role pairs
+by `(producer-role rank, verifier-role rank)`; decoders by `(evidence-kind
+rank, decoder ID, decoder version, implementation Sigil, media type, five
+numeric limits, decoded-contract Sigil)`; media by `(evidence-kind rank,
+media_type, maximum_input_bytes)`; authentication by the member order printed
+above using enum rank then unsigned-ASCII/Sigil order; proof profiles by
+`(proof-kind rank, verification-profile Sigil, then complete canonical JSON)`;
+and generation entries
+by `(generation-kind rank, the four Sigils)`. `PRODUCER` precedes `VERIFIER`;
+all other enum ranks use their order printed in AC3 and this section.
+
+Every decoder, raw-media, proof input/output, and attestation-root byte bound is
+at most `maximum_raw_payload_bytes`. `profile_sigil` is the ordinary self-Sigil
+omitting only itself. The profile
+selected by the OWR ID/version/Sigil must contain the exact producer,
+verifier, role pair, both decoders/media rows, both authentication rows, and
+every selected proof row and the selected generation row. It may narrow the
+canonical matrix but cannot
+widen it or waive an equality, distinctness, resource, or proof requirement.
+
+### AC4.2 trusted authority registry snapshot
+
+`execution-evidence-authority-registry-snapshot/1.0` has exactly:
+
+```text
+schema_version
+registry_id
+registry_version
+role_records
+issuer_records
+key_records
+created_at
+registry_snapshot_sigil
+```
+
+Role records are closed
+`{role_identity, process_instance_identity_sigil, controller_domain_sigil,
+credential_domain_sigil, host_backend_identity_sigil,
+allowed_subject_kinds, allowed_evidence_kinds, allowed_authority_kinds,
+role_record_sigil}`. For this profile the three allowed arrays contain only
+`OUTPUT_WRITER_REVOCATION`, the role's one evidence side, and
+`OUTPUT_WRITER_REVOCATION_OWNER`. Roles are keyed by the complete
+`(role_kind, identity_id, implementation_version, implementation_sigil)`.
+
+Issuer records are closed
+`{issuer_identity, controller_domain_sigil, allowed_role_kinds,
+allowed_subject_kinds, allowed_evidence_kinds, allowed_authority_kinds,
+allowed_proof_kinds,
+issuer_record_sigil}`. Key records are closed
+`{issuer_id, key_id, key_generation, key_profile_sigil,
+verification_profile_sigil, verification_material, authorizations, valid_from,
+valid_until, revoked_at, key_record_sigil}`. Each `authorizations` entry is
+exactly `{subject_kind, evidence_kind, role_kind, authority_kind, proof_kind}`;
+for this family its subject and authority are constant
+`OUTPUT_WRITER_REVOCATION` and `OUTPUT_WRITER_REVOCATION_OWNER`, and the other
+three values equal one complete profile authentication row. The array is
+strictly enum-ranked, unique, non-empty, and bounded at 4,096.
+`verification_material` is exactly one closed
+branch: `ED25519_PUBLIC_KEY {kind, raw_payload}` or
+`ATTESTATION_ROOT {kind, attestation_profile_id, root_payload}`. Payloads use
+the existing immutable `RawPayloadBinding`; no key bytes, roots, URLs, or paths
+are accepted inline. The Ed25519 public-key payload has media type
+`application/vnd.benchwork.ed25519-public-key` and exactly 32 raw octets. An
+attestation root's profile ID and media type equal one selected proof-profile
+row and its size is at most that row's `maximum_root_bytes`. Signature proof
+bytes, attestation proof bytes, Ed25519
+public-key bytes, and attestation-root bytes all resolve through the same
+profile-bound AC4.3 immutable resolver and must pass actual byte-count and Blob
+Sigil recomputation before use. No caller-supplied verification material is an
+alternative.
+
+All arrays are non-empty, at most 4,096, strictly sorted, and unique by their
+complete keys: roles by the four-part role key, issuers by `issuer_id`, and
+keys by `(issuer_id, key_id, key_generation)`. Each nested allowed-value array
+is strictly enum-ranked and unique. `valid_until` and `revoked_at` are nullable
+Timestamp; when present they are no earlier than `valid_from`. Every row Sigil
+is domain-separated over its complete preceding members: role rows use
+`execution-evidence-authority-role-record/1.0`, issuer rows use
+`execution-evidence-authority-issuer-record/1.0`, and key rows use
+`execution-evidence-authority-key-record/1.0`.
+`registry_snapshot_sigil` is the ordinary root self-Sigil omitting only itself.
+The snapshot is immutable and single-assignment by `(registry_id,
+registry_version)` and by its Sigil; same-slot unequal bytes are an integrity
+failure.
+
+The EIA's `registry_snapshot_binding` resolves this exact ID, version, and
+Sigil. Its key binding resolves exactly one key row and its issuer identity
+resolves exactly one issuer row. A role identity resolves exactly one role row
+in the same snapshot. The role, issuer, key authorization entry, proof kind,
+key/verification profile Sigils, and AC4.1 authentication entry must form one
+complete matching row; no field-wise union of separately allowed rows is
+valid. Current registry state, field mixing across snapshots,
+or using one registry for role inequality and a different registry for the same
+EIA's proof verification are invalid. The producer and verifier may use
+different exact snapshots only when their separate AC4.1 authentication rows
+name those snapshots and the AC3 cross-side independence comparison succeeds.
+
+### AC4.3 immutable raw-store index and resolver
+
+`execution-evidence-raw-store-index/1.0` is an append-only replacement root
+with exactly:
+
+```text
+schema_version
+raw_store_id
+raw_store_version
+index_generation
+previous_index_sigil
+entries
+index_sigil
+```
+
+Each entry is exactly `{blob_sigil, size_bytes, media_type,
+object_identity_sigil, immutable_generation_sigil, installed_at,
+entry_sigil}`. Entries are strictly sorted and unique by `(blob_sigil,
+size_bytes, media_type)` and are also unique by `(object_identity_sigil,
+immutable_generation_sigil)`. The root contains 0..4,096 entries; a full root
+rejects new evidence authority without deletion or overwrite. The empty and
+successor
+`index_generation`/`previous_index_sigil` rules are identical to AC1. A legal
+successor inserts exactly one entry at its unique sorted position while every
+historical entry's bytes and relative order remain unchanged; an exact retry
+returns the installed root. Entry Sigils use the domain
+`execution-evidence-raw-store-entry/1.0` with the exact preimage:
+
+```text
+entry_sigil = Sigil([
+  "execution-evidence-raw-store-entry/1.0",
+  blob_sigil,
+  size_bytes,
+  media_type,
+  object_identity_sigil,
+  immutable_generation_sigil,
+  installed_at
+])
+
+index_sigil = Sigil([
+  "execution-evidence-raw-store-index/1.0",
+  raw_store_id,
+  raw_store_version,
+  index_generation,
+  previous_index_sigil,
+  entries
+])
+```
+
+The domain constants are the respective `schema_version` values and are not
+also repeated as an object argument. Protocol visibility additionally requires
+the exact protected AC4.5 Head; atomic replacement and reopen alone do not
+grant authority.
+
+Resolution accepts only the installed profile binding, the complete validated
+canonical index root, and the exact raw-payload descriptor. The binding's
+store ID/version equal the root; its resolver and Head-resolver Sigils select
+installed code. The descriptor selects exactly one immutable entry. The resolver
+performs an exact-generation read, rejects any byte-count or Blob-Sigil
+mismatch, and returns bytes only after both are recomputed. It exposes no path,
+URL, directory enumeration, prefix, object-latest, or caller-selected backend
+key. The index is evidence to validate, never a command to fetch an arbitrary
+object. Reading a newer append-only root is allowed only because the selected
+historical entry is byte-immutable; absence or conflict fails closed and never
+selects another object.
+
+### AC4.4 durable anti-replay index
+
+`execution-evidence-anti-replay-index/1.0` is a closed replacement root with
+exactly `{schema_version, anti_replay_store_id, anti_replay_store_version,
+index_generation, previous_index_sigil, rows, index_sigil}`. Its store ID and
+version equal the installed AC4.1 profile binding. A row has exactly
+`{registry_id, key_id, key_generation, subject_kind, raw_evidence_id,
+anti_replay_sigil, authentication, row_sigil}`. `authentication` is the
+complete closed canonical `execution-evidence-issuer-authentication/1.0`
+object. Every preceding row field is mechanically rederived from that object;
+its EIA ID and self-Sigil are read from the embedded object and are not
+duplicated as caller-selected row fields.
+
+The exact derivations are:
+
+| Row member | Embedded EIA source |
+| --- | --- |
+| `registry_id` | `key_binding.registry_id`, which also equals `registry_snapshot_binding.registry_id` |
+| `key_id` | `key_binding.key_id` |
+| `key_generation` | `key_binding.key_generation` |
+| `subject_kind` | `subject.subject_kind` |
+| `raw_evidence_id` | `subject.raw_evidence_id` |
+| `anti_replay_sigil` | recomputed canonical EIA anti-replay preimage and the EIA member |
+
+Rows are strictly increasing by `(registry_id, key_id, numeric key_generation,
+subject-kind rank, raw_evidence_id)`, using unsigned-ASCII order except for the
+numeric member. They are independently unique by that canonical EIA
+single-assignment key, by `anti_replay_sigil`, and by the embedded
+`authentication.authentication_id`. A row
+Sigil is `Sigil(["execution-evidence-anti-replay-index-row/1.0",
+registry_id, key_id, key_generation, subject_kind, raw_evidence_id,
+anti_replay_sigil, authentication])`. The empty
+root and successor generation/predecessor rules are identical to AC1. A legal
+successor inserts exactly one row at its unique sorted position while every
+historical row's bytes and relative order remain unchanged; an exact retry
+returns the installed row without a generation change. The root
+contains 0..4,096 rows; a full root rejects new authentication authority
+without deletion, overwrite, wraparound, or implicit compaction.
+
+The root self-Sigil is
+`Sigil(["execution-evidence-anti-replay-index/1.0",
+anti_replay_store_id, anti_replay_store_version, index_generation,
+previous_index_sigil, rows])`.
+
+The OWE `issuer_authentication_binding` resolves only by exact authentication
+ID to this index and requires its Sigil to equal the embedded EIA self-Sigil.
+There is no bare-Sigil or separate mutable authentication lookup. Atomic
+replacement plus parent-directory durability, complete reopen, and the exact
+protected AC4.5 Head are jointly the only visibility point. An authentication
+record is not authoritative until its complete embedded row is visible. A
+conflicting key, nonce Sigil, authentication ID, predecessor, historical byte,
+or embedded EIA is an integrity failure; expiry or later key revocation never
+rewrites historical rows.
+
+### AC4.5 protected evidence-index Head
+
+`execution-evidence-index-head/1.0` has exactly:
+
+```text
+schema_version
+index_kind
+store_id
+store_version
+anchor_profile_sigil
+index_generation
+index_sigil
+previous_head_sigil
+anchored_at
+head_sigil
+```
+
+`index_kind` is `RAW_STORE` or `ANTI_REPLAY`; the store ID/version equal the
+selected AC4.1 binding, and `anchor_profile_sigil` equals that binding's
+`monotonic_anchor_profile_sigil`. Its initial/successor generation, predecessor,
+single-assignment, crash-ahead, and rollback matrices are the AC1.3 protected
+Head rules applied independently per `(index_kind, store_id, store_version)`.
+`head_sigil` is
+`Sigil(["execution-evidence-index-head/1.0", index_kind, store_id,
+store_version, anchor_profile_sigil, index_generation, index_sigil,
+previous_head_sigil, anchored_at])`.
+
+The profile-bound Head resolver reads a trusted append-only monotonic anchor
+store separate from either replaceable root. A root at `n+1` with Head `n`
+gates authority until exact one-delta recovery advances the Head. An anchored
+Head ahead of, unequal to, or newer than the root proves rollback or integrity
+failure. No self-Sigil, predecessor member, process memory, or caller-supplied
+Head substitutes for this independent anchor. The concrete anchor store,
+locking, durability, and crash implementation remains a post-approval gate.
+If a deployment cannot supply the selected monotonic store or cannot protect
+it from the rollback class being checked, it grants no namespace, EIA, OWR, or
+Result authority; this RFC does not pretend a self-Sigil detects rollback of
+all local files together.
+
+### AC4.6 required resolver operations
+
+The canonical authority graph names seven operations with exact fail-closed
+inputs and outputs; canonical incorporation does not implement them:
+
+1. `resolve_owr_profile(id, version, sigil)` returns one byte-exact AC4.1
+   record, never current/latest.
+2. `resolve_role_and_key(snapshot_binding, role_identity, issuer_identity,
+   key_binding)` returns one AC4.2 role/issuer/key triple from one exact
+   snapshot and its historical validity decision.
+3. `read_immutable_payload(raw_store_profile_binding, raw_payload)` returns
+   only byte-count- and Blob-Sigil-verified immutable bytes.
+4. `decode_owr_payload(profile, evidence_kind, decoder_binding, media_type,
+   bytes)` runs the separately installed exact implementation with the
+   profile's CPU, memory, size, and recursion limits; it has no network or
+   ambient filesystem access, rejects unknown/extra values, and returns one
+   closed decoded branch whose canonical JSON bytes equal the OWE member.
+5. `verify_eia_proof(profile, registry_snapshot, authentication, proof_bytes)`
+   verifies the existing canonical EIA signed/attested preimage, algorithm,
+   authorization, validity, revocation, and controller-domain rules; hashing
+   or successful decoding is not proof verification.
+6. `install_anti_replay(authentication)` derives every AC4.4 row key, performs
+   the checked root replacement and AC4.5 Head advance, and returns the exact
+   installed row or exact retry only after joint visibility.
+7. `resolve_eia(issuer_authentication_binding)` looks up exactly one jointly
+   visible AC4.4 row by the binding ID, requires the embedded EIA self-Sigil to
+   equal the binding Sigil, fully revalidates the row and EIA, and returns that
+   complete immutable object; absence, ambiguity, or a bare Sigil fails closed.
+
+Successful resolution additionally requires both authenticated raw payloads,
+both proof payloads, complete writer-inventory equality, AC3 independence,
+the selected sealed-generation profile, verifier collection no earlier than
+revocation completion, complete write rejection, exact-generation reopen, and
+immutable-generation confirmation. A supplied comparator object can test these
+equalities but cannot stand in for any resolver operation.
+
+### Rejected shortcuts
+
+- Publishing only the five namespace leaves and inferring a map or array root.
+- Treating a private file or leaf record as visible before the complete index.
+- Omitting predecessor/generation checks or the protected monotonic Head
+  because the replaceable root has a self-Sigil.
+- Deleting aborted or consumed rows, reusing ST/SA or prepared Event IDs, or
+  compacting history without a later separately approved checkpoint protocol.
+- Reusing Observation Evidence subject domains for OWR.
+- Binding EIA authority to the OWR self-Sigil and creating a circular preimage.
+- Using unequal role strings, two keys, or two decoder names as proof of
+  producer/verifier independence.
+- Reusing the Observation Evidence profile as an OWR profile.
+- Resolving a current/latest profile, registry, key, raw object, generation,
+  or backend listing.
+- Treating a Blob Sigil, successful parse, caller-supplied decoded object, or
+  local decoder availability as issuer authentication.
+- Making Schema validation or a pure supplied-fact comparator perform proof
+  verification, immutable reads, index visibility, locking, replay, or Result
+  admission.
+
+### Remaining implementation gates
+
+`execution-result/1.0` publication still waits
+for all of the following executable, independently reviewed work:
+
+1. AC1 root/row/Head Schemas, strict literal-byte loader, comparator, durable
+   replacement implementation, allocator consultation, lock-order tests,
+   crash cuts, replay, and recovery.
+2. AC2/AC3 EIA-to-OWE subject/authority comparators and negative fixtures.
+3. All AC4 Schemas, installed exact-ID resolvers, immutable stores, bounded
+   decoder implementations, conformance corpora, signature/attestation
+   verification, historical registry/key validation, anti-replay replacement,
+   protected monotonic-anchor stores, exact Head-resolver implementations,
+   rollback/crash-cut tests, and producer/verifier independence tests.
+4. Actual writer revocation, complete writer-inventory proof, sealed-generation
+   write rejection, immutable exact-generation read, checked full-byte hash and
+   length comparison, and SSB installation while holding the canonical gate.
+5. The already required executable Log closure, cross-Journal namespace
+   consumption/recovery, Storage terminal-prefix resolution, and live Result
+   admission/disposition integration.
+
+None of these executable gates is silently approved as an implementation by a
+wire decision. Their failures preserve negative evidence and grant no fallback
+authority.
+
+RFC-0013's AC1 index visibility is a normative prerequisite of the RFC-0012
+Result path. Failure to resolve either side byte-for-byte, failure of the
+independent cross-RFC review, or absence of any listed implementation gate
+keeps Result admission and both namespace allocators fail-closed. These rules
+do not alter OD22 Heartbeat collision semantics, the ISR1–ISR3 reducer rules,
+R1–R10, E1–E2, or the formal RFC-0012 contract count.
+
+
+## Approved 2026-08-06 Initial State Reducer ISR1–ISR3 v0.1
+
+The user approved ISR1 through ISR3 as one synchronized decision unit. These
+rules are normative for sequence-one replay and every later Executor epoch.
+They close the initial epoch, exact Executor projection, and complete initial
+State bytes, but they do not themselves create a Journal, install a Head,
+authorize append, or prove a replay/runtime implementation.
+
+### ISR1–ISR3 synchronized requirements
+
+ISR1 through ISR3 are one inseparable canonical decision unit.
+
+### ISR1 — initial and successor epoch equations
+
+ISR1 makes the sequence-one case an if-and-only-if rule:
+
+```text
+sequence == 1
+iff
+prior_epoch == null
+and startup_reason == INITIAL_START
+and new_epoch == envelope.executor_epoch == 1
+```
+
+Epoch value `1` is fixed for the first allocated Executor epoch so that
+`0` remains the unambiguous no-prior-epoch sentinel where canonical records
+require a non-null numeric value.
+
+For every non-first `executor.epoch_started` Event, ISR1 requires:
+
+```text
+sequence > 1
+current replayed Executor epoch <= U63_MAX
+prior_epoch == current replayed Executor epoch
+new_epoch == checked_add_u64(current replayed Executor epoch, 1)
+envelope.executor_epoch == new_epoch
+startup_reason != INITIAL_START
+```
+
+The current published Event Schema makes `prior_epoch` nullable U63 while
+`new_epoch` and the envelope epoch are U64. Therefore a current epoch equal to
+`U63_MAX` can produce exactly one representable successor with
+`new_epoch == U63_MAX + 1`; after replay reaches any epoch greater than
+`U63_MAX`, another successor `executor.epoch_started` cannot encode its prior
+epoch. Any further startup must fail closed before reserving an Event ID or
+sequence and before any partial Journal write. ISR1 does not silently widen
+`prior_epoch` to U64; such a change would require a separate Schema amendment.
+Checked addition never wraps, saturates, or uses binary64. A caller-supplied or
+cached epoch is not sufficient without the verified replay prefix.
+
+### ISR2 — exact sequence-one Executor projection
+
+After applying the valid sequence-one Event defined by ISR1, the State's
+singleton `executor` projection equals exactly:
+
+```text
+executor_instance_id       = Event.executor_instance_id
+executor_epoch             = Event.executor_epoch
+executor_build_binding     = Event.payload.executor_build_binding
+revision                   = 0
+clock_state                = TRUSTED
+last_trusted_utc           = Event.recorded_at
+clock_uncertain_event_id   = null
+active_recovery_id         = null
+authority_gates            = []
+last_event_id              = Event.event_id
+last_event_sigil           = Event.event_sigil
+```
+
+The Event payload build binding must already be closed and self-Sigil-valid,
+and its `executor_build_sigil` must equal the Event envelope value. ISR2 does
+not infer Host trust, clock trust, or build identity from an unverified fixture;
+those are prerequisites of the valid Event and its trusted time input.
+
+### ISR3 — exact complete initial State
+
+The canonical initial State immediately after the sequence-one Event has exactly the
+canonical `execution-state/1.0` root members and these values:
+
+```text
+schema_version  = execution-state/1.0
+limit_profile   = EXECUTION_JOURNAL_V1_FIXED_LIMITS
+journal_binding = {
+  journal_id: Event.journal_id,
+  through_sequence: 1,
+  through_event_id: Event.event_id,
+  through_event_sigil: Event.event_sigil
+}
+executor            = ISR2 projection
+recoveries           = []
+workers              = []
+worker_sessions      = []
+jobs                 = []
+attempts             = []
+leases               = []
+log_streams          = []
+deadlines            = []
+idempotency_records  = []
+state_sigil          = Sigil(all other State members)
+```
+
+All nine arrays are present and empty. No pre-existing Worker, Session, Job,
+Attempt, Lease, Log stream, deadline, Recovery, or idempotency row may be
+injected into the initial projection.
+
+Conformance requires a new mutually consistent retained triplet containing
+the sequence-one Event, its exact initial State, and the matching Journal Head.
+The current shape-only State fixture is not a reducer oracle and must not be
+reused as that triplet. Journal Head `updated_at` is diagnostic Head metadata;
+it does not enter the State or its `state_sigil` preimage.
+
+### Fail-closed validation and authority boundary
+
+Canonical incorporation closes the reducer choice but grants no runtime
+authority. Conformance requires strict JSON loading,
+closed Schema validation, Event and build self-Sigils, the exact ISR1
+equations, the unique `CREATE(EXECUTOR)` revision, byte-for-byte ISR2/ISR3
+projection equality, checked arithmetic, and a consistent Event/State/Head
+triplet. Canonical text alone does not prove a runtime implementation.
+
+
+
+## Approved 2026-08-06 Heartbeat Collision Wire Closure HCW1–HCW10 v0.1
+
+The user approved HCW1 through HCW10 as one synchronized decision unit. The
+following text is normative and closes the collision-family serialization,
+package-internal versions, shared-definition ownership, equality, retry,
+retention, and conformance choices left open by H8. It preserves the canonical
+H1–H10 safety semantics and the final 81-Event order. Approval does not itself
+publish an unimplemented Schema, install a package, mutate State, append or
+replay an Event, or grant execution, Storage, Result, assurance, or scientific
+authority.
+
+## Fixed canonical inputs and non-goals
+
+The following H8 rules are fixed inputs rather than choices in this approved clarification:
+
+1. marker identity is selected by `(owner_kind, owner_id, message_kind,
+   identity_kind, identity_sigil)`;
+2. `identity_kind` is `CANONICAL_MESSAGE` or `RAW_FRAME`;
+3. a marker contains every surviving candidate and records whether one
+   installed package already exists;
+4. total installed-plus-candidate package bindings never exceed 4,096;
+5. a committed marker is permanent and precedes HFP, HCE, HGI, HGR, Event,
+   response, and further ordinary-candidate work;
+6. every frozen candidate receives exactly one deterministic HPR and HFP;
+7. complete candidates compare their exact message bytes, while partial
+   candidates compare the fixed presence/length/fragment stream;
+8. HCE groups byte-equal packages, sorts sides by exact unsigned octets, and
+   requires at least two unequal `MESSAGE_BYTES` sides under one identity;
+9. the marker freezes complete canonical Journal Event bytes and State effects;
+   and
+10. inability to finish evidence never reopens marker-driven authority.
+
+This approved closure does not change candidate caps, package paths, lock order,
+Event types, State transitions, transition causes, revocation obligations,
+retention lifetime, or the final 81-Event order.
+
+## HCW1 — exact candidate inventory `I`
+
+### Closed root and entry order
+
+`I` is exactly the UTF-8 bytes of `canonical_json(candidate_inventory)`, where
+`candidate_inventory` is this closed two-member object:
+
+```text
+schema_version
+entries
+```
+
+`schema_version` is constant
+`execution-heartbeat-collision-candidate-inventory/1.0`. `entries` is a
+non-empty array of the closed HCW2 entry. It contains exactly one entry for
+every descriptor-relative ordinary candidate frozen by the marker, contains no
+installed package, is unique by `source_candidate_id`, and is strictly
+increasing by unsigned-ASCII `source_candidate_id`.
+
+Every `source_candidate_id` is the narrow ordinary-candidate wire
+`^HOC-[0-7][0-9A-HJKMNP-TV-Z]{25}$`, exactly 30 ASCII bytes and the canonical
+unpadded Crockford Base32 encoding of 128 bits. A path, candidate-directory
+nonce, absolute descriptor, inode, URL, arrival ordinal, or scheduler value is
+not serialized.
+
+The marker equalities are exact:
+
+```text
+candidate_count = length(candidate_inventory.entries)
+candidate_inventory_size_bytes = length(I)
+candidate_inventory_bytes_sigil = SigilBytes(
+  utf8("execution-heartbeat-collision-candidate-inventory/1.0\0") || I
+)
+```
+
+The existing conditional count matrix remains unchanged:
+
+```text
+installed_package_present = true  -> candidate_count in 1..4095
+installed_package_present = false -> candidate_count in 2..4096
+candidate_count + (installed_package_present ? 1 : 0) <= 4096
+```
+
+There is no inventory root self-Sigil. The marker's size, domain-separated
+byte-Sigil, and marker self-Sigil bind the complete `I`; HCW2 separately gives
+each entry the identity required by HPR.
+
+### Exact fragment descriptor
+
+Every entry carries three closed fragment descriptors. Each descriptor has
+exactly:
+
+```text
+present
+length_bytes
+fragment_bytes_sigil
+```
+
+`present` is Boolean and `length_bytes` is U63. When `present` is `false`,
+`length_bytes` is zero and `fragment_bytes_sigil` is null. When `present` is
+`true`, `length_bytes` is the exact length of the surviving source fragment,
+including legal zero length, and `fragment_bytes_sigil` is non-null and uses
+the literal domain selected below. An absent fragment is not the same fact as
+a present zero-length fragment.
+
+The domains are:
+
+| Entry member | Exact present-fragment Sigil |
+| --- | --- |
+| `record_fragment` | `SigilBytes(utf8("execution-heartbeat-collision-source-record-fragment/1.0\0") || exact record.json fragment bytes)` |
+| `bytes_fragment`, `source_record_kind: CANONICAL_MESSAGE` | `SigilBytes(utf8("execution-heartbeat-canonical-json/1.0\0") || exact bytes.bin fragment bytes)` |
+| `bytes_fragment`, `source_record_kind: RAW_FRAME` | `SigilBytes(utf8("execution-heartbeat-received-frame/1.0\0") || exact bytes.bin fragment bytes)` |
+| `manifest_fragment` | `SigilBytes(utf8("execution-heartbeat-collision-source-manifest-fragment/1.0\0") || exact manifest.json fragment bytes)` |
+
+Thus the bytes fragment retains the original HCM or HFR source-domain Sigil
+even when the fragment is partial, while record and manifest fragments have
+distinct domains and cannot be exchanged.
+
+## HCW2 — candidate entry and HPR source binding
+
+Each `entries` member is one closed six-member object:
+
+```text
+source_candidate_id
+source_record_kind
+record_fragment
+bytes_fragment
+manifest_fragment
+source_candidate_inventory_entry_sigil
+```
+
+`source_record_kind` is `CANONICAL_MESSAGE` or `RAW_FRAME` and equals the
+marker's `identity_kind`. The three fragment members are HCW1 descriptors for
+the literal files `record.json`, `bytes.bin`, and `manifest.json` in that
+printed order. `source_candidate_inventory_entry_sigil` is the ordinary
+self-Sigil over the other five members:
+
+```text
+source_candidate_inventory_entry_sigil = Sigil({
+  source_candidate_id,
+  source_record_kind,
+  record_fragment,
+  bytes_fragment,
+  manifest_fragment
+})
+```
+
+HPR resolution requires its `source_candidate_id` and
+`source_candidate_inventory_entry_sigil` to equal one literal entry in the
+marker-bound `I`. It also requires HPR marker ID/Sigil and `reserved_at` to
+equal the same committed marker and `detected_at`. A bare entry Sigil, an
+entry from another inventory, a reserialized inventory, or a hash match
+without exact `I` bytes is insufficient.
+
+The inventory entry is immutable after the marker commits. A newly discovered
+fragment, a different length/Sigil, or a candidate omitted from `I` is an
+integrity failure; no recovery rewrites the entry or marker.
+
+## HCW3 — HCG marker package and gate commit
+
+The existing 23-member
+`execution-heartbeat-collision-authority-gate-marker/1.0` root remains
+unchanged. Its descriptor-relative package contains exactly these members and
+no other member:
+
+```text
+marker.json
+inventory.bin
+commit.json
+```
+
+`marker.json` is the exact UTF-8 `canonical_json` bytes of the marker,
+`inventory.bin` is exact `I`, and `commit.json` is the exact UTF-8
+`canonical_json` bytes of this closed six-member object:
+
+```text
+schema_version
+collision_gate_commit_id
+collision_gate_marker_id
+collision_gate_marker_sigil
+commit_state
+collision_gate_commit_sigil
+```
+
+`schema_version` is constant
+`execution-heartbeat-collision-authority-gate-commit/1.0` and `commit_state`
+is constant `COMMITTED`. The canonical H8 formulas remain exact:
+
+```text
+collision_gate_commit_id =
+  "HGC-" || UPPER_HEX(SHA256(canonical_json([
+    "execution-heartbeat-collision-authority-gate-commit-id/1.0",
+    collision_gate_marker_id,
+    collision_gate_marker_sigil
+  ])))
+
+collision_gate_commit_sigil =
+  Sigil(commit object without collision_gate_commit_sigil)
+```
+
+The HGC ID matches `^HGC-[0-9A-F]{64}$` and is 68 ASCII bytes. The package
+resolver strictly reloads all JSON, recomputes `I`, every entry and fragment
+Sigil, marker ID/self-Sigil, HGC ID/self-Sigil, and literal bytes. It rejects
+an uncommitted, partial, extra-member, wrong-type, symlink-followed,
+rename-uncertain, parent-unsynced, or byte-different package. Filesystem
+installation and `GATE_COMMITTED_VISIBLE` remain external authority, not a
+fact established by these three files alone.
+
+## HCW4 — HPR reservation package and commit
+
+The existing ten-member
+`execution-heartbeat-forensic-package-reservation-index-row/1.0` root remains
+unchanged. Its descriptor-relative reservation package contains exactly:
+
+```text
+reservation.json
+commit.json
+```
+
+`reservation.json` is the exact UTF-8 `canonical_json` bytes of the HPR row.
+Its `commit.json` is the exact UTF-8 `canonical_json` bytes of this closed
+six-member object:
+
+```text
+schema_version
+reservation_commit_id
+forensic_reservation_id
+forensic_reservation_sigil
+commit_state
+reservation_commit_sigil
+```
+
+`schema_version` is constant
+`execution-heartbeat-forensic-package-reservation-commit/1.0` and
+`commit_state` is constant `COMMITTED`. The formulas are:
+
+```text
+reservation_commit_id =
+  "HPC-" || UPPER_HEX(SHA256(canonical_json([
+    "execution-heartbeat-forensic-package-reservation-commit-id/1.0",
+    forensic_reservation_id,
+    forensic_reservation_sigil
+  ])))
+
+reservation_commit_sigil =
+  Sigil(commit object without reservation_commit_sigil)
+```
+
+The HPC ID matches `^HPC-[0-9A-F]{64}$` and is 68 ASCII bytes. HPR and HFP IDs
+retain their canonical formulas over `(collision_gate_marker_id,
+source_candidate_id)`. HPR is single-assignment independently by reservation
+ID, source candidate ID, and forensic package ID. The complete package must be
+byte-identical under each key; a changed marker, entry Sigil, reserved time,
+row, or commit conflicts.
+
+Reservation package writing, file and directory `fsync`, staging arbitration,
+rename, parent `fsync`, reopen, and `RESERVATION_COMMITTED_VISIBLE` remain
+external. Shape, ID, or self-Sigil validity never proves visibility.
+
+## HCW5 — exact HFP fragment inventory and comparison bytes
+
+### Fragment inventory
+
+`fragment-inventory.json` is the exact UTF-8 `canonical_json` bytes of this
+closed eight-member object:
+
+```text
+schema_version
+source_candidate_id
+source_candidate_inventory_entry_sigil
+source_record_kind
+record_fragment
+bytes_fragment
+manifest_fragment
+fragment_inventory_sigil
+```
+
+`schema_version` is constant
+`execution-heartbeat-forensic-package-fragment-inventory/1.0`.
+`source_candidate_id`, `source_record_kind`, all three descriptors, and the
+entry Sigil equal the one literal HCW2 entry byte-for-byte.
+`fragment_inventory_sigil` is the ordinary self-Sigil over the other seven
+members.
+
+`source_state` is `COMPLETE` exactly when all three descriptors have
+`present: true`; otherwise it is `PARTIAL`, including an empty surviving
+candidate directory whose three descriptors are absent. For every physical
+HFP source-fragment container:
+
+- a present descriptor requires the container to hold the exact original
+  fragment bytes with the same length and domain Sigil; and
+- an absent descriptor requires a physically present zero-length container,
+  while its descriptor remains `present: false`, length zero, and Sigil null.
+
+The zero-length absent container is packaging structure, not invented source
+content. A present zero-length source fragment is distinguished by
+`present: true` and the non-null domain Sigil of empty bytes.
+
+### Comparison source and `K`
+
+For `COMPLETE`, `comparison_kind` is `MESSAGE_BYTES` and `X` is the exact
+`source-bytes.fragment` content. For `PARTIAL`, `comparison_kind` is
+`PARTIAL_FRAGMENT_SET` and `X` is the unambiguous concatenation, in
+`record_fragment`, `bytes_fragment`, `manifest_fragment` order, of:
+
+```text
+one presence octet (0x00 absent, 0x01 present)
+U64BE(exact original fragment length)
+exact original fragment bytes when present
+```
+
+The canonical H8 construction remains:
+
+```text
+MESSAGE_BYTES:        K = 0x00 || U64BE(length(X)) || X
+PARTIAL_FRAGMENT_SET: K = 0x01 || U64BE(length(X)) || X
+
+comparison_size_bytes = length(K)
+comparison_bytes_sigil = SigilBytes(
+  utf8("execution-heartbeat-collision-side-order-bytes/1.0\0") || K
+)
+```
+
+All lengths are checked before U64BE encoding and remain within U63 where the
+canonical HFP binding requires U63. `comparison-bytes.bin` is exact `K`, not
+`X`, a raw digest, a JSON encoding, or a reconstructed complete package.
+
+The HFP package contains exactly these six members:
+
+```text
+fragment-inventory.json
+comparison-bytes.bin
+source-record.fragment
+source-bytes.fragment
+source-manifest.fragment
+forensic-manifest.json
+```
+
+No absent source fragment permits omission of its zero-length container.
+
+## HCW6 — forensic manifest and package binding
+
+`forensic-manifest.json` is the exact UTF-8 `canonical_json` bytes of this
+closed 14-member object:
+
+```text
+schema_version
+forensic_manifest_id
+forensic_package_id
+forensic_reservation_id
+forensic_reservation_sigil
+source_candidate_id
+source_record_kind
+source_state
+comparison_kind
+comparison_size_bytes
+comparison_bytes_sigil
+fragment_inventory_sigil
+storage_profile
+forensic_manifest_sigil
+```
+
+`schema_version` is constant
+`execution-heartbeat-forensic-package-manifest/1.0` and `storage_profile` is
+constant `DESCRIPTOR_RELATIVE_ATOMIC_DIRECTORY_V1`. `source_record_kind` is
+`CANONICAL_MESSAGE` or `RAW_FRAME`; `source_state` and `comparison_kind` obey
+HCW5's exact matrix. The canonical ID formula remains:
+
+```text
+forensic_manifest_id =
+  "HFM-" || UPPER_HEX(SHA256(canonical_json([
+    "execution-heartbeat-forensic-package-manifest-id/1.0",
+    forensic_package_id,
+    forensic_reservation_id,
+    forensic_reservation_sigil,
+    source_candidate_id,
+    source_record_kind,
+    source_state,
+    comparison_kind,
+    comparison_size_bytes,
+    comparison_bytes_sigil,
+    fragment_inventory_sigil
+  ])))
+
+forensic_manifest_sigil =
+  Sigil(forensic manifest without forensic_manifest_sigil)
+```
+
+HFM matches `^HFM-[0-9A-F]{64}$` and is 68 ASCII bytes.
+
+The public `heartbeat_forensic_package_binding` has exactly the canonical 12
+members:
+
+```text
+forensic_package_id
+forensic_reservation_id
+forensic_reservation_sigil
+source_candidate_id
+source_record_kind
+source_state
+comparison_kind
+comparison_size_bytes
+comparison_bytes_sigil
+fragment_inventory_sigil
+forensic_manifest_id
+forensic_manifest_sigil
+```
+
+It is an exact projection of the resolved manifest plus its reservation. It
+does not carry a path, storage profile, fragment bytes, candidate nonce,
+marker binding, HCE ID, or visibility assertion.
+
+HFP resolution reopens the committed HPR package and all six HFP members,
+proves the HCW2 entry equality, recomputes every fragment descriptor,
+inventory Sigil, `X`, `K`, comparison Sigil, HFP/HFM IDs, manifest self-Sigil,
+and literal file bytes. No isolated binding, Sigil, or complete-looking final
+directory establishes `HFP_COMMITTED_VISIBLE`.
+
+## HCW7 — HCE collision kind, sides, and descriptor
+
+### Exact `collision_kind` interpretation
+
+The canonical HCE root retains its member name `collision_kind`. Its exact enum
+is:
+
+```text
+CANONICAL_MESSAGE
+RAW_FRAME
+```
+
+It equals the bound HCG marker's `identity_kind` byte-for-byte. The differing
+field names do not create two concepts: `collision_kind` is the HCE projection
+of marker `identity_kind`. It also equals every complete source record's kind
+and every HFP `source_record_kind`. The HCG marker does not gain a new
+`collision_kind` member, and HCE is not renamed to `identity_kind`.
+
+This resolves the canonical sentence that `collision_kind` equals the gate
+marker without changing the already fixed HCG 23-member root.
+
+### Gate binding and sides
+
+`collision_gate_binding` remains the exact closed five-member object:
+
+```text
+collision_gate_marker_id
+collision_gate_marker_sigil
+collision_gate_journal_event
+collision_gate_index_row_id
+collision_gate_index_row_sigil
+```
+
+`collision_gate_journal_event` is the full canonical Execution EventRef. Each
+`collision_sides` member remains the exact closed object:
+
+```text
+comparison_kind
+comparison_size_bytes
+comparison_bytes_sigil
+packages
+```
+
+`packages` contains these closed branches:
+
+```text
+INSTALLED_PACKAGE {
+  kind,
+  record_id,
+  record_sigil,
+  stored_size_bytes,
+  stored_bytes_sigil,
+  install_manifest_id,
+  install_manifest_sigil
+}
+
+FORENSIC_PACKAGE {
+  kind,
+  forensic_package
+}
+```
+
+`forensic_package` is HCW6's complete binding. For
+`collision_kind: CANONICAL_MESSAGE`, an installed `record_id` is an HCM ID and
+its byte Sigil uses the HCM canonical-JSON domain. For `RAW_FRAME`, it is an
+HFR ID and uses the received-frame domain. Its HMI must resolve the exact
+record and bytes.
+
+For that installed branch, `X` is the exact resolved HCM or HFR `bytes.bin`,
+and its side values are derived, never accepted as declarations:
+
+```text
+comparison_kind = MESSAGE_BYTES
+K = 0x00 || U64BE(length(X)) || X
+comparison_size_bytes = length(K)
+comparison_bytes_sigil = SigilBytes(
+  utf8("execution-heartbeat-collision-side-order-bytes/1.0\0") || K
+)
+```
+
+The HMI `stored_size_bytes` and `stored_bytes_sigil` describe `X` using the
+HCM/HFR source domain; the side size and Sigil describe `K` using the distinct
+side-order domain. Neither pair substitutes for the other. The derived `K`
+must equal the exact comparison bytes of the side that contains the installed
+branch.
+
+There is at most one installed branch globally; its presence equals the marker
+Boolean. Every HCW2 entry appears exactly once through its one HFP binding,
+and the total package-binding count is at most 4,096.
+
+Side equality and order are determined only after reopening exact comparison
+bytes:
+
+1. byte-equal packages are grouped in one side;
+2. different sides have byte-different comparison bytes;
+3. sides strictly increase by unsigned-octet comparison of exact `K`;
+4. the installed branch sorts first within its side;
+5. HFP branches then sort by `forensic_package_id` ASCII; and
+6. at least two `MESSAGE_BYTES` sides are unequal under the same marker key.
+
+Partial sides remain retained context and cannot alone prove a collision.
+
+### HCE descriptor and package
+
+`D` remains exactly:
+
+```text
+D = utf8(canonical_json([collision_gate_binding, collision_sides]))
+```
+
+The HCE package is the existing generic committed package with
+`record_kind: COLLISION_EVIDENCE`, `record.json` equal to exact canonical HCE
+JSON, `bytes.bin` equal to `D`, and `manifest.json` equal to the HMI. Its HMI
+facts are:
+
+```text
+stored_size_bytes = length(D)
+stored_bytes_sigil = SigilBytes(
+  utf8("execution-heartbeat-collision-evidence-descriptor/1.0\0") || D
+)
+```
+
+The HCE ID remains a fresh canonical 128-bit Crockford ID matching
+`^HCE-[0-7][0-9A-HJKMNP-TV-Z]{25}$`, length 30, redrawn on collision. Its
+self-Sigil omits only `collision_evidence_sigil`. HCE `detected_at`,
+owner/message tuple, `identity_sigil`, and `collision_kind` equal the marker.
+
+Raw SHA-256, undomained `SigilBytes(D)`, an HCM/HFR domain, a generic
+byte-Sigil, omitted side, reordered side, two-side truncation, package
+substitution, or descriptor/`bytes.bin` inequality fails closed.
+
+## HCW8 — canonical `$defs` ownership and imports
+
+The eventual Schemas must use the following literal owners and absolute URIs.
+There is no placeholder-substitution step. A consumer must not clone, widen,
+or privately rename a shared wire.
+
+### Collision-family owners
+
+| Definition | Exact canonical URI |
+| --- | --- |
+| HCG ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/collisionGateMarkerId` |
+| HGC ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/collisionGateCommitId` |
+| complete HGC commit | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/collisionGateCommit` |
+| HOC ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/sourceCandidateId` |
+| candidate inventory | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/candidateInventory` |
+| candidate entry | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/candidateInventoryEntry` |
+| source fragment descriptor | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/sourceFragmentDescriptor` |
+| dependent suffix plan | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/dependentSuffixPlan` |
+| revocation obligation | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-marker/1.0#/$defs/revocationObligation` |
+| HGI ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-index-row/1.0#/$defs/collisionGateIndexRowId` |
+| complete HGI row | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-index-row/1.0#/$defs/collisionGateIndexRow` |
+| HPR ID | `https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0#/$defs/forensicReservationId` |
+| HFP ID | `https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0#/$defs/forensicPackageId` |
+| HPC ID | `https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0#/$defs/reservationCommitId` |
+| complete HPR row | `https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0#/$defs/forensicReservationRow` |
+| reservation commit | `https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0#/$defs/reservationCommit` |
+| HCE ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/collisionEvidenceId` |
+| HFM ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/forensicManifestId` |
+| collision kind | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/collisionKind` |
+| fragment inventory | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/fragmentInventory` |
+| forensic manifest | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/forensicManifest` |
+| forensic package binding | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/heartbeatForensicPackageBinding` |
+| collision gate binding | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/collisionGateBinding` |
+| collision side | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/collisionSide` |
+| installed/forensic package union | `https://benchwork.dev/schemas/execution-heartbeat-collision-evidence/1.0#/$defs/collisionPackage` |
+| HGR ID | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-recovery/1.0#/$defs/collisionGateRecoveryId` |
+| HRE evidence | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-recovery/1.0#/$defs/revocationCompletionEvidence` |
+| revocation completion result | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-recovery/1.0#/$defs/revocationCompletionResult` |
+| complete HGR row | `https://benchwork.dev/schemas/execution-heartbeat-collision-authority-gate-recovery/1.0#/$defs/collisionGateRecovery` |
+
+The new collision-family `$defs` aliases above use the printed lower-camel
+names. Top-level HCG, HGI, HPR, HCE, and HGR records validate against their
+respective root Schema URI; their root `schema_version` constants remain,
+respectively:
+
+```text
+execution-heartbeat-collision-authority-gate-marker/1.0
+execution-heartbeat-collision-authority-gate-index-row/1.0
+execution-heartbeat-forensic-package-reservation-index-row/1.0
+execution-heartbeat-collision-evidence/1.0
+execution-heartbeat-collision-authority-gate-recovery/1.0
+```
+
+### Imported foundation owners
+
+These are imports, not collision-owned aliases. Existing snake-case `$defs`
+names remain snake case.
+
+| Imported definition | Exact canonical URI |
+| --- | --- |
+| complete HCM record | `https://benchwork.dev/schemas/execution-heartbeat-canonical-message/1.0` |
+| HCM record ID | `https://benchwork.dev/schemas/execution-heartbeat-canonical-message/1.0#/$defs/canonicalMessageRecordId` |
+| complete HFR record | `https://benchwork.dev/schemas/execution-heartbeat-raw-frame/1.0` |
+| HFR record ID | `https://benchwork.dev/schemas/execution-heartbeat-raw-frame/1.0#/$defs/rawFrameRecordId` |
+| complete HMI | `https://benchwork.dev/schemas/execution-heartbeat-message-store-install-manifest/1.0` |
+| HMI ID | `https://benchwork.dev/schemas/execution-heartbeat-message-store-install-manifest/1.0#/$defs/installManifestId` |
+| HMI record kind | `https://benchwork.dev/schemas/execution-heartbeat-message-store-install-manifest/1.0#/$defs/recordKind` |
+| complete Execution Journal Event | `https://benchwork.dev/schemas/execution-journal-event/1.0` |
+| Event type | `https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_type` |
+| EventRef | `https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_ref` |
+| Event ID | `https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id` |
+| entity revision | `https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/entity_revision` |
+| transition cause | `https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/transition_cause` |
+| Worker-Session State | `https://benchwork.dev/schemas/execution-state/1.0#/$defs/worker_session_state` |
+| Lease State | `https://benchwork.dev/schemas/execution-state/1.0#/$defs/lease_state` |
+| Attempt State | `https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_state` |
+| Job State | `https://benchwork.dev/schemas/execution-state/1.0#/$defs/job_state` |
+| Worker Session ID | `https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId` |
+| Lease ID | `https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId` |
+| Attempt ID | `https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId` |
+| Job ID | `https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId` |
+| Timestamp | `https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp` |
+| Sigil | `https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil` |
+| U63 | `https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63` |
+| PositiveU63 | `https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63` |
+
+The EventRef, Event ID, entity-revision, transition-cause, and four State enum
+URIs in this table resolve through the canonically incorporated and published
+SWC/JEW strongly connected pair. This clarification assigns their owner but
+does not by itself grant replay, append, runtime, or filesystem authority.
+
+Schema cycles may use Draft 2020-12 registry resolution but may not replace a
+direct `$ref` with a copied shape.
+
+HPR and the already published local contract-only leaves may lexically check an
+HCG/HFP ID before the owning Schema is available. Such lexical checks are not
+marker or package resolution. Full resolvers must use the owner URI above.
+
+## HCW9 — IDs, Sigils, retry, retention, and authority boundaries
+
+### Fixed ID and Sigil table
+
+This approved closure adds no new operational identity algorithm. The complete collision
+family uses:
+
+| Object | Fixed identity rule |
+| --- | --- |
+| HCG marker | canonical H8 deterministic ID over owner/message/identity tuple; ordinary marker self-Sigil |
+| HGC commit | HCW3 deterministic ID over HCG ID/Sigil; ordinary commit self-Sigil |
+| HPR reservation | canonical H8 deterministic ID over HCG ID and HOC ID; ordinary row self-Sigil |
+| HFP package | canonical H8 deterministic ID over HCG ID and HOC ID |
+| HPC commit | HCW4 deterministic ID over HPR ID/Sigil; ordinary commit self-Sigil |
+| inventory entry | HCW2 ordinary self-Sigil |
+| fragment inventory | HCW5 ordinary self-Sigil |
+| HFM manifest | canonical H8 deterministic ID over complete manifest identity tuple; ordinary manifest self-Sigil |
+| HCE evidence | fresh canonical 128-bit Crockford ID; ordinary HCE self-Sigil |
+| HGI row | canonical H8 deterministic ID over owner/message/identity lookup key; ordinary row self-Sigil |
+| HGR recovery | fresh canonical 128-bit Crockford ID; ordinary HGR self-Sigil |
+| HRE evidence | canonical H8 deterministic ID over obligation ID/Sigil and full EventRef; canonical HRE domain-separated evidence Sigil |
+
+No ID formula gains a timestamp, path, size, package state, Event sequence, or
+filesystem value. No ordinary self-Sigil is replaced by a byte-Sigil, and no
+domain-separated byte-Sigil is replaced by a raw digest.
+
+### Retry and single assignment
+
+The following keys are independent:
+
+- HCG: marker ID and complete owner/message/identity lookup key;
+- HPR: reservation ID, source candidate ID, and forensic package ID;
+- HFP: forensic package ID and `(collision_gate_marker_id,
+  source_candidate_id)`;
+- HGI: index row ID and complete owner/message/identity lookup key; and
+- HCE, HGR: their random IDs, with redraw before installation when already
+  occupied.
+
+An exact retry reopens every required package and compares every record,
+inventory, fragment container, comparison byte, manifest, commit, EventRef,
+and self-Sigil byte-for-byte before returning the first installed object. A
+match on size or Sigil alone is never an exact retry. Different bytes under any
+independent key are permanent integrity failure. They are not overwritten,
+merged, repaired from hashes, assigned a second deterministic ID, or treated
+as an ordinary duplicate.
+
+HGR remains an append-only recovery evidence record rather than a mutable
+single logical slot. An occupied random HGR ID is redrawn; a committed HGR is
+immutable.
+
+### Parser, local validator, resolver, and replay split
+
+Every JSON object above uses strict UTF-8 loading and rejects a BOM, duplicate
+keys at every depth, non-finite numbers, trailing content, invalid scalar
+encoding, non-object roots where an object is required, and unknown members.
+Binary files are never JSON-normalized.
+
+Pure local validation may establish only:
+
+- closed shape, primitive bounds, enums, conditional nulls, and array bounds;
+- deterministic IDs and locally owned self-Sigils;
+- canonical ordering derivable from one complete supplied object; and
+- exact length/domain-Sigil equality for explicitly supplied bytes.
+
+Dependency-fed immutable resolution additionally reopens and byte-compares
+the HCG, `I`, entry, HPR, HFP, HMI, HCE, HGI, HGR, Event, and obligation
+objects required by that branch. It proves all owner, source, marker,
+inventory, EventRef, package, and timestamp equalities. A supplied dictionary
+or Boolean saying that a dependency was verified is not a resolver.
+
+Filesystem installation and visibility require the canonical no-symlink,
+file-`fsync`, directory-`fsync`, reopen, atomic rename, parent-`fsync`, and
+descriptor-relative final reopen state machines. Journal replay requires the
+complete verified prefix, exact Event bytes, State reducer, revision algebra,
+transition admissibility, and recovery suffix. These authorities remain
+external and fail closed from contract-only helpers.
+
+### Retention
+
+The canonical retention rule is unchanged. Marker, inventory, entry,
+ordinary package and candidate fragments, HPR, every reservation and HFP
+staging candidate, HFP, HCE, HGI, HGR, Event, obligation, and completion
+evidence are retained for the affected Journal and integrity-export lifetime.
+Before that shared lifetime ends, no successful HFP/HCE construction,
+terminal owner, index rebuild, cache cleanup, or shorter component retention
+expiry deletes or substitutes collision material. Expiry of that canonical
+shared lifetime is not prohibited by this approved closure. The committed HCG marker is
+the one separate permanent exception: it remains immutable and is never
+deleted, superseded, or changed to an open state.
+
+## HCW10 — conformance evidence and remaining approval gates
+
+### Required local fixtures
+
+Retained local Schema and validator fixtures must include at least:
+
+1. candidate inventories at both conditional count boundaries, strict HOC
+   order, and all eight present/absent combinations for the three fragments;
+2. present empty versus absent fragment, wrong length, null/non-null Sigil
+   inversion, raw SHA, undomained Sigil, and all record/bytes/manifest
+   cross-domain substitutions;
+3. missing, duplicate, reordered, and changed inventory entries, wrong entry
+   self-Sigil, duplicate HOC ID, wrong `source_record_kind`, and marker
+   candidate-count inequality;
+4. exact HCG/HGC and HPR/HPC package members, schema versions, IDs, self-Sigils,
+   and rejection of extra, missing, wrong-type, or substituted members;
+5. complete HCM and HFR HFPs, every partial fragment combination, absent
+   zero-container versus present-empty distinction, wrong source-domain Sigil,
+   malformed U64BE framing, comparison-kind tag substitution, and `K`/file
+   inequality;
+6. exact forensic manifest, HFM preimage, storage profile, fragment inventory
+   equality, HPR/HFP source equality, and all manifest field substitutions;
+7. HCE canonical and raw collision kinds, installed/no-installed branches,
+   byte-equal package grouping, two through 4,096 sides/packages, full
+   inventory coverage, partial-only non-proof, side/package reorder, and
+   descriptor/HMI domain substitutions;
+8. HPR/HFP/HCG/HGI independent-key collisions and exact byte-equal retries;
+9. strict-loader BOM, bad UTF-8, duplicate-key, non-finite, trailing-content,
+   non-object, unknown-member, identifier-case, Crockford, bound, and null
+   failures; and
+10. every external-authority entry point failing closed when only local shape,
+    a bare Sigil, a path, a final directory, or a supplied verification flag is
+    available.
+
+### Required crash/replay fixtures
+
+Integration evidence must separately cover every file, directory, rename, and
+parent-`fsync` cut for HCG, HPR, HFP, and HCE; multiple HPR/HFP staging
+candidates; ASCII-smallest arbitration; partial final paths; marker-first
+startup closure; missing or byte-different collision Event; partial dependent
+suffix; incomplete credential/handle revocation; HGI rebuild; HGR result-set
+completion; and permanent closure after every failure.
+
+
+The SWC1–SWC2 and JEW1–JEW4 approval and publication prerequisites named
+during review are now satisfied by their canonical incorporation above.
+Affected collision contracts still require their Schemas, strict loaders,
+dependency resolvers, durable package state machines, complete State/Event
+integration, crash/replay evidence, and independent P1/P2/P3-zero review
+before they may claim runtime or append authority.
+
+
+
 ## Compatibility
 
 This RFC refines RFC-0007's reserved Executor contract and is subordinate to

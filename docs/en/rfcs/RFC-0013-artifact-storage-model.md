@@ -3944,6 +3944,191 @@ Storage authorization does not authorize external disclosure. An export to a
 remote or external party requires the exact destination and disclosure policy
 to be approved under the applicable Review or future transport contract.
 
+## Approved 2026-08-06 Result Authority Closure AC1 v0.1
+
+The user approved AC1 through AC4 as one synchronized cross-RFC decision
+bundle. This RFC owns AC1's namespace replacement-index root, row, protected
+Head, legal-delta comparison, and sole visibility boundary. RFC-0012 owns
+AC2–AC4's OWR subject, authority, and evidence-substrate rules. Neither side
+is independently sufficient authority.
+
+### AC1 — namespace replacement-index root
+
+RFC-0013 owns three new closed contracts:
+`artifact-storage-execution-namespace-index-row/1.0` and
+`artifact-storage-execution-namespace-index/1.0`, plus the protected
+`artifact-storage-execution-namespace-index-head/1.0`. They are storage-private
+control records. They are not Worker inputs, Result fields, Journal Events, or
+standalone leaf visibility paths.
+
+### AC1.1 closed row
+
+The row has exactly these required members:
+
+```text
+schema_version
+reservation
+activation
+abort
+consumption_intent
+consumption
+row_sigil
+```
+
+`schema_version` is constant
+`artifact-storage-execution-namespace-index-row/1.0`. `reservation` is one
+complete `artifact-storage-execution-namespace-reservation/1.0` object. The
+other four members are either null or one complete object from the matching
+activation, abort, consumption-intent, or consumption leaf contract. The only
+legal null/presence branches are:
+
+| Derived state | activation | abort | consumption_intent | consumption |
+| --- | --- | --- | --- | --- |
+| `PENDING_EVENT` | null | null | null | null |
+| `ACTIVE` | object | null | null | null |
+| `ABORTED` | null | object | null | null |
+| `CONSUMING` | object | null | object | null |
+| `CONSUMED` | object | null | object | object |
+
+Every present leaf resolves byte-for-byte to the row reservation through the
+already canonical owner/equality matrix. A row contains no independent status,
+timestamp, mutable projection, path, or backend locator. Its self-Sigil is:
+
+```text
+row_sigil = Sigil([
+  "artifact-storage-execution-namespace-index-row/1.0",
+  reservation,
+  activation,
+  abort,
+  consumption_intent,
+  consumption
+])
+```
+
+### AC1.2 closed root and order
+
+The root has exactly:
+
+```text
+schema_version
+anchor_profile_sigil
+index_generation
+previous_index_sigil
+rows
+index_sigil
+```
+
+`schema_version` is constant
+`artifact-storage-execution-namespace-index/1.0`. `index_generation` is U64.
+`anchor_profile_sigil` selects the installed monotonic-anchor protection and
+resolver profile and is byte-equal in every generation. `previous_index_sigil`
+is Sigil or null. `rows` contains 0..4,096 members and
+is strictly increasing by the unsigned-ASCII bytes of
+`reservation.namespace_reservation_id`. No second order or map-key
+serialization is permitted. A full index applies durable fail-closed
+backpressure: no new reservation is admitted. Deletion, wraparound, or an
+implementation-selected larger bound is forbidden; any future compaction or
+checkpoint format requires a separately approved protocol.
+
+Across all rows, each of the following is independently unique: reservation
+key Sigil, reservation ID, `(job_id, attempt_id, output_handle_id)`, ST-ID,
+SA-ID, consumption-intent ID, and prepared Storage Event ID. Every present
+activation, abort, intent, or consumption leaf is also unique by its own
+ordinary self-Sigil and its canonical owner slot. A duplicate under any one
+class is invalid even when another class differs.
+
+The unique empty initial root has `index_generation: 0`,
+`previous_index_sigil: null`, and `rows: []`. Every successor has checked
+`index_generation = prior.index_generation + 1`, rejects U64 overflow, and has
+`previous_index_sigil = prior.index_sigil`. Its self-Sigil is:
+
+```text
+index_sigil = Sigil([
+  "artifact-storage-execution-namespace-index/1.0",
+  anchor_profile_sigil,
+  index_generation,
+  previous_index_sigil,
+  rows
+])
+```
+
+### AC1.3 protected Head, replacement comparison, and visibility
+
+The independently protected Head has exactly:
+
+```text
+schema_version
+anchor_profile_sigil
+index_generation
+index_sigil
+previous_head_sigil
+anchored_at
+head_sigil
+```
+
+The Schema constant is
+`artifact-storage-execution-namespace-index-head/1.0`. The initial Head names
+the exact generation-zero root and has `previous_head_sigil: null`. Every
+successor has checked Head and index generation equal to prior generation plus
+one, has `anchor_profile_sigil` equal to the root and prior Head, names the
+exact installed root Sigil, and has
+`previous_head_sigil = prior.head_sigil`. `head_sigil` is
+`Sigil(["artifact-storage-execution-namespace-index-head/1.0",
+anchor_profile_sigil, index_generation, index_sigil, previous_head_sigil,
+anchored_at])`.
+
+The Head is installed in the configured trusted monotonic anchor store,
+separate from the replaceable index object. That store is append-only,
+single-writer under the namespace lock, rejects generation rollback or a
+second unequal successor, and resolves its current Head without accepting a
+caller path or Head candidate. A self-Sigil or predecessor chain in the
+replaceable root is not an anti-rollback substitute.
+
+A non-retry replacement performs exactly one legal delta:
+
+- insert one new `PENDING_EVENT` row; or
+- change one row `PENDING_EVENT -> ACTIVE` or
+  `PENDING_EVENT -> ABORTED`; or
+- change one row `ACTIVE -> CONSUMING`; or
+- change one row `CONSUMING -> CONSUMED`.
+
+Every earlier leaf remains byte-for-byte unchanged. Rows cannot be deleted,
+reordered, reassigned, compacted, or rewritten. An exact retry returns the
+already installed root and does not increment the generation. Equal generation
+with unequal bytes, a skipped generation, the wrong predecessor Sigil, an
+illegal branch, a changed historical leaf, or a unique-key conflict is
+`INTEGRITY_FAILURE`, not last-writer-wins repair.
+
+Before replacement, the writer requires the trusted current Head to name the
+reopened prior root. It then file-syncs the candidate, atomically replaces the
+one configured descriptor-relative canonical index object, directory-syncs
+it, reopens and validates it, and advances the monotonic Head to that exact
+root before releasing authority. Protocol visibility is the conjunction of
+the durable reopened root and its protected Head. A private transaction file,
+standalone leaf, directory listing, prefix match, unanchored newer root,
+current/latest caller lookup, or in-memory row is never authoritative.
+
+A crash with the exact generation `n+1` root durable while the Head remains at
+`n` gates allocators; recovery under the same lock may advance only when the
+new root names the anchored root as predecessor and is its one legal delta. A
+Head ahead of the root, a root more than one generation ahead, a root older
+than the Head, or any unequal bytes is rollback/integrity failure. Failure to
+prove any step retains the evidence and gates both allocators.
+
+AC1 selects the wire, checked compare, and visibility boundary. It does not
+implement the lock, filesystem transaction, allocator, append, replay, or
+crash-repair procedures already required by RFC-0013.
+
+
+Conformance additionally requires the AC1 root/row/Head Schemas, strict
+literal-byte loader, checked comparator, durable replacement and allocator
+integration, lock-order tests, crash cuts, replay, recovery, and independent
+cross-RFC review. Until all reciprocal RFC-0012 prerequisites also resolve,
+both namespace allocators and Result admission fail closed. A valid leaf,
+root self-Sigil, or unanchored replacement never establishes visibility.
+
+
+
 ## Compatibility and migration
 
 This RFC does not reinterpret or rewrite an already accepted

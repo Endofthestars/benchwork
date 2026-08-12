@@ -408,9 +408,14 @@ Quarantine members are unique and ordered by `(subject_kind, subject_id)`;
 logs are unique and ordered by the fixed stream-kind order
 `STDOUT`, `STDERR`, `STRUCTURED` and then `stream_id`; and next actions use
 the printed action order.
-The top-level Attempt-derived views select the current unresolved Attempt, or
-the Job terminal event's selected Attempt after Job terminalization. When no
-Attempt exists they use `LeaseView.NONE`, `PublicFenceView.NONE`, an
+The top-level Attempt-derived views use one `projection_attempt_id` from the
+verified fixed-prefix replay. For a terminal Job they use the terminal Job
+Event's exact `selected_attempt_binding`, or null for its canonical `NONE`
+branch. For a nonterminal Job with non-null RFC-0012 `current_attempt_id`, they
+use that Attempt. For a nonterminal Job with null `current_attempt_id` and one
+or more historical Attempts, including `RETRY_WAIT`, they use the Attempt with
+the greatest `retry_ordinal`. When no Attempt exists they use
+`LeaseView.NONE`, `PublicFenceView.NONE`, an
 `AssuranceView` containing the requested tuple, `attempt_binding: NONE`, and
 the current Job assurance binding, the fixed pre-attempt cleanup defaults,
 and empty Quarantine and log arrays. Otherwise the top-level logs are exactly
@@ -420,9 +425,11 @@ views equal that Attempt's entry byte-for-byte and never select a different
 retry.
 
 `CancellationView` uses a closed selector. If any state-changing
-`job.cancellation_requested` exists in the fixed prefix, it selects the
-lowest-sequence such event and remains `REQUESTED`; later terminal
-observations do not replace it. Otherwise, if one or more state-neutral
+`job.stop_latched` Event in the fixed prefix has
+`transition_cause.code = CANCEL_REQUESTED` and
+`request_binding.kind = CANCELLATION`, it selects the lowest-sequence such
+Event and remains `REQUESTED`; later terminal observations do not replace it.
+Otherwise, if one or more state-neutral
 `job.cancellation_observed` events exist, it selects the lowest-sequence one
 as `OBSERVED_TERMINAL`. It is `NONE` only when neither event exists. Thus
 arbitrarily many idempotency-distinct terminal observations cannot make the
@@ -659,6 +666,65 @@ not a Lease credential and may be returned when required for provenance.
 Observe is read-only. A missing, corrupt, or replay-inconsistent journal fails
 closed rather than reporting inferred state from live processes, queues, or
 Crucible paths.
+
+### Approved 2026-08-06 Observation projection clarification OP1–OP2 v0.1
+
+The user approved OP1 and OP2 as one synchronized selector decision. These
+rules replace the nonexistent cancellation selector and close the projection
+Attempt during the historical-Attempt/no-current-Attempt interval. They are
+normative for a live `execution-observation/1.0` projection.
+
+#### Approved synchronized selector rules
+
+#### OP1 — Cancellation selector
+
+Replace the nonexistent state-changing selector input with the canonical
+RFC-0012 representation:
+
+1. If the fixed prefix contains one or more `job.stop_latched` Events whose
+   payload has `transition_cause.code = CANCEL_REQUESTED` and
+   `request_binding.kind = CANCELLATION`, select the lowest-sequence such
+   Event and emit `CancellationView.REQUESTED`.
+2. Otherwise, if the prefix contains one or more state-neutral
+   `job.cancellation_observed` Events, select the lowest-sequence such Event
+   and emit `CancellationView.OBSERVED_TERMINAL`.
+3. Otherwise emit `CancellationView.NONE`.
+4. Later observations never replace a selected state-changing request, and no
+   new Event type is introduced.
+
+#### OP2 — Projection Attempt selector
+
+Define one `projection_attempt_id` from the verified fixed-prefix replay:
+
+1. For a terminal Job, use the terminal Job Event's exact
+   `selected_attempt_binding`, or null for its canonical `NONE` branch.
+2. For a nonterminal Job with non-null RFC-0012 `current_attempt_id`, use that
+   Attempt.
+3. For a nonterminal Job with null `current_attempt_id` and one or more
+   historical Attempts, use the Attempt with the greatest `retry_ordinal`.
+   This includes `RETRY_WAIT` between finalization and the next allocation.
+4. If no Attempt exists, use null and the already specified no-Attempt
+   defaults.
+5. When non-null, top-level Lease, public fence, assurance, cleanup,
+   quarantine, and the three Log views copy the selected Attempt projection
+   byte-for-byte.  The selector is derived only from replayed canonical state;
+   it is not caller-controlled and does not add a field to the 23-field wire.
+
+#### Remaining live-projection prerequisites
+
+OP1–OP2 do not define the complete `NextAction` state/reason precedence
+matrix, the exact `ObservationEvent.related_entity_ids` derivation, the
+membership policy for historical Worker Sessions, or the Event-to-view
+formula for nonterminal cleanup and Log closure progress.  Those must be
+closed before a live RFC-0015 projection can claim conformance.
+
+#### Authority boundary
+
+OP1–OP2 amend only the two RFC-0015 selector rules above.  It would not
+publish a Journal replayer, validate retained frames, authenticate a Cursor,
+derive a page, expose runtime records, register an MCP tool, mutate execution
+state, accept a Result, issue a Receipt, or confer scientific authority.
+
 
 ## Cancel
 

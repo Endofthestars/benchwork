@@ -18,3 +18,17 @@ canonical: true
    `PIVOT` outcome automatically creates lineage.
 6. Define Provider leases, cancellation, result transport, and executor
    isolation before direct research verbs automatically execute Task Capsules.
+
+## Resolved decision record (2026-08-06)
+
+The user approved four synchronized Phase 3 decision packages. They are no
+longer open decisions; their canonical text is incorporated in the owning RFCs:
+
+1. OD22: RFC-0012 Heartbeat Collision Wire Closure HCW1–HCW10.
+2. OD23: RFC-0012 Initial State Reducer ISR1–ISR3.
+3. OD24: RFC-0013 namespace closure AC1 and RFC-0012 Result Authority Closure
+   AC2–AC4.
+4. OD25: RFC-0015 Observation projection clarification OP1–OP2.
+
+These decisions do not by themselves publish a runtime, authorize journal or
+storage mutation, accept a Result, or confer scientific authority.
