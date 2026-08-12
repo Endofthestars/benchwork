@@ -867,6 +867,34 @@ def validate_execution_recovery_action_set_supplied_prefix_v1(
         _fail("Execution Recovery action set disagrees with supplied prefix")
 
 
+def validate_execution_recovery_start_supplied_action_set_v1(
+    event: dict[str, Any], action_set: dict[str, Any], prefix: list[dict[str, Any]],
+) -> None:
+    """Compare a Recovery start with its sealed STARTED set and supplied prefix.
+
+    This is a closed-record relation only: it neither persists the action set,
+    derives actions, nor grants recovery or append authority.
+    """
+    validate_execution_journal_event_v1(event)
+    validate_execution_recovery_action_set_supplied_prefix_v1(action_set, prefix)
+    last = prefix[-1]
+    payload = event["payload"]
+    if event["event_type"] != "recovery.started":
+        _fail("Execution Recovery start binding requires a recovery.started Event")
+    if (
+        event["journal_id"] != last["journal_id"]
+        or event["sequence"] != last["sequence"] + 1
+        or event["previous_event_sigil"] != last["event_sigil"]
+        or payload["recovery_id"] != action_set["recovery_id"]
+        or payload["initial_action_set_sigil"] != action_set["action_set_sigil"]
+        or payload["replay_through_sequence"] != action_set["derived_through_sequence"]
+        or payload["replay_through_event_sigil"] != action_set["derived_through_event_sigil"]
+        or action_set["phase"] != "STARTED"
+        or action_set["supersedes_action_set_sigil"] is not None
+    ):
+        _fail("Execution Recovery start disagrees with supplied action set or prefix")
+
+
 def validate_execution_state_supplied_recovery_action_set_v1(
     state: dict[str, Any], action_set: dict[str, Any],
 ) -> None:

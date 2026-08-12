@@ -45,6 +45,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
     validate_execution_recovery_action_set_supplied_prefix_v1,
+    validate_execution_recovery_start_supplied_action_set_v1,
     validate_execution_state_supplied_recovery_action_set_v1,
     validate_execution_recovery_action_supplied_event_v1,
     validate_execution_storage_root_manifest_v1,
@@ -815,6 +816,36 @@ def test_recovery_action_set_anchors_to_its_supplied_prefix() -> None:
     with pytest.raises(Exception, match="previous_event_sigil"):
         validate_execution_recovery_action_set_supplied_prefix_v1(
             action_set, [initial, broken_prefix],
+        )
+
+
+def test_recovery_start_binds_its_started_action_set_and_prefix() -> None:
+    initial = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    clock_uncertain = _clock_uncertain_event(initial)
+    action_set = _recovery_action_set()
+    action_set["derived_through_event_sigil"] = clock_uncertain["event_sigil"]
+    action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in action_set.items() if key != "action_set_sigil"
+    })
+    recovery_started = _recovery_started_event(clock_uncertain)
+    recovery_started["payload"]["initial_action_set_sigil"] = action_set["action_set_sigil"]
+    recovery_started["event_sigil"] = content_sigil({
+        key: member for key, member in recovery_started.items() if key != "event_sigil"
+    })
+    validate_execution_recovery_start_supplied_action_set_v1(
+        recovery_started, action_set, [initial, clock_uncertain],
+    )
+
+    wrong_set = deepcopy(action_set)
+    wrong_set["supersedes_action_set_sigil"] = SIGIL
+    wrong_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in wrong_set.items() if key != "action_set_sigil"
+    })
+    with pytest.raises(Exception, match="start disagrees"):
+        validate_execution_recovery_start_supplied_action_set_v1(
+            recovery_started, wrong_set, [initial, clock_uncertain],
         )
 
 
