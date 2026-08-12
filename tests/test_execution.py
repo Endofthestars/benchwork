@@ -226,6 +226,18 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "not terminalizable"):
             self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
 
+    def test_duplicate_terminal_delivery_is_rejected_without_rewriting_history(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        terminal = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        event_count = len(self.service.observe(job["job_id"])["events"])
+
+        with self.assertRaisesRegex(AthanorError, "not terminalizable"):
+            self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+
+        observation = self.service.observe(job["job_id"])
+        self.assertEqual(observation["job"], terminal["job"])
+        self.assertEqual(len(observation["events"]), event_count)
+
     def test_tampered_journal_fails_closed(self) -> None:
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
