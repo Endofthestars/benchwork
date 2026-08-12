@@ -886,6 +886,61 @@ def load_execution_result_ingress_index_v1(raw: str | bytes | bytearray) -> dict
     return index
 
 
+def derive_execution_storage_root_manifest_id_v1(manifest: dict[str, Any]) -> str:
+    """Derive an ESM-ID from its immutable owner tuple."""
+    digest = content_sigil([
+        "execution-storage-root-manifest-id/1.0", manifest["root_kind"],
+        manifest["job_id"], manifest["attempt_id"], manifest["owner_binding"],
+    ]).removeprefix("sha256:").upper()
+    return f"ESM-{digest}"
+
+
+def validate_execution_storage_root_manifest_v1(manifest: dict[str, Any]) -> None:
+    """Validate an ESM's local immutable closure, never Storage authority."""
+    validate_instance("execution-storage-root-manifest-1.0.json", manifest)
+    _check_nfc(manifest)
+    if manifest["manifest_id"] != derive_execution_storage_root_manifest_id_v1(manifest):
+        _fail("Execution Storage Root Manifest ID mismatch")
+    if manifest["manifest_sigil"] != content_sigil(_without(manifest, "manifest_sigil")):
+        _fail("Execution Storage Root Manifest self-Sigil mismatch")
+    entries = manifest["entries"]
+    if len({entry["storage_subject_id"] for entry in entries}) != len(entries):
+        _fail("Execution Storage Root Manifest storage subject IDs must be unique")
+    if manifest["root_kind"] in {"JOB_INPUT", "ATTEMPT_INPUT"}:
+        ordinals = [entry["subject"]["input_ordinal"] for entry in entries]
+        if ordinals != list(range(len(entries))):
+            _fail("Execution Storage Root Manifest input ordinals must be contiguous")
+    expected_blobs: list[dict[str, Any]] = []
+    for entry in entries:
+        if entry["entry_sigil"] != content_sigil(_without(entry, "entry_sigil")):
+            _fail("Execution Storage Root Manifest entry self-Sigil mismatch")
+        subject = entry["subject"]
+        if subject["kind"] != "ATTEMPT_OUTPUT":
+            expected_subject_id = content_sigil([
+                "execution-storage-subject-id/1.0", manifest["root_kind"],
+                manifest["job_id"], manifest["attempt_id"], subject,
+            ])
+            if entry["storage_subject_id"] != expected_subject_id:
+                _fail("Execution Storage Root Manifest storage subject ID mismatch")
+        origin_kind = entry["storage_origin"]["kind"]
+        claimed_blob = entry["claimed_blob"]
+        if (origin_kind == "NOT_STORED") != (claimed_blob is None):
+            _fail("Execution Storage Root Manifest claimed Blob disagrees with origin")
+        if origin_kind == "COMMITTED_BLOB":
+            expected_blobs.append(claimed_blob)
+    expected_blobs.sort(key=lambda blob: (blob["blob_sigil"], blob["size_bytes"]))
+    if manifest["blob_refs"] != expected_blobs:
+        _fail("Execution Storage Root Manifest Blob refs disagree with committed entries")
+    if (manifest["protection_plan"]["kind"] == "NONE") != (not expected_blobs):
+        _fail("Execution Storage Root Manifest protection plan disagrees with Blob refs")
+
+
+def load_execution_storage_root_manifest_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    manifest = _load_strict_object(raw, "Execution Storage Root Manifest")
+    validate_execution_storage_root_manifest_v1(manifest)
+    return manifest
+
+
 def derive_observation_evidence_subject_sigil_v1(
     owner_binding: dict[str, Any], result_observation_binding: dict[str, Any]
 ) -> str:

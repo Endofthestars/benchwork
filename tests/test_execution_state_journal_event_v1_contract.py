@@ -13,6 +13,7 @@ from benchwork.execution_contracts import (
     derive_observation_evidence_id_v1,
     derive_observation_evidence_subject_sigil_v1,
     derive_execution_observation_cursor_sigil_v1,
+    derive_execution_storage_root_manifest_id_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
@@ -24,6 +25,7 @@ from benchwork.execution_contracts import (
     load_execution_result_ingress_index_v1,
     load_execution_recovery_action_set_v1,
     load_execution_state_v1,
+    load_execution_storage_root_manifest_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
@@ -34,6 +36,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_receipt_v1,
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
+    validate_execution_storage_root_manifest_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -306,6 +309,39 @@ def _result_ingress_index() -> dict[str, Any]:
     }
     index["index_sigil"] = content_sigil({key: member for key, member in index.items() if key != "index_sigil"})
     return index
+
+
+def _storage_root_manifest() -> dict[str, Any]:
+    subject = {
+        "kind": "JOB_INPUT", "input_ordinal": 0,
+        "input_identity": {"logical_name": "input", "object_id": "RP-ONE", "object_type": "research-program",
+                           "object_sigil": SIGIL, "media_type": "application/json", "maximum_bytes": 1,
+                           "mount_path": "input.json"},
+        "input_sigil": SIGIL,
+    }
+    entry = {
+        "storage_subject_id": content_sigil([
+            "execution-storage-subject-id/1.0", "JOB_INPUT", JOB_ID, None, subject,
+        ]),
+        "subject": subject, "claimed_blob": None,
+        "storage_origin": {"kind": "NOT_STORED", "transfer": None,
+                           "terminal_reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+                           "evidence_sigil": SIGIL},
+        "entry_sigil": "",
+    }
+    entry["entry_sigil"] = content_sigil({key: member for key, member in entry.items() if key != "entry_sigil"})
+    manifest = {
+        "schema_version": "execution-storage-root-manifest/1.0", "manifest_id": "",
+        "root_kind": "JOB_INPUT", "job_id": JOB_ID, "attempt_id": None,
+        "owner_binding": {"kind": "JOB_INPUT", "start_request_sigil": SIGIL, "task_id": "TK-ONE",
+                          "task_capsule_sigil": SIGIL, "specification_id": "ES-0" + "0" * 25,
+                          "specification_sigil": SIGIL, "input_set_sigil": SIGIL},
+        "entries": [entry], "blob_refs": [], "protection_plan": {"kind": "NONE"},
+        "created_at": STAMP, "manifest_sigil": "",
+    }
+    manifest["manifest_id"] = derive_execution_storage_root_manifest_id_v1(manifest)
+    manifest["manifest_sigil"] = content_sigil({key: member for key, member in manifest.items() if key != "manifest_sigil"})
+    return manifest
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1120,6 +1156,35 @@ def test_result_ingress_index_seals_receipt_candidate_and_status_bindings() -> N
         {key: member for key, member in committed.items() if key != "index_sigil"}
     )
     validate_execution_result_ingress_index_v1(committed)
+
+
+def test_storage_root_manifest_closes_local_owner_and_blob_integrity() -> None:
+    manifest = _storage_root_manifest()
+    validate_execution_storage_root_manifest_v1(manifest)
+    assert load_execution_storage_root_manifest_v1(json.dumps(manifest)) == manifest
+
+    bad_subject_id = deepcopy(manifest)
+    bad_subject_id["entries"][0]["storage_subject_id"] = SIGIL
+    bad_subject_id["entries"][0]["entry_sigil"] = content_sigil({
+        key: member for key, member in bad_subject_id["entries"][0].items() if key != "entry_sigil"
+    })
+    bad_subject_id["manifest_sigil"] = content_sigil({
+        key: member for key, member in bad_subject_id.items() if key != "manifest_sigil"
+    })
+    with pytest.raises(Exception, match="storage subject ID mismatch"):
+        validate_execution_storage_root_manifest_v1(bad_subject_id)
+
+    bad_protection = deepcopy(manifest)
+    bad_protection["protection_plan"] = {
+        "kind": "PLANNED", "reference_set_registration_event_id": "SE-ONE", "hold_id": "SH-ONE",
+        "hold_set_event_id": "SE-TWO", "policy_id": "SP-EXECUTION-ROOT-HOLD-V1", "policy_sigil": SIGIL,
+        "hold_lifetime": {"kind": "OWNER_TERMINAL"},
+    }
+    bad_protection["manifest_sigil"] = content_sigil({
+        key: member for key, member in bad_protection.items() if key != "manifest_sigil"
+    })
+    with pytest.raises(Exception, match="protection plan"):
+        validate_execution_storage_root_manifest_v1(bad_protection)
 
 
 def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None:
