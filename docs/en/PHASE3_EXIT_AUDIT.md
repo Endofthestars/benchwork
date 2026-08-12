@@ -35,10 +35,12 @@ scientific fact.
 2. Install the required RFC-0013 Storage reducers and prove retained output,
    quarantine, and recovery projections from a complete Storage prefix.
 3. Extend the existing supplied-facts Result and assurance-Claim comparators
-   to their remaining externally authoritative resolvers. A `CLAIMED` outcome
-   already cannot be established by an opaque Sigil alone in the installed
-   replay path.
-4. Run the expanded conformance suite and retain independent threat-model and
-   implementation review evidence.
+   only to consume their remaining externally verified resolver results. A
+   `CLAIMED` outcome already cannot be established by an opaque Sigil alone in
+   the installed replay path.
+4. Resolve the authority and State-evolution prerequisites in the
+   [Phase 3 blocker register](PHASE3_BLOCKER_REGISTER.md), then run the
+   expanded conformance suite and retain independent threat-model review
+   evidence.
 5. Request explicit acceptance for each RFC. This repository forbids sealing
    an RFC without that confirmation.
