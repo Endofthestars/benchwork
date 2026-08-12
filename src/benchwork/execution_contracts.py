@@ -2022,6 +2022,73 @@ def _reduce_lease_renewed_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     return build_execution_state_v1(reduced)
 
 
+def _reduce_executor_clock_restored_v1(
+    state: dict[str, Any], event: dict[str, Any], action_set: dict[str, Any]
+) -> dict[str, Any]:
+    """Restore a trusted clock without reopening Recovery-gated authority.
+
+    The frozen FINALIZING action is caller supplied and is used only to bind
+    this Event to its reserved recovery action.  This reducer never derives an
+    action set, validates a time source, or treats completion of Recovery as
+    established.
+    """
+    validate_execution_recovery_action_supplied_event_v1(action_set, event)
+    executor = state["executor"]
+    recovery_id = executor["active_recovery_id"]
+    if recovery_id is None or len(state["recoveries"]) != 1:
+        _fail("Clock restoration requires exactly one active Recovery")
+    recovery = state["recoveries"][0]
+    binding = event["recovery_action_binding"]
+    assert binding is not None
+    action = action_set["actions"][binding["action_ordinal"]]
+    payload = event["payload"]
+    expected_revision = [{
+        "entity_kind": "EXECUTOR",
+        "entity_id": executor["executor_instance_id"],
+        "preceding_revision": executor["revision"],
+        "next_revision": executor["revision"] + 1,
+    }]
+    if (
+        event["event_type"] != "executor.clock_restored"
+        or executor["clock_state"] != "UNCERTAIN"
+        or executor["authority_gates"] != ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"]
+        or recovery["recovery_id"] != recovery_id
+        or recovery["state"] != "FINALIZING"
+        or action_set["recovery_id"] != recovery_id
+        or action_set["phase"] != "FINALIZING"
+        or action_set["action_set_sigil"] != recovery["current_action_set_sigil"]
+        or action["action_kind"] != "RESTORE_CLOCK"
+        or action["entity_kind"] != "EXECUTOR"
+        or action["entity_id"] != executor["executor_instance_id"]
+        or action["expected_revision"] != executor["revision"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["entity_revisions"] != expected_revision
+        or action["parameters"]["clock_uncertain_event_id"]
+        != executor["clock_uncertain_event_id"]
+        or action["parameters"]["trusted_time_source_sigil"]
+        != payload["trusted_time_source_sigil"]
+        or payload["fenced_lease_ids"]
+        or any(lease["state"] in {"OFFERED", "ACTIVE"} for lease in state["leases"])
+        or _parse_time(payload["restored_utc"]) < _parse_time(executor["last_trusted_utc"])
+    ):
+        _fail("Clock restoration Event disagrees with FINALIZING Recovery state")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["executor"] = {
+        **executor,
+        "revision": executor["revision"] + 1,
+        "clock_state": "TRUSTED",
+        "last_trusted_utc": payload["restored_utc"],
+        "clock_uncertain_event_id": None,
+        "authority_gates": ["RECOVERY_ACTIVE"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -2031,6 +2098,7 @@ def replay_execution_supplied_state_suffix_v1(
     supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
     supplied_observation_evidence: list[dict[str, Any]] | None = None,
     supplied_log_chunks: list[dict[str, Any]] | None = None,
+    supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reduce installed suffix Events from one caller-supplied verified State.
 
@@ -2125,6 +2193,15 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_heartbeat_accepted_v1(current, event)
         elif event["event_type"] == "lease.renewed":
             current = _reduce_lease_renewed_v1(current, event)
+        elif event["event_type"] == "executor.clock_restored":
+            action_set_sigil = event["recovery_action_binding"]["action_set_sigil"] if event["recovery_action_binding"] else ""
+            action_set = _find_supplied_v1(
+                supplied_recovery_action_sets,
+                action_set_sigil,
+                "action_set_sigil",
+                "Clock restoration",
+            )
+            current = _reduce_executor_clock_restored_v1(current, event, action_set)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current

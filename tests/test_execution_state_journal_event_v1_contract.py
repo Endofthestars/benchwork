@@ -36,6 +36,7 @@ from benchwork.execution_contracts import (
     load_execution_output_storage_observation_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_supplied_state_suffix_v1,
     replay_execution_empty_recovery_phase_prefix_v1,
     validate_execution_journal_prefix_wire_v1,
     validate_execution_observation_evidence_v1,
@@ -1171,6 +1172,72 @@ def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
     with pytest.raises(Exception, match="completion disagrees"):
         validate_execution_recovery_completion_supplied_action_set_v1(
             state, wrong_epoch, action_set,
+        )
+
+
+def test_clock_restoration_keeps_recovery_authority_gate_closed() -> None:
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["journal_binding"] = {
+        "journal_id": "EJ-ONE", "through_sequence": 3,
+        "through_event_id": "JE-THREE", "through_event_sigil": SIGIL_B,
+    }
+    action_set = {
+        "schema_version": "execution-recovery-action-set/1.0", "recovery_id": "RY-ONE",
+        "phase": "FINALIZING", "derived_from_journal_id": "EJ-ONE",
+        "derived_through_sequence": 2, "derived_through_event_sigil": SIGIL,
+        "supersedes_action_set_sigil": None,
+        "actions": [{
+            "ordinal": 0, "action_kind": "RESTORE_CLOCK", "entity_kind": "EXECUTOR",
+            "entity_id": "XI-ONE", "expected_revision": 2, "target_event_id": "JE-FOUR",
+            "target_sequence": 4, "target_event_type": "executor.clock_restored",
+            "prerequisite_event_ids": ["JE-ONE", "JE-TWO"],
+            "parameters": {"clock_uncertain_event_id": "JE-TWO", "trusted_time_source_sigil": SIGIL,
+                           "clock_uncertainty_tolerance_seconds": 0},
+        }], "action_set_sigil": "",
+    }
+    action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in action_set.items() if key != "action_set_sigil"
+    })
+    state["executor"].update({
+        "revision": 2, "clock_state": "UNCERTAIN", "clock_uncertain_event_id": "JE-TWO",
+        "active_recovery_id": "RY-ONE", "authority_gates": ["CLOCK_UNCERTAIN", "RECOVERY_ACTIVE"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B,
+    })
+    state["recoveries"] = [{
+        "recovery_id": "RY-ONE", "revision": 3, "state": "FINALIZING",
+        "prior_recovery_id": None, "started_event_sigil": SIGIL,
+        "current_action_set_sigil": action_set["action_set_sigil"],
+        "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B,
+    }]
+    _reseal_state(state)
+    event = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
+        "event_id": "JE-FOUR", "sequence": 4, "event_type": "executor.clock_restored",
+        "executor_instance_id": "XI-ONE", "executor_epoch": 1,
+        "executor_build_sigil": state["executor"]["executor_build_binding"]["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
+        "entity_revisions": [{"entity_kind": "EXECUTOR", "entity_id": "XI-ONE",
+                              "preceding_revision": 2, "next_revision": 3}],
+        "causation_event_id": "JE-THREE", "idempotency_key_sigil": None,
+        "recovery_action_binding": {"recovery_id": "RY-ONE", "phase": "FINALIZING",
+                                    "action_set_sigil": action_set["action_set_sigil"], "action_ordinal": 0},
+        "payload": {"trusted_time_source_sigil": SIGIL, "restored_utc": "2026-08-06T00:00:03Z",
+                    "fenced_lease_ids": [], "new_anchor_evidence_sigil": SIGIL},
+        "previous_event_sigil": SIGIL_B,
+    })
+    restored = replay_execution_supplied_state_suffix_v1(
+        state, [event], supplied_recovery_action_sets=[action_set],
+    )
+    assert restored["executor"]["clock_state"] == "TRUSTED"
+    assert restored["executor"]["authority_gates"] == ["RECOVERY_ACTIVE"]
+    assert restored["executor"]["active_recovery_id"] == "RY-ONE"
+
+    wrong = deepcopy(event)
+    wrong["payload"]["fenced_lease_ids"] = ["LS-" + "0" * 26]
+    wrong = build_execution_journal_event_v1({key: value for key, value in wrong.items() if key != "event_sigil"})
+    with pytest.raises(Exception, match="Clock restoration"):
+        replay_execution_supplied_state_suffix_v1(
+            state, [wrong], supplied_recovery_action_sets=[action_set],
         )
 
 
