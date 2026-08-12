@@ -948,6 +948,14 @@ def test_storage_journal_prefix_checks_chain_sequence_and_fixed_head() -> None:
     with pytest.raises(AthanorError, match="does not start"):
         validate_artifact_storage_journal_prefix_v1([not_initialized])
 
+    wrong_initial_epoch = deepcopy(first)
+    wrong_initial_epoch["epoch"] = 2
+    wrong_initial_epoch["event_sigil"] = content_sigil({
+        key: member for key, member in wrong_initial_epoch.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="must use epoch one"):
+        validate_artifact_storage_journal_prefix_v1([wrong_initial_epoch])
+
     old_epoch = deepcopy(second)
     old_epoch["epoch"] = 0
     old_epoch["event_sigil"] = content_sigil({

@@ -588,6 +588,8 @@ def validate_artifact_storage_journal_prefix_v1(events: list[dict[str, Any]]) ->
         validate_artifact_storage_journal_event_v1(event)
         if expected_sequence == 1 and event["event_type"] != "storage.initialized":
             _fail("Artifact Storage Journal prefix does not start with storage.initialized")
+        if expected_sequence == 1 and event["epoch"] != 1:
+            _fail("Artifact Storage Journal initial Event must use epoch one")
         if event["sequence"] != expected_sequence:
             _fail("Artifact Storage Journal prefix sequence is not contiguous")
         if previous is not None:
