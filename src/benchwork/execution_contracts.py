@@ -1402,6 +1402,35 @@ def _reduce_job_message_rejected_v1(state: dict[str, Any], event: dict[str, Any]
     return build_execution_state_v1(reduced)
 
 
+def _reduce_worker_draining_or_quarantined_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Transition one Worker while preserving its separately projected Sessions."""
+    matches = [worker for worker in state["workers"] if worker["worker_id"] == event["entity_revisions"][0]["entity_id"]]
+    if len(matches) != 1:
+        _fail("Worker lifecycle Event has no unique Worker projection")
+    worker, payload, executor = matches[0], event["payload"], state["executor"]
+    affected = payload["affected_worker_session_ids"]
+    target = "DRAINING" if event["event_type"] == "worker.draining" else "QUARANTINED"
+    valid_source = {"ENABLED"} if target == "DRAINING" else {"REGISTERED", "ENABLED", "DRAINING"}
+    if (
+        event["event_type"] not in {"worker.draining", "worker.quarantined"}
+        or worker["state"] not in valid_source or affected != worker["worker_session_ids"]
+        or (target == "DRAINING" and not payload["reason_code"])
+        or (target == "QUARANTINED" and not payload["reason_codes"])
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != executor["executor_epoch"]
+        or event["causation_event_id"] != worker["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "WORKER", "entity_id": worker["worker_id"], "preceding_revision": worker["revision"], "next_revision": worker["revision"] + 1}]
+    ):
+        _fail("Worker lifecycle Event disagrees with Worker projection")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["workers"] = [
+        {**candidate, "revision": candidate["revision"] + 1, "state": target,
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_id"] == worker["worker_id"] else candidate
+        for candidate in state["workers"]
+    ]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record a duplicate chunk observation without appending bytes twice."""
     payload, executor = event["payload"], state["executor"]
@@ -1951,6 +1980,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_worker_session_message_rejected_v1(current, event)
         elif event["event_type"] == "job.message_rejected":
             current = _reduce_job_message_rejected_v1(current, event)
+        elif event["event_type"] in {"worker.draining", "worker.quarantined"}:
+            current = _reduce_worker_draining_or_quarantined_v1(current, event)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
         elif event["event_type"] == "attempt.starting":
