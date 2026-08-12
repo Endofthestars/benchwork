@@ -442,6 +442,12 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     with pytest.raises(AthanorError, match="disagrees"):
         replay_execution_supplied_state_suffix_v1(cleaning_state, [premature_capture])
 
+    released = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-SIXTEEN", "sequence": 16, "event_type": "lease.released", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 11, "next_revision": 12}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": closed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"release_evidence_sigil": SIGIL, "prior_fence_floor": 1, "tombstone_generation": 2, "tombstone_publication_sigil": SIGIL, "session_capacity_after": 0}, "previous_event_sigil": closed["event_sigil"]})
+    released_state = replay_execution_supplied_state_suffix_v1(closed_state, [released])
+    assert released_state["leases"][0]["state"] == "RELEASED"
+    assert released_state["attempts"][0]["lease_terminal_binding"]["lease_state"] == "RELEASED"
+    assert released_state["jobs"][0]["fence_floor"] == 2
+
     malformed = deepcopy(ingress)
     malformed["payload"]["result_sigil"] = "sha256:" + "b" * 64
     malformed = build_execution_journal_event_v1({key: value for key, value in malformed.items() if key != "event_sigil"})
