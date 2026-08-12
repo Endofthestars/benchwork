@@ -500,6 +500,43 @@ def replay_execution_initial_prefix_v1(
     return state
 
 
+def replay_execution_journal_prefix_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Verify a v1 Journal prefix and reduce its installed ISR3 suffix only.
+
+    Prefix integrity is checked before reducer dispatch.  The only installed
+    reducer is ISR3; a syntactically valid later Event therefore fails closed
+    rather than being interpreted as a no-op or a guessed transition.
+    """
+    if not events:
+        _fail("Execution Journal replay requires a nonempty prefix")
+    journal_id = events[0].get("journal_id")
+    previous_sigil: str | None = None
+    for expected_sequence, event in enumerate(events, 1):
+        validate_execution_journal_event_v1(event)
+        if event["journal_id"] != journal_id:
+            _fail("Execution Journal replay prefix contains multiple journal identities")
+        if event["sequence"] != expected_sequence:
+            _fail("Execution Journal replay prefix has a sequence gap")
+        if event["previous_event_sigil"] != previous_sigil:
+            _fail("Execution Journal replay prefix has a broken Event chain")
+        previous_sigil = event["event_sigil"]
+    if head is not None:
+        validate_execution_journal_head_v1(head)
+        last = events[-1]
+        if (
+            head["journal_id"] != journal_id
+            or head["last_sequence"] != last["sequence"]
+            or head["last_event_id"] != last["event_id"]
+            or head["last_event_sigil"] != last["event_sigil"]
+        ):
+            _fail("Execution Journal Head disagrees with replay prefix")
+    if len(events) != 1:
+        _fail("Execution Journal replay reducer is unavailable for later Events")
+    return replay_execution_initial_prefix_v1(events, head=head)
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([

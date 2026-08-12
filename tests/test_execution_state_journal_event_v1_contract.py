@@ -23,6 +23,7 @@ from benchwork.execution_contracts import (
     load_execution_result_ingress_receipt_v1,
     load_execution_state_v1,
     replay_execution_initial_prefix_v1,
+    replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
     validate_execution_journal_head_v1,
@@ -481,8 +482,19 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     assert load_execution_journal_head_v1(json.dumps(head)) == head
     validate_execution_initial_state_supplied_facts_v1(event, state, head)
     assert replay_execution_initial_prefix_v1([event], head=head) == state
+    assert replay_execution_journal_prefix_v1([event], head=head) == state
     with pytest.raises(Exception, match="only the initial one-Event prefix"):
         replay_execution_initial_prefix_v1([event, event])
+    with pytest.raises(Exception, match="sequence gap"):
+        replay_execution_journal_prefix_v1([event, event])
+
+    wrong_head = deepcopy(head)
+    wrong_head["last_event_id"] = "JE-TWO"
+    wrong_head["head_sigil"] = content_sigil(
+        {key: member for key, member in wrong_head.items() if key != "head_sigil"}
+    )
+    with pytest.raises(Exception, match="Head disagrees"):
+        replay_execution_journal_prefix_v1([event], head=wrong_head)
 
     wrong_initial_event = deepcopy(event)
     wrong_initial_event["event_type"] = "executor.clock_uncertain"
@@ -491,6 +503,18 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     with pytest.raises(Exception, match="execution-journal-event"):
         replay_execution_initial_prefix_v1([wrong_initial_event])
+
+    valid_later_event = build_execution_journal_event_v1(_event_unsigned(), context={
+        "ordinary_l12_suffix": True,
+        "ordinary_l12_anchor": True,
+        "l12_idempotency_key_sigil": SIGIL,
+    })
+    valid_later_event["previous_event_sigil"] = event["event_sigil"]
+    valid_later_event["event_sigil"] = content_sigil(
+        {key: member for key, member in valid_later_event.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="reducer is unavailable"):
+        replay_execution_journal_prefix_v1([event, valid_later_event])
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )
