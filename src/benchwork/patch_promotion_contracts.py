@@ -124,7 +124,10 @@ def validate_patch_bundle_v1(bundle: dict[str, Any]) -> None:
         previous = blob_union.setdefault(blob["sigil"], blob)
         if previous != blob:
             _fail("Patch Bundle Blob union has inconsistent metadata for one Sigil")
-    if sum(blob["size_bytes"] for blob in blob_union.values()) > bundle["limits"]["max_total_bytes"]:
+    if (
+        sum(blob["size_bytes"] for blob in blob_union.values())
+        > bundle["limits"]["max_total_bytes"]
+    ):
         _fail("Patch Bundle Blob union exceeds max_total_bytes")
 
 
@@ -224,7 +227,9 @@ def validate_patch_promotion_target_guard_v1(guard: dict[str, Any]) -> None:
     if times[0] is not None and _time(times[1]) < _time(times[0]):
         _fail("Patch Promotion Target Guard expires before acquisition")
     active = {"HELD", "RENEWING", "RELEASING", "FENCING", "RECOVERING"}
-    if guard["state"] in active and (any(value is None for value in anchors) or any(value is None for value in times)):
+    if guard["state"] in active and (
+        any(value is None for value in anchors) or any(value is None for value in times)
+    ):
         _fail("Patch Promotion active Target Guard lacks a deadline anchor")
     if guard["fence_floor"] > guard["fencing_generation"]:
         _fail("Patch Promotion Target Guard fence floor exceeds fencing generation")
@@ -242,7 +247,9 @@ def validate_patch_promotion_authorization_v1(authorization: dict[str, Any]) -> 
     """Validate local immutable Authorization bytes, without resolving its Preview."""
     validate_instance("patch-promotion-authorization-1.0.json", authorization)
     _check_nfc(authorization)
-    if authorization["authorization_sigil"] != content_sigil(_without(authorization, "authorization_sigil")):
+    if authorization["authorization_sigil"] != content_sigil(
+        _without(authorization, "authorization_sigil")
+    ):
         _fail("Patch Promotion Authorization self-Sigil mismatch")
     paths = [path.encode("utf-8") for path in authorization["affected_paths"]]
     if paths != sorted(paths) or len(paths) != len(set(paths)):
@@ -264,13 +271,15 @@ def validate_patch_promotion_attempt_v1(attempt: dict[str, Any]) -> None:
 
 
 def validate_patch_promotion_attempt_supplied_authorization_v1(
-    attempt: dict[str, Any], authorization: dict[str, Any],
+    attempt: dict[str, Any],
+    authorization: dict[str, Any],
 ) -> None:
     """Bind an allocated Attempt to its exact supplied Authorization document."""
     validate_patch_promotion_attempt_v1(attempt)
     validate_patch_promotion_authorization_v1(authorization)
     if (
-        attempt["authorization"] != {"id": authorization["authorization_id"], "sigil": authorization["authorization_sigil"]}
+        attempt["authorization"]
+        != {"id": authorization["authorization_id"], "sigil": authorization["authorization_sigil"]}
         or attempt["operation_sigil"] != authorization["operation_sigil"]
         or attempt["target"] != authorization["target"]
         or attempt["target_content_generation"] != authorization["target_content_generation"]
@@ -278,6 +287,43 @@ def validate_patch_promotion_attempt_supplied_authorization_v1(
         or attempt["mode"] != authorization["mode"]
     ):
         _fail("Patch Promotion Attempt disagrees with supplied Authorization")
+
+
+def validate_patch_promotion_outcome_v1(outcome: dict[str, Any]) -> None:
+    """Validate local terminal Outcome closure without resolving its Journal Event."""
+    validate_instance("patch-promotion-outcome-1.0.json", outcome)
+    _check_nfc(outcome)
+    if outcome["outcome_sigil"] != content_sigil(_without(outcome, "outcome_sigil")):
+        _fail("Patch Promotion Outcome self-Sigil mismatch")
+    times = outcome["timestamps"]
+    ordered_times = [times["created_at"]]
+    ordered_times.extend(
+        value
+        for value in (times["mutation_started_at"], times["verification_started_at"])
+        if value is not None
+    )
+    ordered_times.append(times["terminal_at"])
+    if [_time(value) for value in ordered_times] != sorted(_time(value) for value in ordered_times):
+        _fail("Patch Promotion Outcome timestamps are not non-decreasing")
+    observations = outcome["path_observations"]
+    paths = [item["path_bytes"].encode("utf-8") for item in observations]
+    if paths != sorted(paths) or len(paths) != len(set(paths)):
+        _fail("Patch Promotion Outcome path observations must be sorted and unique")
+    verifier = outcome["verifier_evidence"]
+    verifier_sigils = [item["sigil"].encode("ascii") for item in verifier]
+    if verifier_sigils != sorted(verifier_sigils) or len(verifier_sigils) != len(
+        set(verifier_sigils)
+    ):
+        _fail("Patch Promotion Outcome verifier evidence must be sorted and unique")
+    adapter_evidence = outcome["adapter_write_evidence"]
+    if adapter_evidence is not None:
+        receipts = adapter_evidence["receipt_sigils"]
+        if receipts != sorted(receipts) or len(receipts) != len(set(receipts)):
+            _fail("Patch Promotion Outcome adapter receipt Sigils must be sorted and unique")
+        if adapter_evidence["mode"] != "FULL_TREE_ATOMIC_CAS" and len(receipts) != len(
+            observations
+        ):
+            _fail("Patch Promotion Outcome per-entry evidence must cover every path observation")
 
 
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:
@@ -316,7 +362,9 @@ def load_patch_promotion_journal_head_v1(raw: str | bytes | bytearray) -> dict[s
 
 
 def validate_patch_promotion_journal_prefix_v1(
-    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+    events: list[dict[str, Any]],
+    *,
+    head: dict[str, Any] | None = None,
 ) -> None:
     """Validate one complete caller-supplied contiguous Promotion prefix."""
     if not events:
