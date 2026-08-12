@@ -519,6 +519,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     closed_state = replay_execution_supplied_state_suffix_v1(cleaning_state, [closed])
     assert closed_state["attempts"][0]["revision"] == 11
 
+    late_rejection = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-LATEREJECT", "sequence": 16, "event_type": "attempt.result_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 11, "next_revision": 12}], "causation_event_id": closed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"disposition_kind": "LATE_OR_CONFLICTING_REJECTION", "message_sigil": SIGIL, "claimed_result_sigil": SIGIL, "received_at": receipt["received_at"], "reason_codes": ["LEASE_TERMINAL"], "historical_disposition_event_id": accepted["event_id"]}, "previous_event_sigil": closed["event_sigil"]})
+    late_rejected_state = replay_execution_supplied_state_suffix_v1(closed_state, [late_rejection])
+    assert late_rejected_state["attempts"][0]["result_binding"] == accepted_state["attempts"][0]["result_binding"]
+    assert late_rejected_state["attempts"][0]["revision"] == 12
+
+    wrong_late_rejection = deepcopy(late_rejection)
+    wrong_late_rejection["payload"]["historical_disposition_event_id"] = None
+    wrong_late_rejection = build_execution_journal_event_v1({key: value for key, value in wrong_late_rejection.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(closed_state, [wrong_late_rejection])
+
     premature_capture = deepcopy(closed)
     premature_capture["payload"]["step"] = "ACCOUNTING_CAPTURED"
     premature_capture = build_execution_journal_event_v1({key: value for key, value in premature_capture.items() if key != "event_sigil"})

@@ -1255,6 +1255,32 @@ def _reduce_result_rejected_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_late_result_rejected_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Retain a late/conflicting Result rejection without rewriting disposition."""
+    if len(state["attempts"]) != 1:
+        _fail("Late Result rejection reducer requires one Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    result = attempt["result_binding"]
+    terminal_states = {"SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "POLICY_VIOLATED", "LEASE_EXPIRED", "LOST", "FENCED", "REJECTED"}
+    historical = result.get("disposition_event_id") if result["kind"] != "NONE" else None
+    if (
+        event["event_type"] != "attempt.result_rejected"
+        or attempt["state"] not in {"DRAINING", "STOPPING", "CLEANING", *terminal_states}
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or payload.get("disposition_kind") != "LATE_OR_CONFLICTING_REJECTION"
+        or payload.get("historical_disposition_event_id") != historical
+        or not payload.get("reason_codes")
+    ):
+        _fail("Late Result rejection Event disagrees with historical Attempt disposition")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close a running Attempt after its immutable result disposition."""
     if len(state["attempts"]) != 1:
@@ -1686,10 +1712,13 @@ def replay_execution_supplied_state_suffix_v1(
             receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result acceptance")
             current = _reduce_result_accepted_v1(current, event, evidence, receipt)
         elif event["event_type"] == "attempt.result_rejected":
-            evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"].get("observation_evidence_disposition_binding", {}).get("observation_evidence_id", ""), "observation_evidence_id", "Result rejection")
-            intake = current["attempts"][0]["result_intake"]
-            receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result rejection")
-            current = _reduce_result_rejected_v1(current, event, evidence, receipt)
+            if event["payload"].get("disposition_kind") == "FIRST_DISPOSITION_REJECTION":
+                evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"].get("observation_evidence_disposition_binding", {}).get("observation_evidence_id", ""), "observation_evidence_id", "Result rejection")
+                intake = current["attempts"][0]["result_intake"]
+                receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result rejection")
+                current = _reduce_result_rejected_v1(current, event, evidence, receipt)
+            else:
+                current = _reduce_late_result_rejected_v1(current, event)
         elif event["event_type"] == "attempt.draining":
             current = _reduce_attempt_draining_v1(current, event)
         elif event["event_type"] == "attempt.cleaning":
