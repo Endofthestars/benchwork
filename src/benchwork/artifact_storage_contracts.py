@@ -925,7 +925,10 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     }
     for projection in state["canonical_reference_intents"]:
         intent = canonical_intents.pop(projection["reference_intent_id"], None)
-        if (projection["state"] == "OPEN") != (intent is not None):
+        if (
+            (projection["state"] == "OPEN") != (intent is not None)
+            or (intent is not None and intent["owner_id"] != projection["reference_intent_id"])
+        ):
             _fail("Artifact Storage State canonical-reference Intent disagrees with projection")
     if canonical_intents:
         _fail("Artifact Storage State canonical-reference Intent lacks a projection")

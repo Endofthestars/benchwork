@@ -1322,6 +1322,14 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     with pytest.raises(AthanorError, match="canonical-reference Intent disagrees"):
         validate_artifact_storage_state_v1(missing_canonical_intent)
 
+    wrong_canonical_owner = deepcopy(canonical_state)
+    wrong_canonical_owner["open_intents"][0]["owner_id"] = "RI-OTHER"  # type: ignore[index]
+    wrong_canonical_owner["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_canonical_owner.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="canonical-reference Intent disagrees"):
+        validate_artifact_storage_state_v1(wrong_canonical_owner)
+
     mismatched_selected = deepcopy(committed_state)
     mismatched_selected["replicas"][0]["record"]["object"]["generation"] = "OTHER"
     mismatched_selected["replicas"][0]["record"]["record_sigil"] = content_sigil({
