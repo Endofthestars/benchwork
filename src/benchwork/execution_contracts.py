@@ -206,6 +206,10 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     if (executor["active_recovery_id"] is not None) != ("RECOVERY_ACTIVE" in gates):
         _fail("Execution State recovery gate disagrees with active recovery")
     worker_ids: set[str] = set()
+    for worker in state["workers"]:
+        session_ids = worker["worker_session_ids"]
+        if session_ids != sorted(session_ids, key=lambda value: _unsigned_ascii(value, "Worker session ID")):
+            _fail("Worker worker_session_ids are not unsigned-ASCII sorted")
     for session in state["worker_sessions"]:
         session_id = session["worker_session_id"]
         if session_id in worker_ids:
@@ -214,11 +218,38 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
         capacity = session["capacity"]
         if capacity is not None and session["capacity_in_use"] > capacity:
             _fail("Worker-Session capacity_in_use exceeds capacity")
-        if session["lease_ids"] != sorted(session["lease_ids"]):
+        if (session["last_heartbeat_sequence"] is None) != (
+            session["last_heartbeat_message_sigil"] is None
+        ):
+            _fail("Worker-Session heartbeat fields must be jointly null or present")
+        if session["state"] in {"REGISTERED", "OFFLINE", "QUARANTINED", "CLOSED"} and (
+            session["next_heartbeat_due_at"] is not None
+        ):
+            _fail("Worker-Session terminal or unready state must not have a heartbeat due time")
+        if session["lease_ids"] != sorted(
+            session["lease_ids"], key=lambda value: _unsigned_ascii(value, "Lease ID")
+        ):
             _fail("Worker-Session lease_ids are not unsigned-ASCII sorted")
     lease_ids = [lease["lease_id"] for lease in state["leases"]]
     if len(lease_ids) != len(set(lease_ids)):
         _fail("duplicate Lease projection identity")
+    terminal_lease_states = {"RELEASED", "REVOKED", "EXPIRED", "FENCED"}
+    for lease in state["leases"]:
+        heartbeat_members = (
+            lease["last_heartbeat_sequence"],
+            lease["last_heartbeat_message_sigil"],
+            lease["last_resource_sample_sigil"],
+        )
+        if any(member is None for member in heartbeat_members) and not all(
+            member is None for member in heartbeat_members
+        ):
+            _fail("Lease heartbeat fields must be jointly null or present")
+        terminal = lease["state"] in terminal_lease_states
+        if (lease["next_heartbeat_due_at"] is None) != (lease["state"] != "ACTIVE"):
+            _fail("Lease heartbeat due time disagrees with lease state")
+        tombstone_members = (lease["tombstone_generation"], lease["tombstone_event_sigil"])
+        if (all(member is not None for member in tombstone_members)) != terminal:
+            _fail("Lease tombstone fields disagree with terminal lease state")
     keys = [_idempotency_projection(record) for record in state["idempotency_records"]]
     if keys != sorted(keys):
         _fail("idempotency_records are not sorted by the canonical 11-rank key")

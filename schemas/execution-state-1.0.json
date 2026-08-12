@@ -76,7 +76,7 @@
     "terminal_event_binding": {
       "oneOf": [
         {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
-        {"type": "object", "additionalProperties": false, "required": ["kind", "terminal_state", "terminal_event_id", "terminal_event_sigil", "terminal_sequence", "terminal_recorded_at"], "properties": {"kind": {"const": "PRESENT"}, "terminal_state": {"oneOf": [{"$ref": "#/$defs/job_state"}, {"$ref": "#/$defs/attempt_state"}, {"$ref": "#/$defs/lease_state"}]}, "terminal_event_id": {"$ref": "#/$defs/event_id"}, "terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "terminal_sequence": {"$ref": "#/$defs/positive_u63"}, "terminal_recorded_at": {"$ref": "#/$defs/timestamp"}}}
+        {"type": "object", "additionalProperties": false, "required": ["kind", "terminal_state", "terminal_event_id", "terminal_event_sigil", "terminal_sequence", "terminal_recorded_at"], "properties": {"kind": {"const": "PRESENT"}, "terminal_state": {"anyOf": [{"$ref": "#/$defs/job_state"}, {"$ref": "#/$defs/attempt_state"}, {"$ref": "#/$defs/lease_state"}]}, "terminal_event_id": {"$ref": "#/$defs/event_id"}, "terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "terminal_sequence": {"$ref": "#/$defs/positive_u63"}, "terminal_recorded_at": {"$ref": "#/$defs/timestamp"}}}
       ]
     },
     "resource_counter_floors": {

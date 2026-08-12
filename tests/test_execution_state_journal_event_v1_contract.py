@@ -40,6 +40,43 @@ SESSION_ID = "WS-" + "0" * 26
 LEASE_ID = "LS-" + "0" * 26
 
 
+def _reseal_state(state: dict[str, Any]) -> None:
+    state["state_sigil"] = content_sigil(
+        {key: member for key, member in state.items() if key != "state_sigil"}
+    )
+
+
+def _state_with_session_and_lease() -> dict[str, Any]:
+    state = json.loads((FIXTURES / "execution-state-v1" / "valid-initial.json").read_text())
+    state["workers"] = [{
+        "worker_id": "WK-ONE", "revision": 0, "state": "ENABLED",
+        "worker_binding_sigil": SIGIL, "definition_revision": 0,
+        "worker_session_ids": [SESSION_ID], "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }]
+    state["worker_sessions"] = [{
+        "worker_session_id": SESSION_ID, "revision": 0, "state": "READY", "worker_id": "WK-ONE",
+        "worker_binding_sigil": SIGIL, "worker_session_binding_sigil": SIGIL, "executor_epoch": 1,
+        "worker_session_heartbeat_policy_id": "WSHP-" + "A" * 64,
+        "worker_session_heartbeat_policy_sigil": SIGIL, "capacity": 1, "capacity_in_use": 1,
+        "last_heartbeat_sequence": 1, "last_heartbeat_message_sigil": SIGIL,
+        "last_resource_sample_sigil": SIGIL,
+        "resource_counter_floors": {"cpu_time_seconds": None, "storage_bytes_written": None, "network_egress_bytes": None},
+        "next_heartbeat_due_at": STAMP, "lease_ids": [LEASE_ID], "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }]
+    state["leases"] = [{
+        "lease_id": LEASE_ID, "revision": 0, "state": "ACTIVE", "lease_binding_sigil": SIGIL,
+        "job_id": JOB_ID, "attempt_id": "AT-ONE", "worker_id": "WK-ONE", "worker_session_id": SESSION_ID,
+        "executor_epoch": 1, "fencing_generation": 0, "claim_due_at": STAMP, "expiry_due_at": STAMP,
+        "maximum_expiry_due_at": STAMP, "last_heartbeat_sequence": 1,
+        "last_heartbeat_message_sigil": SIGIL, "last_resource_sample_sigil": SIGIL,
+        "resource_counter_floors": {"cpu_time_seconds": None, "storage_bytes_written": None, "network_egress_bytes": None},
+        "next_heartbeat_due_at": STAMP, "renewal_counter": 0, "terminal_event_binding": {"kind": "NONE"},
+        "tombstone_generation": None, "tombstone_event_sigil": None, "last_event_id": "JE-ONE", "last_event_sigil": SIGIL,
+    }]
+    _reseal_state(state)
+    return state
+
+
 def _event_unsigned() -> dict[str, Any]:
     return {
         "schema_version": "execution-journal-event/1.0",
@@ -264,12 +301,61 @@ def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
     schema = json.loads((SCHEMAS / "execution-state-1.0.json").read_text())
     assert len(schema["$defs"]["worker_session_projection"]["required"]) == 19
     assert len(schema["$defs"]["lease_projection"]["required"]) == 24
+    assert "anyOf" in schema["$defs"]["terminal_event_binding"]["oneOf"][1]["properties"]["terminal_state"]
     assert schema["$defs"]["idempotency_operation_kind"]["enum"] == list(
         IDEMPOTENCY_OPERATION_KINDS_V1
     )
     raw = (FIXTURES / "execution-state-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_state_v1(raw)
+
+
+def test_state_locally_binds_session_and_lease_heartbeat_projections() -> None:
+    state = _state_with_session_and_lease()
+    assert load_execution_state_v1(json.dumps(state)) == state
+
+    bad_session = deepcopy(state)
+    bad_session["worker_sessions"][0]["last_heartbeat_message_sigil"] = None
+    _reseal_state(bad_session)
+    with pytest.raises(Exception, match="Worker-Session heartbeat fields"):
+        load_execution_state_v1(json.dumps(bad_session))
+
+    bad_session_due = deepcopy(state)
+    bad_session_due["worker_sessions"][0]["state"] = "OFFLINE"
+    _reseal_state(bad_session_due)
+    with pytest.raises(Exception, match="Worker-Session terminal or unready"):
+        load_execution_state_v1(json.dumps(bad_session_due))
+
+    bad_lease = deepcopy(state)
+    bad_lease["leases"][0]["last_resource_sample_sigil"] = None
+    _reseal_state(bad_lease)
+    with pytest.raises(Exception, match="Lease heartbeat fields"):
+        load_execution_state_v1(json.dumps(bad_lease))
+
+    bad_lease_due = deepcopy(state)
+    bad_lease_due["leases"][0]["next_heartbeat_due_at"] = None
+    _reseal_state(bad_lease_due)
+    with pytest.raises(Exception, match="Lease heartbeat due time"):
+        load_execution_state_v1(json.dumps(bad_lease_due))
+
+    bad_tombstone = deepcopy(state)
+    bad_tombstone["leases"][0]["tombstone_generation"] = 0
+    bad_tombstone["leases"][0]["tombstone_event_sigil"] = SIGIL
+    _reseal_state(bad_tombstone)
+    with pytest.raises(Exception, match="Lease tombstone fields"):
+        load_execution_state_v1(json.dumps(bad_tombstone))
+
+    terminal_lease = deepcopy(state)
+    terminal_lease["leases"][0].update({
+        "state": "RELEASED", "next_heartbeat_due_at": None,
+        "tombstone_generation": 0, "tombstone_event_sigil": SIGIL,
+        "terminal_event_binding": {
+            "kind": "PRESENT", "terminal_state": "RELEASED", "terminal_event_id": "JE-TWO",
+            "terminal_event_sigil": SIGIL, "terminal_sequence": 2, "terminal_recorded_at": STAMP,
+        },
+    })
+    _reseal_state(terminal_lease)
+    assert load_execution_state_v1(json.dumps(terminal_lease)) == terminal_lease
 
 
 def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> None:
