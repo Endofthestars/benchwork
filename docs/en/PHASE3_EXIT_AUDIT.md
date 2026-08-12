@@ -8,7 +8,7 @@ runtime or scientific authority.
 | --- | --- | --- |
 | Five accepted RFCs | RFC-0011 through RFC-0015 remain `draft`. | Blocked by explicit RFC acceptance. |
 | Executable Schemas and examples | `scripts/ci/check-schemas.py` validates 214 published Schemas; Phase 3 fixtures are checked by the contract suite. | Present. |
-| Threat-model review | RFC-0011 and RFC-0013 contain threat models, but there is no recorded independent review decision. | Missing retained review evidence. |
+| Threat-model review | [Independent local trust-boundary review](PHASE3_THREAT_MODEL_REVIEW.md) found no P1/P2 in the bounded implementation slice. It explicitly leaves external authority and RFC acceptance open. | Partial retained review evidence. |
 | Conformance suite | `scripts/ci/check-phase3-contracts.py` validates the contract-only local slice. It deliberately does not establish full conformance. | Partial. |
 | Local reference vertical slice | Local `benchwork-local-*/0.1` storage and execution primitives retain bounded operational evidence. RFC-0012 replay preserves multi-Attempt history, fresh retry-allocation identities, lease-fence monotonicity, Result acceptance local closure, and supplied-facts assurance-Claim closure. RFC-0013 replay also projects exact supplied provenance-policy registrations. Retry scheduling/readiness and complete Storage replay remain unavailable; all authority-bearing paths fail closed. | Partial. |
 | Local runtime lifecycle demonstrations | `tests/test_execution.py` exercises lease-expired negative terminalization, cancellation, duplicate terminal delivery rejection, stale observation cursors, and restart recovery across queued and terminal Jobs. | Present for the bounded `benchwork-local-execution/0.1` runtime only. |
@@ -41,7 +41,7 @@ scientific fact.
    the installed replay path.
 4. Resolve the authority and State-evolution prerequisites in the
    [Phase 3 blocker register](PHASE3_BLOCKER_REGISTER.md), then run the
-   expanded conformance suite and retain independent threat-model review
-   evidence.
+   expanded conformance suite and retain the required formal threat-model
+   review evidence beyond the bounded local review.
 5. Request explicit acceptance for each RFC. This repository forbids sealing
    an RFC without that confirmation.
