@@ -192,6 +192,9 @@ def validate_execution_state_v1(state: dict[str, Any]) -> None:
     """Validate a State cache as bytes/projections, never as replay authority."""
     validate_instance("execution-state-1.0.json", state)
     _check_nfc(state)
+    build = state["executor"]["executor_build_binding"]
+    if build["executor_build_sigil"] != content_sigil(_without(build, "executor_build_sigil")):
+        _fail("Execution State executor build self-Sigil mismatch")
     worker_ids: set[str] = set()
     for session in state["worker_sessions"]:
         session_id = session["worker_session_id"]

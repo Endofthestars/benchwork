@@ -26,6 +26,7 @@ from benchwork.execution_contracts import (
     validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
 )
+from benchwork.schema_validation import validate_instance
 
 
 ROOT = Path(__file__).parents[1]
@@ -269,6 +270,44 @@ def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
     raw = (FIXTURES / "execution-state-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_state_v1(raw)
+
+
+def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> None:
+    event = json.loads(
+        (FIXTURES / "execution-journal-event-v1" / "valid-initial.json").read_text()
+    )
+    state = json.loads(
+        (FIXTURES / "execution-state-v1" / "valid-initial.json").read_text()
+    )
+    head = json.loads(
+        (FIXTURES / "execution-journal-head-v1" / "valid-initial.json").read_text()
+    )
+    assert load_execution_journal_event_v1(json.dumps(event)) == event
+    assert load_execution_state_v1(json.dumps(state)) == state
+    validate_instance("execution-journal-head-1.0.json", head)
+    assert head["head_sigil"] == content_sigil(
+        {key: member for key, member in head.items() if key != "head_sigil"}
+    )
+    for record in (state["journal_binding"], head):
+        assert record["journal_id"] == event["journal_id"]
+        assert record["through_sequence" if record is state["journal_binding"] else "last_sequence"] == event["sequence"]
+        assert record["through_event_id" if record is state["journal_binding"] else "last_event_id"] == event["event_id"]
+        assert record["through_event_sigil" if record is state["journal_binding"] else "last_event_sigil"] == event["event_sigil"]
+    assert state["executor"]["executor_build_binding"] == event["payload"]["executor_build_binding"]
+    assert state["executor"]["last_event_sigil"] == event["event_sigil"]
+    for member in (
+        "recoveries", "workers", "worker_sessions", "jobs", "attempts",
+        "leases", "log_streams", "deadlines", "idempotency_records",
+    ):
+        assert state[member] == []
+
+    tampered = deepcopy(state)
+    tampered["executor"]["executor_build_binding"]["implementation_version"] = "V2"
+    tampered["state_sigil"] = content_sigil(
+        {key: member for key, member in tampered.items() if key != "state_sigil"}
+    )
+    with pytest.raises(Exception, match="executor build self-Sigil"):
+        load_execution_state_v1(json.dumps(tampered))
 
 
 def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -> None:

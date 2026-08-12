@@ -1,0 +1,1 @@
+{"schema_version":"execution-journal-head/1.0","limit_profile":"EXECUTION_JOURNAL_V1_FIXED_LIMITS","journal_id":"EJ-ONE","last_sequence":1,"last_event_id":"JE-ONE","last_event_sigil":"sha256:ab35540a99f75c38d45a733a6ef79bfd8a751cc82ef5210a407f6bb79ef2994d","updated_at":"2026-08-06T00:00:00Z","head_sigil":"sha256:479cf50ece60c4728eeb4cd6b2d8240f2dfb3541bfa42aee143111b972787847"}
