@@ -555,6 +555,14 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     with pytest.raises(Exception, match="decreasing recorded_at"):
         replay_execution_journal_prefix_v1([event, decreasing_time])
+
+    conflicting_build = deepcopy(clock_uncertain)
+    conflicting_build["executor_build_sigil"] = SIGIL
+    conflicting_build["event_sigil"] = content_sigil(
+        {key: member for key, member in conflicting_build.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="conflicting Executor build"):
+        replay_execution_journal_prefix_v1([event, conflicting_build])
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )

@@ -564,6 +564,7 @@ def replay_execution_journal_prefix_v1(
     journal_id = events[0].get("journal_id")
     previous_sigil: str | None = None
     previous_recorded_at: datetime | None = None
+    epoch_build_sigils: dict[tuple[str, int], str] = {}
     for expected_sequence, event in enumerate(events, 1):
         validate_execution_journal_event_v1(event)
         if event["journal_id"] != journal_id:
@@ -575,6 +576,10 @@ def replay_execution_journal_prefix_v1(
         recorded_at = _parse_time(event["recorded_at"])
         if previous_recorded_at is not None and recorded_at < previous_recorded_at:
             _fail("Execution Journal replay prefix has decreasing recorded_at time")
+        epoch_key = (event["executor_instance_id"], event["executor_epoch"])
+        prior_build_sigil = epoch_build_sigils.setdefault(epoch_key, event["executor_build_sigil"])
+        if event["executor_build_sigil"] != prior_build_sigil:
+            _fail("Execution Journal replay prefix has conflicting Executor build Sigils")
         previous_sigil = event["event_sigil"]
         previous_recorded_at = recorded_at
     if head is not None:
