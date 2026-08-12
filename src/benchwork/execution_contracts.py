@@ -1113,11 +1113,115 @@ def _reduce_attempt_running_v1(state: dict[str, Any], event: dict[str, Any]) -> 
     return build_execution_state_v1(reduced)
 
 
+def _reduce_result_ingress_received_v1(
+    state: dict[str, Any], event: dict[str, Any], receipt: dict[str, Any], intent: dict[str, Any]
+) -> dict[str, Any]:
+    """Record one immutable Worker-result receipt for a running Attempt.
+
+    The supplied intent is deliberately compared, rather than treated as an
+    append permission.  A caller still has to establish the durable Index and
+    Journal Head separately.
+    """
+    validate_execution_result_ingress_receipt_v1(receipt)
+    validate_execution_result_ingress_event_intent_v1(intent)
+    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
+        _fail("Result ingress reducer requires one running Attempt and active Lease")
+    attempt, lease = state["attempts"][0], state["leases"][0]
+    executor, payload = state["executor"], event["payload"]
+    owner = receipt["owner_binding"]
+    receipt_binding = {
+        "ingress_receipt_id": receipt["ingress_receipt_id"],
+        "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+    }
+    expected_owner = {
+        "job_id": attempt["job_id"], "job_binding_sigil": state["jobs"][0]["job_binding_sigil"],
+        "attempt_id": attempt["attempt_id"], "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+        "lease_id": lease["lease_id"], "lease_binding_sigil": lease["lease_binding_sigil"],
+        "worker_id": attempt["worker_session_binding"].get("worker_id"),
+        "worker_binding_sigil": attempt["worker_session_binding"].get("worker_binding_sigil"),
+        "worker_session_id": attempt["worker_session_binding"].get("worker_session_id"),
+        "worker_session_binding_sigil": attempt["worker_session_binding"].get("worker_session_binding_sigil"),
+        "executor_epoch": lease["executor_epoch"], "fence_tuple": attempt["public_fence_tuple"],
+    }
+    expected_payload = {
+        "ingress_receipt_id": receipt["ingress_receipt_id"],
+        "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+        "result_sigil": receipt["result_sigil"],
+        "observation_evidence_subject_sigil": receipt["result_observation_binding"]["observation_evidence_subject_sigil"],
+        "received_at": receipt["received_at"],
+    }
+    if (
+        event["event_type"] != "attempt.result_ingress_received"
+        or attempt["state"] != "RUNNING" or lease["state"] != "ACTIVE"
+        or attempt["result_intake"] != {"kind": "NONE"}
+        or owner != expected_owner
+        or receipt["receiver_identity"]["executor_instance_id"] != executor["executor_instance_id"]
+        or intent["result_ingress_receipt_binding"] != receipt_binding
+        or intent["event_candidate"] != event
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != lease["executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or payload != expected_payload
+    ):
+        _fail("Result ingress Event disagrees with running Attempt or supplied Receipt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1,
+        "result_intake": {"kind": "RECEIVED", "result_ingress_receipt_binding": receipt_binding,
+            "observation_evidence_subject_sigil": expected_payload["observation_evidence_subject_sigil"],
+            "result_sigil": receipt["result_sigil"], "received_at": receipt["received_at"],
+            "ingress_event_intent_id": intent["ingress_event_intent_id"], "ingress_event_id": event["event_id"],
+            "ingress_event_sigil": event["event_sigil"]},
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_result_accepted_v1(
+    state: dict[str, Any], event: dict[str, Any], evidence: dict[str, Any], receipt: dict[str, Any]
+) -> dict[str, Any]:
+    """Accept a received Result only from MATCHED supplied Observation Evidence."""
+    validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
+    if len(state["attempts"]) != 1 or len(state["leases"]) != 1:
+        _fail("Result acceptance reducer requires one running Attempt and active Lease")
+    attempt, lease = state["attempts"][0], state["leases"][0]
+    executor, payload, intake = state["executor"], event["payload"], attempt["result_intake"]
+    disposition = {"result_ingress_receipt_binding": intake["result_ingress_receipt_binding"],
+        "observation_evidence_subject_sigil": intake["observation_evidence_subject_sigil"],
+        "observation_evidence_id": evidence["observation_evidence_id"],
+        "observation_evidence_sigil": evidence["observation_evidence_sigil"]}
+    if (
+        event["event_type"] != "attempt.result_accepted" or attempt["state"] != "RUNNING"
+        or lease["state"] != "ACTIVE" or intake["kind"] != "RECEIVED"
+        or evidence["assessment"]["kind"] != "MATCHED"
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != lease["executor_epoch"]
+        or event["causation_event_id"] != intake["ingress_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or payload != {"result_sigil": intake["result_sigil"], "lease_revision": lease["revision"],
+            "fence_tuple": attempt["public_fence_tuple"], "received_at": intake["received_at"],
+            "validation_evidence_sigil": evidence["observation_evidence_sigil"],
+            "observation_evidence_disposition_binding": disposition}
+    ):
+        _fail("Result acceptance Event disagrees with received Result or Observation Evidence")
+    reduced = _advance_journal_binding_v1(state, event)
+    result = {"kind": "ACCEPTED", "result_sigil": intake["result_sigil"],
+        "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"],
+        "disposition_sequence": event["sequence"]}
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "result_binding": result,
+        "result_intake": {**intake, "kind": "DISPOSED", "observation_evidence_id": evidence["observation_evidence_id"],
+            "observation_evidence_sigil": evidence["observation_evidence_sigil"], "outcome": "ACCEPTED",
+            "disposition_event_id": event["event_id"], "disposition_event_sigil": event["event_sigil"]},
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
     *,
     supplied_leases: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_receipts: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
+    supplied_observation_evidence: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reduce installed suffix Events from one caller-supplied verified State.
 
@@ -1148,6 +1252,15 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_attempt_starting_v1(current, event)
         elif event["event_type"] == "attempt.running":
             current = _reduce_attempt_running_v1(current, event)
+        elif event["event_type"] == "attempt.result_ingress_received":
+            receipt = _find_supplied_v1(supplied_result_ingress_receipts, event["payload"]["ingress_receipt_id"], "ingress_receipt_id", "Result ingress")
+            intent = _find_supplied_v1(supplied_result_ingress_intents, event["event_id"], "event_candidate.event_id", "Result ingress intent")
+            current = _reduce_result_ingress_received_v1(current, event, receipt, intent)
+        elif event["event_type"] == "attempt.result_accepted":
+            evidence = _find_supplied_v1(supplied_observation_evidence, event["payload"]["observation_evidence_disposition_binding"]["observation_evidence_id"], "observation_evidence_id", "Result acceptance")
+            intake = current["attempts"][0]["result_intake"]
+            receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result acceptance")
+            current = _reduce_result_accepted_v1(current, event, evidence, receipt)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current
@@ -1158,7 +1271,15 @@ def _find_supplied_v1(
 ) -> dict[str, Any]:
     if records is None:
         _fail(f"{label} replay requires supplied immutable records")
-    matches = [record for record in records if record.get(member) == identifier]
+    def member_value(record: dict[str, Any]) -> Any:
+        value: Any = record
+        for part in member.split("."):
+            if not isinstance(value, dict):
+                return _MISSING
+            value = value.get(part, _MISSING)
+        return value
+
+    matches = [record for record in records if member_value(record) == identifier]
     if len(matches) != 1:
         _fail(f"{label} replay requires exactly one supplied immutable record")
     return matches[0]

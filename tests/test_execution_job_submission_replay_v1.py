@@ -10,6 +10,9 @@ import pytest
 from benchwork.athanor import AthanorError, content_sigil
 from benchwork.execution_contracts import (
     build_execution_journal_event_v1,
+    derive_observation_evidence_id_v1,
+    derive_observation_evidence_subject_sigil_v1,
+    derive_result_ingress_receipt_id_v1,
     replay_execution_journal_prefix_v1,
     replay_execution_supplied_state_suffix_v1,
     validate_execution_job_v1,
@@ -359,6 +362,54 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     running = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-TEN", "sequence": 10, "event_type": "attempt.running", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:08Z", "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 5, "next_revision": 6}], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"process_tree_identity": "PROCESS", "process_tree_evidence_sigil": SIGIL, "side_effect_handle_set_sigil": SIGIL}, "previous_event_sigil": starting["event_sigil"]})
     running_state = replay_execution_supplied_state_suffix_v1(claimed_state, [starting, running])
     assert running_state["attempts"][0]["state"] == "RUNNING"
+
+    owner = {
+        "job_id": JOB_ID, "job_binding_sigil": job["job_binding_sigil"], "attempt_id": "AT-ONE",
+        "attempt_binding_sigil": attempt["attempt_binding_sigil"], "lease_id": lease["lease_id"],
+        "lease_binding_sigil": lease["lease_binding_sigil"], "worker_id": "WK-ONE",
+        "worker_binding_sigil": SIGIL, "worker_session_id": session_id,
+        "worker_session_binding_sigil": SIGIL, "executor_epoch": 1,
+        "fence_tuple": running_state["attempts"][0]["public_fence_tuple"],
+    }
+    observation = {
+        "runtime_observation": {"started_at": "2026-08-06T00:00:07Z", "ended_at": "2026-08-06T00:00:08Z", "cpu_time_seconds": 0, "peak_memory_bytes": 0, "process_count": 0},
+        "termination_observation": {"kind": "EXITED", "exit_code": 0, "observed_at": "2026-08-06T00:00:08Z", "observation_source": "WORKER"},
+        "observation_evidence_subject_sigil": "",
+    }
+    observation["observation_evidence_subject_sigil"] = derive_observation_evidence_subject_sigil_v1(owner, observation)
+    receipt: dict[str, Any] = {
+        "schema_version": "execution-result-ingress-receipt/1.0", "ingress_receipt_id": "", "owner_binding": owner,
+        "result_sigil": SIGIL, "result_observation_binding": observation, "received_at": "2026-08-06T00:00:08Z",
+        "control_channel_identity_sigil": SIGIL,
+        "credential_verification": {"kind": "VERIFIED", "lease_credential_digest": SIGIL, "verification_profile_sigil": SIGIL, "verified_at": "2026-08-06T00:00:08Z", "verification_sigil": ""},
+        "receiver_identity": {"executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "implementation_sigil": SIGIL},
+        "created_at": "2026-08-06T00:00:08Z", "ingress_receipt_sigil": "",
+    }
+    receipt["ingress_receipt_id"] = derive_result_ingress_receipt_id_v1(receipt)
+    verification = receipt["credential_verification"]
+    verification["verification_sigil"] = content_sigil(["execution-result-ingress-credential-verification/1.0", owner, SIGIL, receipt["received_at"], SIGIL, SIGIL, SIGIL, verification["verified_at"]])
+    receipt["ingress_receipt_sigil"] = content_sigil({key: value for key, value in receipt.items() if key != "ingress_receipt_sigil"})
+    ingress = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-ELEVEN", "sequence": 11, "event_type": "attempt.result_ingress_received", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 6, "next_revision": 7}], "causation_event_id": running["event_id"], "idempotency_key_sigil": content_sigil(["execution-result-ingress-key/1.0", "AT-ONE", SIGIL]), "recovery_action_binding": None, "payload": {"ingress_receipt_id": receipt["ingress_receipt_id"], "ingress_receipt_sigil": receipt["ingress_receipt_sigil"], "result_sigil": SIGIL, "observation_evidence_subject_sigil": observation["observation_evidence_subject_sigil"], "received_at": receipt["received_at"]}, "previous_event_sigil": running["event_sigil"]})
+    intent: dict[str, Any] = {"schema_version": "execution-result-ingress-event-intent/1.0", "ingress_event_intent_id": "OII-" + "A" * 64, "result_ingress_receipt_binding": {"ingress_receipt_id": receipt["ingress_receipt_id"], "ingress_receipt_sigil": receipt["ingress_receipt_sigil"]}, "event_candidate": ingress, "created_at": receipt["received_at"], "intent_sigil": ""}
+    intent["intent_sigil"] = content_sigil({key: value for key, value in intent.items() if key != "intent_sigil"})
+    ingress_state = replay_execution_supplied_state_suffix_v1(running_state, [ingress], supplied_result_ingress_receipts=[receipt], supplied_result_ingress_intents=[intent])
+    assert ingress_state["attempts"][0]["result_intake"]["kind"] == "RECEIVED"
+
+    source = {"source_kind": "WORKER", "source_identity_id": "SOURCE", "source_identity_sigil": SIGIL, "source_identity_profile_sigil": SIGIL, "source_channel_sigil": SIGIL, "source_channel_profile_sigil": SIGIL, "source_registry_id": "REGISTRY", "source_registry_version": "1.0", "source_registry_snapshot_sigil": SIGIL}
+    evidence: dict[str, Any] = {"schema_version": "execution-observation-evidence/1.0", "observation_evidence_id": "", **owner, "result_observation_binding": observation, "result_ingress_receipt_binding": intent["result_ingress_receipt_binding"], "producer_evidence_binding": {"raw_evidence_id": "ORE-" + "A" * 64, "raw_evidence_record_sigil": SIGIL}, "verifier_evidence_binding": {"raw_evidence_id": "ORE-" + "B" * 64, "raw_evidence_record_sigil": SIGIL}, "evidence_profile_binding": {"evidence_profile_id": "PROFILE", "evidence_profile_version": "1.0", "evidence_profile_sigil": SIGIL}, "assessment": {"kind": "MATCHED", "verified_runtime_observation": observation["runtime_observation"], "verified_termination_observation": observation["termination_observation"], "verified_source_binding": source, "reason_bindings": []}, "created_at": receipt["received_at"], "observation_evidence_sigil": ""}
+    evidence["observation_evidence_id"] = derive_observation_evidence_id_v1(evidence)
+    evidence["observation_evidence_sigil"] = content_sigil({key: value for key, value in evidence.items() if key != "observation_evidence_sigil"})
+    disposition = {"result_ingress_receipt_binding": intent["result_ingress_receipt_binding"], "observation_evidence_subject_sigil": observation["observation_evidence_subject_sigil"], "observation_evidence_id": evidence["observation_evidence_id"], "observation_evidence_sigil": evidence["observation_evidence_sigil"]}
+    accepted = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-TWELVE", "sequence": 12, "event_type": "attempt.result_accepted", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 7, "next_revision": 8}], "causation_event_id": ingress["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"result_sigil": SIGIL, "lease_revision": 1, "fence_tuple": owner["fence_tuple"], "received_at": receipt["received_at"], "validation_evidence_sigil": evidence["observation_evidence_sigil"], "observation_evidence_disposition_binding": disposition}, "previous_event_sigil": ingress["event_sigil"]})
+    accepted_state = replay_execution_supplied_state_suffix_v1(ingress_state, [accepted], supplied_result_ingress_receipts=[receipt], supplied_observation_evidence=[evidence])
+    assert accepted_state["attempts"][0]["result_binding"]["kind"] == "ACCEPTED"
+    assert accepted_state["attempts"][0]["result_intake"]["outcome"] == "ACCEPTED"
+
+    malformed = deepcopy(ingress)
+    malformed["payload"]["result_sigil"] = "sha256:" + "b" * 64
+    malformed = build_execution_journal_event_v1({key: value for key, value in malformed.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(running_state, [malformed], supplied_result_ingress_receipts=[receipt], supplied_result_ingress_intents=[intent])
 
     wrong_attempt = deepcopy(attempt)
     wrong_attempt["retry_ordinal"] = 2
