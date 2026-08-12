@@ -3916,7 +3916,7 @@ are:
 | `recovery.started` | Recovery transaction creation in `STARTED`; Executor sets `active_recovery_id` and closes `RECOVERY_ACTIVE` gate | `recovery_id`, `prior_recovery_id`, `replay_through_sequence`, `replay_through_event_sigil`, `old_epoch`, `new_epoch`, `nonterminal_job_ids`, `nonterminal_attempt_ids`, `nonterminal_lease_ids`, `nonterminal_worker_session_ids`, `initial_action_set_sigil` |
 | `recovery.action_set_rebased` | Active Recovery remains in its current phase | `recovery_id`, `phase`, `prior_action_set_sigil`, `replacement_action_set_sigil`, `reason_event_id`, `new_epoch`, `carried_completion_event_ids` |
 | `recovery.phase_advanced` | Recovery phase named in payload | `recovery_id`, `from_phase`, `to_phase`, `completed_action_set_sigil`, `next_action_set_sigil`, `completed_entity_ids`, `quarantined_entity_ids` |
-| `recovery.completed` | Recovery `FINALIZING -> COMPLETED`; Executor clears `active_recovery_id` and reopens `RECOVERY_ACTIVE` gate | `recovery_id`, `completed_action_set_sigil`, `recovered_state_sigil`, `fence_tombstone_event_ids`, `quarantined_entity_ids`, `resumable_job_ids` |
+| `recovery.completed` | Recovery `FINALIZING -> COMPLETED`; Executor clears `active_recovery_id` and reopens `RECOVERY_ACTIVE` gate | `recovery_id`, `completed_action_set_sigil`, `finalizing_state_sigil`, `fence_tombstone_event_ids`, `quarantined_entity_ids`, `resumable_job_ids` |
 | `worker.definition_registered` | Worker definition none `-> REGISTERED` | `worker_binding_sigil`, `definition_revision`, `supersedes_worker_binding_sigil` |
 | `worker.enabled` | Worker definition `REGISTERED`, `DRAINING`, or `QUARANTINED -> ENABLED` | `worker_binding_sigil`, `verification_evidence_set_sigil` |
 | `worker.draining` | Worker definition `ENABLED -> DRAINING` | `reason_code`, `affected_worker_session_ids` |
@@ -4091,7 +4091,7 @@ transaction remains terminal history but does not prevent a later fresh
 | `STARTED` | `FENCING` | `recovery.phase_advanced`; the `STARTED` action set is complete and the exact durable `FENCING` action set is bound. |
 | `FENCING` | `RECONCILING` | `recovery.phase_advanced`; the `FENCING` action set is complete, all old `OFFERED`/`ACTIVE` Leases have durable tombstones, and the exact `RECONCILING` action set is bound. |
 | `RECONCILING` | `FINALIZING` | `recovery.phase_advanced`; reconciliation actions verified, terminated, settled, or quarantined resources and the exact `FINALIZING` action set is bound. |
-| `FINALIZING` | `COMPLETED` | `recovery.completed`; the `FINALIZING` action set, Attempt, assurance, retry, and Job consequences are durable and the replayed state Sigil validates. |
+| `FINALIZING` | `COMPLETED` | `recovery.completed`; the `FINALIZING` action set, Attempt, assurance, retry, and Job consequences are durable and its exact pre-transition State Sigil validates. The completed post-State is then sealed from the Event, avoiding a self-referential Event/State Sigil cycle. |
 
 `COMPLETED` is terminal. Each action-set document is made durable before the
 event that binds its Sigil. A phase event is appended only after every action

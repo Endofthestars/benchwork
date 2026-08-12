@@ -449,7 +449,7 @@
             "required": [
               "recovery_id",
               "completed_action_set_sigil",
-              "recovered_state_sigil",
+              "finalizing_state_sigil",
               "fence_tombstone_event_ids",
               "quarantined_entity_ids",
               "resumable_job_ids"
@@ -459,7 +459,7 @@
               "completed_action_set_sigil": {
                 "$ref": "#/$defs/sigil"
               },
-              "recovered_state_sigil": {
+              "finalizing_state_sigil": {
                 "$ref": "#/$defs/sigil"
               },
               "fence_tombstone_event_ids": {

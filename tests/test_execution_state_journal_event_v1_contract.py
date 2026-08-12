@@ -39,6 +39,7 @@ from benchwork.execution_contracts import (
     replay_execution_journal_supplied_facts_v1,
     replay_execution_supplied_state_suffix_v1,
     replay_execution_empty_recovery_phase_prefix_v1,
+    _reduce_recovery_completed_v1,
     validate_execution_journal_prefix_wire_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
@@ -1182,11 +1183,26 @@ def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
             {"entity_kind": "RECOVERY", "entity_id": "RY-ONE", "preceding_revision": 3, "next_revision": 4},
         ], "causation_event_id": None, "idempotency_key_sigil": None, "recovery_action_binding": None,
         "payload": {"recovery_id": "RY-ONE", "completed_action_set_sigil": action_set["action_set_sigil"],
-                    "recovered_state_sigil": SIGIL, "fence_tombstone_event_ids": [],
+                    "finalizing_state_sigil": state["state_sigil"], "fence_tombstone_event_ids": [],
                     "quarantined_entity_ids": [], "resumable_job_ids": []},
         "previous_event_sigil": SIGIL_B}
     event["event_sigil"] = content_sigil({key: member for key, member in event.items() if key != "event_sigil"})
     validate_execution_recovery_completion_supplied_action_set_v1(state, event, action_set)
+    completed = _reduce_recovery_completed_v1(state, event, action_set)
+    assert completed["executor"]["active_recovery_id"] is None
+    assert completed["executor"]["authority_gates"] == ["CLOCK_UNCERTAIN"]
+    assert completed["recoveries"][0]["state"] == "COMPLETED"
+    assert completed["journal_binding"]["through_event_sigil"] == event["event_sigil"]
+
+    wrong_state = deepcopy(event)
+    wrong_state["payload"]["finalizing_state_sigil"] = SIGIL
+    wrong_state["event_sigil"] = content_sigil({
+        key: member for key, member in wrong_state.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="completion disagrees"):
+        validate_execution_recovery_completion_supplied_action_set_v1(
+            state, wrong_state, action_set
+        )
 
     wrong_set = deepcopy(action_set)
     wrong_set["phase"] = "RECONCILING"

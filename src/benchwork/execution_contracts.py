@@ -2404,6 +2404,14 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_recovery_phase_advanced_v1(
                 current, event, completed_action_set, next_action_set
             )
+        elif event["event_type"] == "recovery.completed":
+            action_set = _find_supplied_v1(
+                supplied_recovery_action_sets,
+                event["payload"]["completed_action_set_sigil"],
+                "action_set_sigil",
+                "Recovery completion action set",
+            )
+            current = _reduce_recovery_completed_v1(current, event, action_set)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current
@@ -3879,9 +3887,9 @@ def validate_execution_recovery_completion_supplied_action_set_v1(
 ) -> None:
     """Check a Recovery completion Event against supplied pre-completion facts.
 
-    The payload's recovered State Sigil is only an asserted postcondition here;
-    recomputing it requires the complete installed reducer and remains outside
-    this contract-only helper.
+    The Event binds the sealed pre-transition FINALIZING State. The completed
+    post-State is deterministically sealed after this Event, avoiding an
+    impossible Event/State self-Sigil cycle.
     """
     validate_execution_state_v1(state)
     validate_execution_journal_event_v1(event)
@@ -3921,12 +3929,51 @@ def validate_execution_recovery_completion_supplied_action_set_v1(
         or event["entity_revisions"] != expected_revisions
         or recovery["state"] != "FINALIZING"
         or payload["recovery_id"] != recovery["recovery_id"]
+        or payload["finalizing_state_sigil"] != state["state_sigil"]
         or payload["completed_action_set_sigil"] != recovery["current_action_set_sigil"]
         or payload["completed_action_set_sigil"] != finalizing_action_set["action_set_sigil"]
         or finalizing_action_set["recovery_id"] != recovery["recovery_id"]
         or finalizing_action_set["phase"] != "FINALIZING"
     ):
         _fail("Execution Recovery completion disagrees with supplied State or action set")
+
+
+def _reduce_recovery_completed_v1(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    finalizing_action_set: dict[str, Any],
+) -> dict[str, Any]:
+    """Complete a sealed Recovery from its exact FINALIZING State."""
+    validate_execution_recovery_completion_supplied_action_set_v1(
+        state, event, finalizing_action_set
+    )
+    executor = state["executor"]
+    recovery_id = executor["active_recovery_id"]
+    assert recovery_id is not None
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["executor"] = {
+        **executor,
+        "revision": executor["revision"] + 1,
+        "active_recovery_id": None,
+        "authority_gates": [
+            gate for gate in executor["authority_gates"] if gate != "RECOVERY_ACTIVE"
+        ],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }
+    reduced["recoveries"] = [
+        {
+            **recovery,
+            "revision": recovery["revision"] + 1,
+            "state": "COMPLETED",
+            "last_event_id": event["event_id"],
+            "last_event_sigil": event["event_sigil"],
+        }
+        if recovery["recovery_id"] == recovery_id
+        else recovery
+        for recovery in state["recoveries"]
+    ]
+    return build_execution_state_v1(reduced)
 
 
 def validate_execution_state_supplied_recovery_action_set_v1(
