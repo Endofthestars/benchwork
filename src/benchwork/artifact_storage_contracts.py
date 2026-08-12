@@ -178,6 +178,54 @@ def load_artifact_storage_reference_intent_v1(
     return intent
 
 
+def validate_canonical_reference_commit_supplied_facts_v1(
+    intent: dict[str, Any], chronicle_event: dict[str, Any],
+    chronicle_commit: dict[str, Any],
+) -> None:
+    """Compare a candidate canonical pin with supplied Chronicle Event facts.
+
+    This verifies only the local Event/Receipt chain and the immutable intent
+    head binding.  It does not resolve an event-family payload to the request,
+    authenticate a Chronicle prefix, or grant Chronicle commit authority.
+    """
+    validate_artifact_storage_reference_intent_v1(intent)
+    validate_instance("chronicle-event-1.1.json", chronicle_event)
+    _check_nfc_and_numbers(chronicle_event)
+    receipt = chronicle_event["receipt"]
+    event_body = {
+        key: value for key, value in chronicle_event.items()
+        if key not in {"event_body_sigil", "receipt"}
+    }
+    receipt_body = {key: value for key, value in receipt.items() if key != "receipt_sigil"}
+    if intent["expected_chronicle_head"]["event_count"] == 9223372036854775807:
+        _fail("Canonical Reference supplied Chronicle commit exceeds the U63 head domain")
+    expected_head = {
+        "schema_version": "chronicle-head/1.1",
+        "event_count": intent["expected_chronicle_head"]["event_count"] + 1,
+        "terminal_receipt_sigil": receipt["receipt_sigil"],
+    }
+    if (
+        chronicle_event["event_body_sigil"] != content_sigil(event_body)
+        or receipt["receipt_sigil"] != content_sigil(receipt_body)
+        or chronicle_event["type"] != intent["canonical_event_type"]
+        or chronicle_event["sequence"] != expected_head["event_count"]
+        or chronicle_event["previous_receipt_sigil"]
+        != intent["expected_chronicle_head"]["terminal_receipt_sigil"]
+        or receipt["event_id"] != chronicle_event["event_id"]
+        or receipt["event_body_sigil"] != chronicle_event["event_body_sigil"]
+        or receipt["previous_receipt_sigil"] != chronicle_event["previous_receipt_sigil"]
+        or receipt["accepted_at"] != chronicle_event["occurred_at"]
+        or chronicle_commit != {
+            "event_id": chronicle_event["event_id"],
+            "event_body_sigil": chronicle_event["event_body_sigil"],
+            "receipt_id": receipt["receipt_id"],
+            "receipt_sigil": receipt["receipt_sigil"],
+            "head": expected_head,
+        }
+    ):
+        _fail("Canonical Reference supplied Chronicle commit disagrees with immutable intent")
+
+
 def validate_artifact_storage_legacy_protection_v1(protection: dict[str, Any]) -> None:
     """Validate a Legacy Protection record without resolving its evidence."""
     validate_instance("artifact-storage-legacy-protection-1.0.json", protection)

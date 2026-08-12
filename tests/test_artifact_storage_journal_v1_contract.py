@@ -53,6 +53,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_reference_set_v1,
     validate_artifact_storage_state_supplied_control_records_v1,
     validate_artifact_storage_tail_evidence_v1,
+    validate_canonical_reference_commit_supplied_facts_v1,
 )
 
 
@@ -1017,6 +1018,53 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
     with pytest.raises(AthanorError, match="Reference Intent projection lacks"):
         validate_artifact_storage_state_supplied_control_records_v1(
             state, reference_sets=[reference_set], reference_intents=[]
+        )
+
+    chronicle_event = {
+        "schema_version": "chronicle-event/1.1", "event_id": "CE-ONE", "sequence": 1,
+        "type": intent["canonical_event_type"], "object_id": "OBJECT",
+        "occurred_at": STAMP, "previous_receipt_sigil": None,
+        "actor": {"actor_id": "ACTOR", "actor_type": "agent", "host": "codex",
+                  "authenticated_by": "AUTH"}, "payload": {}, "event_body_sigil": "",
+        "receipt": {},
+    }
+    chronicle_event["event_body_sigil"] = content_sigil({
+        key: value for key, value in chronicle_event.items()
+        if key not in {"event_body_sigil", "receipt"}
+    })
+    receipt = {
+        "schema_version": "receipt/1.1", "receipt_id": "RC-ONE", "event_id": "CE-ONE",
+        "event_body_sigil": chronicle_event["event_body_sigil"], "previous_receipt_sigil": None,
+        "accepted_at": STAMP, "receipt_sigil": "",
+    }
+    receipt["receipt_sigil"] = content_sigil({
+        key: value for key, value in receipt.items() if key != "receipt_sigil"
+    })
+    chronicle_event["receipt"] = receipt
+    chronicle_commit = {
+        "event_id": chronicle_event["event_id"],
+        "event_body_sigil": chronicle_event["event_body_sigil"],
+        "receipt_id": receipt["receipt_id"], "receipt_sigil": receipt["receipt_sigil"],
+        "head": {"schema_version": "chronicle-head/1.1", "event_count": 1,
+                 "terminal_receipt_sigil": receipt["receipt_sigil"]},
+    }
+    validate_canonical_reference_commit_supplied_facts_v1(
+        intent, chronicle_event, chronicle_commit
+    )
+    malformed_commit = deepcopy(chronicle_commit)
+    malformed_commit["head"]["event_count"] = 2
+    with pytest.raises(AthanorError, match="supplied Chronicle commit"):
+        validate_canonical_reference_commit_supplied_facts_v1(
+            intent, chronicle_event, malformed_commit
+        )
+    terminal_head = deepcopy(intent)
+    terminal_head["expected_chronicle_head"]["event_count"] = 9223372036854775807
+    terminal_head["record_sigil"] = content_sigil({
+        key: value for key, value in terminal_head.items() if key != "record_sigil"
+    })
+    with pytest.raises(AthanorError, match="exceeds the U63"):
+        validate_canonical_reference_commit_supplied_facts_v1(
+            terminal_head, chronicle_event, chronicle_commit
         )
 
 
