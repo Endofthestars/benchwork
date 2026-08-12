@@ -83,8 +83,14 @@ def _reject_nonfinite(token: str) -> NoReturn:
 
 
 def _load_strict_object(raw: str | bytes | bytearray, label: str) -> dict[str, Any]:
-    if isinstance(raw, (bytes, bytearray)) and bytes(raw).startswith(b"\xef\xbb\xbf"):
-        _fail(f"invalid {label} JSON: UTF-8 BOM is forbidden")
+    if isinstance(raw, (bytes, bytearray)):
+        encoded = bytes(raw)
+        if encoded.startswith(b"\xef\xbb\xbf"):
+            _fail(f"invalid {label} JSON: UTF-8 BOM is forbidden")
+        try:
+            raw = encoded.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            _fail(f"invalid {label} JSON: non-UTF-8 encoding is forbidden")
     if isinstance(raw, str) and raw.startswith("\ufeff"):
         _fail(f"invalid {label} JSON: UTF-8 BOM is forbidden")
     try:

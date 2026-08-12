@@ -289,6 +289,8 @@ def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -
     assert load_execution_request_v1("observe", json.dumps(observe)) == observe
     for raw in (
         b'\xef\xbb\xbf{}',
+        "{}".encode("utf-16"),
+        "{}".encode("utf-32"),
         b'{"schema_version":"execution-observe-request/1.0","limit":1,"limit":2}',
     ):
         with pytest.raises(Exception):
@@ -319,6 +321,9 @@ def test_state_rejects_split_policy_legacy_shapes_unknowns_and_duplicate_bytes()
         load_execution_state_v1(raw)
     with pytest.raises(Exception, match="BOM"):
         load_execution_state_v1(b"\xef\xbb\xbf{}")
+    for encoding in ("utf-16", "utf-32"):
+        with pytest.raises(Exception, match="non-UTF-8"):
+            load_execution_state_v1("{}".encode(encoding))
 
 
 def test_event_schema_exposes_81_ordered_closed_payload_branches_and_l12_closure() -> None:
