@@ -405,6 +405,17 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert accepted_state["attempts"][0]["result_binding"]["kind"] == "ACCEPTED"
     assert accepted_state["attempts"][0]["result_intake"]["outcome"] == "ACCEPTED"
 
+    draining = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-THIRTEEN", "sequence": 13, "event_type": "attempt.draining", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": receipt["received_at"], "observed_at": None, "entity_revisions": [{"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 8, "next_revision": 9}], "causation_event_id": accepted["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"result_binding": accepted_state["attempts"][0]["result_binding"], "process_exit_observation_sigil": SIGIL}, "previous_event_sigil": accepted["event_sigil"]})
+    draining_state = replay_execution_supplied_state_suffix_v1(accepted_state, [draining])
+    assert draining_state["attempts"][0]["state"] == "DRAINING"
+    assert draining_state["attempts"][0]["completion_anchor_binding"] == {"kind": "RESULT_ACCEPTED", "event_id": accepted["event_id"], "event_sigil": accepted["event_sigil"], "sequence": accepted["sequence"], "result_sigil": SIGIL}
+
+    wrong_draining = deepcopy(draining)
+    wrong_draining["payload"]["result_binding"] = {"kind": "NONE"}
+    wrong_draining = build_execution_journal_event_v1({key: value for key, value in wrong_draining.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_execution_supplied_state_suffix_v1(accepted_state, [wrong_draining])
+
     malformed = deepcopy(ingress)
     malformed["payload"]["result_sigil"] = "sha256:" + "b" * 64
     malformed = build_execution_journal_event_v1({key: value for key, value in malformed.items() if key != "event_sigil"})

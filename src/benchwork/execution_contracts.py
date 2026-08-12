@@ -1214,6 +1214,37 @@ def _reduce_result_accepted_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_draining_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Close a running Attempt after its immutable result disposition."""
+    if len(state["attempts"]) != 1:
+        _fail("Attempt draining reducer requires one running Attempt")
+    attempt, payload = state["attempts"][0], event["payload"]
+    executor = state["executor"]
+    result = attempt["result_binding"]
+    if result["kind"] == "ACCEPTED":
+        anchor = {"kind": "RESULT_ACCEPTED", "event_id": result["disposition_event_id"],
+            "event_sigil": result["disposition_event_sigil"], "sequence": result["disposition_sequence"],
+            "result_sigil": result["result_sigil"]}
+    elif result["kind"] == "NONE":
+        anchor = {"kind": "NO_RESULT", "event_id": event["event_id"], "event_sigil": event["event_sigil"],
+            "sequence": event["sequence"], "process_exit_observation_sigil": payload["process_exit_observation_sigil"]}
+    else:
+        _fail("Attempt draining reducer does not yet replay rejected Result dispositions")
+    if (
+        event["event_type"] != "attempt.draining" or attempt["state"] != "RUNNING"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != attempt["lease_executor_epoch"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1}]
+        or payload["result_binding"] != result
+    ):
+        _fail("Attempt draining Event disagrees with Result disposition")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{**attempt, "revision": attempt["revision"] + 1, "state": "DRAINING",
+        "completion_anchor_binding": anchor, "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
 def replay_execution_supplied_state_suffix_v1(
     state: dict[str, Any],
     events: list[dict[str, Any]],
@@ -1261,6 +1292,8 @@ def replay_execution_supplied_state_suffix_v1(
             intake = current["attempts"][0]["result_intake"]
             receipt = _find_supplied_v1(supplied_result_ingress_receipts, intake.get("result_ingress_receipt_binding", {}).get("ingress_receipt_id", ""), "ingress_receipt_id", "Result acceptance")
             current = _reduce_result_accepted_v1(current, event, evidence, receipt)
+        elif event["event_type"] == "attempt.draining":
+            current = _reduce_attempt_draining_v1(current, event)
         else:
             _fail("Execution supplied-state suffix reducer is unavailable for this Event")
     return current
