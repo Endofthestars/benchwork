@@ -8,6 +8,7 @@ Storage operation, Chronicle write, or Patch promotion.
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 from typing import Any, NoReturn
 
 from .athanor import AthanorError, content_sigil
@@ -28,6 +29,109 @@ def _time(value: str) -> datetime:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as error:
         raise AthanorError("Patch Promotion Journal Event recorded_at is invalid") from error
+
+
+def _blob_key(blob: dict[str, Any]) -> bytes:
+    return blob["sigil"].encode("ascii")
+
+
+def _require_sorted_unique_blobs(blobs: list[dict[str, Any]], name: str) -> None:
+    keys = [_blob_key(blob) for blob in blobs]
+    if keys != sorted(keys) or len(set(keys)) != len(keys):
+        _fail(f"Patch Bundle {name} must be sorted and unique by Sigil")
+
+
+def _entry_payload(entry: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the one RFC-0014 payload Blob required by a postimage entry."""
+    kind = entry["kind"]
+    if kind == "FILE":
+        return {
+            "sigil": entry["blob_sigil"],
+            "size_bytes": entry["size_bytes"],
+            "media_type": "application/octet-stream",
+        }
+    if kind == "SYMLINK":
+        target = entry["target"].encode("utf-8")
+        sigil = "sha256:" + hashlib.sha256(target).hexdigest()
+        if entry["target_sigil"] != sigil:
+            _fail("Patch Bundle SYMLINK target Sigil does not match UTF-8 target bytes")
+        return {
+            "sigil": sigil,
+            "size_bytes": len(target),
+            "media_type": "application/octet-stream",
+        }
+    return None
+
+
+def validate_patch_bundle_v1(bundle: dict[str, Any]) -> None:
+    """Validate local RFC-0014 Patch Bundle invariants without resolving Blobs."""
+    validate_instance("patch-bundle-1.0.json", bundle)
+    _check_nfc(bundle)
+    if bundle["bundle_sigil"] != content_sigil(_without(bundle, "bundle_sigil")):
+        _fail("Patch Bundle self-Sigil mismatch")
+
+    operations = bundle["operations"]
+    paths = [operation["path_bytes"].encode("utf-8") for operation in operations]
+    if paths != sorted(paths) or len(set(paths)) != len(paths):
+        _fail("Patch Bundle operations must be sorted and unique by path_bytes")
+    if len(operations) > bundle["limits"]["max_paths"]:
+        _fail("Patch Bundle operation count exceeds max_paths")
+
+    expected_payloads: dict[str, dict[str, Any]] = {}
+    for operation in operations:
+        before = operation["preimage"]["kind"]
+        after = operation["postimage"]["kind"]
+        transition = operation["operation"]
+        valid_transition = (
+            (transition == "ADD" and before == "ABSENT" and after != "ABSENT")
+            or (transition == "DELETE" and before != "ABSENT" and after == "ABSENT")
+            or (transition == "MODIFY" and before != "ABSENT" and before == after)
+            or (
+                transition == "TYPE_CHANGE"
+                and before != "ABSENT"
+                and after != "ABSENT"
+                and before != after
+            )
+        )
+        if not valid_transition:
+            _fail("Patch Bundle operation disagrees with its preimage and postimage kinds")
+        payload = _entry_payload(operation["postimage"])
+        if (operation["payload_sigil"] is None) != (payload is None):
+            _fail("Patch Bundle operation payload presence disagrees with postimage kind")
+        if payload is not None:
+            if operation["payload_sigil"] != payload["sigil"]:
+                _fail("Patch Bundle operation payload Sigil disagrees with postimage")
+            previous = expected_payloads.setdefault(payload["sigil"], payload)
+            if previous != payload:
+                _fail("Patch Bundle reuses one payload Sigil with inconsistent Blob metadata")
+
+    payloads = bundle["payloads"]
+    renderings = bundle["renderings"]
+    attachments = bundle["attachments"]
+    _require_sorted_unique_blobs(payloads, "payloads")
+    _require_sorted_unique_blobs(renderings, "renderings")
+    _require_sorted_unique_blobs(attachments, "attachments")
+    actual_payloads = {blob["sigil"]: blob for blob in payloads}
+    if actual_payloads != expected_payloads:
+        _fail("Patch Bundle payloads are not the exact postimage payload set")
+    if len(payloads) > bundle["limits"]["max_blobs"]:
+        _fail("Patch Bundle payload count exceeds max_blobs")
+    if any(blob["size_bytes"] > bundle["limits"]["max_payload_bytes"] for blob in payloads):
+        _fail("Patch Bundle payload exceeds max_payload_bytes")
+
+    blob_union: dict[str, dict[str, Any]] = {}
+    for blob in payloads + renderings + attachments:
+        previous = blob_union.setdefault(blob["sigil"], blob)
+        if previous != blob:
+            _fail("Patch Bundle Blob union has inconsistent metadata for one Sigil")
+    if sum(blob["size_bytes"] for blob in blob_union.values()) > bundle["limits"]["max_total_bytes"]:
+        _fail("Patch Bundle Blob union exceeds max_total_bytes")
+
+
+def load_patch_bundle_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    bundle = _load_strict_object(raw, "Patch Bundle")
+    validate_patch_bundle_v1(bundle)
+    return bundle
 
 
 def validate_patch_promotion_journal_event_v1(event: dict[str, Any]) -> None:

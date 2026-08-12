@@ -20,6 +20,7 @@ TESTS = (
     "tests/test_execution_job_outcome_v1_contract.py",
     "tests/test_artifact_storage_journal_v1_contract.py",
     "tests/test_patch_promotion_journal_v1_contract.py",
+    "tests/test_patch_promotion_bundle_v1_contract.py",
     "tests/mcp/test_runtime.py",
     "tests/mcp/test_tool_registry.py",
 )
