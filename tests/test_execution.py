@@ -552,6 +552,20 @@ class ExecutionServiceTest(unittest.TestCase):
         not_ready = tools.benchwork_get_job_result(started["data"]["job"]["job_id"])
         self.assertFalse(not_ready["ok"])
         self.assertEqual(not_ready["error"]["code"], "EXECUTION_NOT_READY")
+        service = ExecutionService(Path(self.directory.name))
+        job = started["data"]["job"]
+        service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        stale_revision = tools.benchwork_cancel_job(
+            job["job_id"],
+            job["job_binding_sigil"],
+            job["revision"],
+            "cancel-after-terminal",
+            "late cancellation",
+        )
+        self.assertFalse(stale_revision["ok"])
+        self.assertEqual(stale_revision["error"]["code"], "EXECUTION_CONFLICT")
+
+        started = tools.benchwork_start_job(_specification(specification_id="ES-002"), "start-002")
         cancelled = tools.benchwork_cancel_job(
             started["data"]["job"]["job_id"],
             started["data"]["job"]["job_binding_sigil"],
