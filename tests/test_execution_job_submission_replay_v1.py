@@ -937,6 +937,18 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert assured_state["attempts"][0]["attempt_assurance_binding"]["kind"] == "CLAIMED"
     assert assured_state["jobs"][0]["attempt_summaries"][0]["attempt_id"] == "AT-ONE"
 
+    unmet_attempt_assurance = deepcopy(attempt_assurance)
+    unmet_attempt_assurance["payload"].update({
+        "evaluation": "UNMET", "assurance_claim_sigil": None,
+        "reason_codes": ["ASSURANCE_UNMET"],
+    })
+    unmet_attempt_assurance = build_execution_journal_event_v1({
+        key: value for key, value in unmet_attempt_assurance.items() if key != "event_sigil"
+    })
+    unmet_state = replay_execution_supplied_state_suffix_v1(settled_state, [unmet_attempt_assurance])
+    assert unmet_state["attempts"][0]["attempt_assurance_binding"]["kind"] == "UNMET"
+    assert unmet_state["jobs"][0]["attempt_summaries"][0]["assurance_evaluation_event_sigil"] == unmet_attempt_assurance["event_sigil"]
+
     job_assurance = build_execution_journal_event_v1({
         "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
         "event_id": "JE-JOBASSURANCE", "sequence": 20, "event_type": "job.assurance_evaluated",
