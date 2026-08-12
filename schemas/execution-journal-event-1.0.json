@@ -1312,10 +1312,10 @@
               "evaluation": true,
               "attempt_id": true,
               "attempt_assurance_event_sigil": {
-                "$ref": "#/$defs/sigil"
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
               },
               "assurance_claim_sigil": {
-                "$ref": "#/$defs/sigil"
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
               },
               "reason_codes": {
                 "type": "array"
@@ -2638,7 +2638,7 @@
             "properties": {
               "evaluation": true,
               "assurance_claim_sigil": {
-                "$ref": "#/$defs/sigil"
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
               },
               "reason_codes": {
                 "type": "array"

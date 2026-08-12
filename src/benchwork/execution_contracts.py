@@ -2044,6 +2044,283 @@ def _reduce_job_budget_settled_v1(
     return build_execution_state_v1(reduced)
 
 
+def _reduce_attempt_assurance_evaluated_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Freeze one terminal Attempt assurance result and its final Job summary."""
+    if len(state["jobs"]) != 1:
+        _fail("Attempt assurance reducer requires one Job")
+    job, payload, executor = state["jobs"][0], event["payload"], state["executor"]
+    attempt_id = event["entity_revisions"][-1]["entity_id"] if event["entity_revisions"] else ""
+    matches = [item for item in state["attempts"] if item["attempt_id"] == attempt_id]
+    if len(matches) != 1:
+        _fail("Attempt assurance Event names an unknown Attempt")
+    attempt = matches[0]
+    evaluation = payload["evaluation"]
+    reasons = payload["reason_codes"]
+    claimed = evaluation == "CLAIMED"
+    expected_revisions = [
+        {"entity_kind": "JOB", "entity_id": job["job_id"],
+         "preceding_revision": job["revision"], "next_revision": job["revision"] + 1},
+        {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"],
+         "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
+    ]
+    if (
+        evaluation not in {"CLAIMED", "UNMET", "UNVERIFIABLE"}
+        or (claimed and (payload["assurance_claim_sigil"] is None or reasons))
+        or (not claimed and (payload["assurance_claim_sigil"] is not None or not reasons))
+        or reasons != sorted(set(reasons))
+        or job["state"] not in {"ACTIVE", "STOPPING"}
+        or job["current_attempt_id"] != attempt["attempt_id"]
+        or attempt["state"] not in _ATTEMPT_TERMINAL_EVENT_STATES_V1.values()
+        or attempt["budget_settlement_binding"].get("kind") != "SETTLED"
+        or attempt["attempt_assurance_binding"] != {"kind": "PENDING"}
+        or any(summary["attempt_id"] == attempt["attempt_id"] for summary in job["attempt_summaries"])
+        or event["event_type"] != "attempt.assurance_evaluated"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"] != expected_revisions
+    ):
+        _fail("Attempt assurance Event disagrees with settled terminal Attempt")
+    base = {"kind": evaluation, "evaluation_event_id": event["event_id"],
+            "evaluation_event_sigil": event["event_sigil"], "evaluation_sequence": event["sequence"],
+            "evidence_set_sigil": payload["evidence_set_sigil"]}
+    assurance = (
+        {**base, "assurance_claim_sigil": payload["assurance_claim_sigil"]}
+        if claimed else {**base, "reason_codes": reasons}
+    )
+    summary = {
+        "attempt_id": attempt["attempt_id"], "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+        "retry_ordinal": attempt["retry_ordinal"], "terminal_state": attempt["state"],
+        "terminal_event_id": attempt["terminal_event_binding"]["terminal_event_id"],
+        "terminal_event_sigil": attempt["terminal_event_binding"]["terminal_event_sigil"],
+        "worker_session_binding": attempt["worker_session_binding"],
+        "attempt_authorization_requirement": attempt["attempt_authorization_requirement"],
+        "attempt_authorization_state": attempt["attempt_authorization_state"],
+        "budget_settlement_event_sigil": attempt["budget_settlement_binding"]["event_sigil"],
+        "assurance_evaluation_event_sigil": event["event_sigil"],
+    }
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["jobs"] = [{
+        **job, "revision": job["revision"] + 1, "current_attempt_id": None,
+        "attempt_summaries": [*job["attempt_summaries"], summary],
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["attempts"] = [{
+        **candidate, "revision": candidate["revision"] + 1, "attempt_assurance_binding": assurance,
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    } if candidate["attempt_id"] == attempt["attempt_id"] else candidate for candidate in state["attempts"]]
+    return build_execution_state_v1(reduced)
+
+
+def _reduce_job_assurance_evaluated_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Freeze the Job assurance roll-up from an already finalized Attempt."""
+    if len(state["jobs"]) != 1:
+        _fail("Job assurance reducer requires one Job")
+    job, payload, executor = state["jobs"][0], event["payload"], state["executor"]
+    evaluation, attempt_id, reasons = payload["evaluation"], payload["attempt_id"], payload["reason_codes"]
+    expected = [{"entity_kind": "JOB", "entity_id": job["job_id"],
+                 "preceding_revision": job["revision"], "next_revision": job["revision"] + 1}]
+    if (
+        evaluation not in {"CLAIMED", "UNMET", "UNVERIFIABLE", "NOT_APPLICABLE"}
+        or job["state"] not in {"ACTIVE", "STOPPING"}
+        or job["current_attempt_id"] is not None or job["job_assurance_binding"] != {"kind": "PENDING"}
+        or event["event_type"] != "job.assurance_evaluated"
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != job["last_event_id"]
+        or event["entity_revisions"] != expected or reasons != sorted(set(reasons))
+    ):
+        _fail("Job assurance Event disagrees with finalized Job prefix")
+    if evaluation == "NOT_APPLICABLE":
+        if job["attempt_summaries"] or attempt_id is not None or payload["attempt_assurance_event_sigil"] is not None or payload["assurance_claim_sigil"] is not None or reasons != ["NO_ATTEMPT_ALLOCATED"]:
+            _fail("No-attempt Job assurance Event disagrees with Job")
+        binding = {"kind": evaluation, "evaluation_event_id": event["event_id"],
+                   "evaluation_event_sigil": event["event_sigil"], "evaluation_sequence": event["sequence"],
+                   "reason": "NO_ATTEMPT_ALLOCATED", "evidence_set_sigil": payload["evidence_set_sigil"]}
+    else:
+        matches = [item for item in state["attempts"] if item["attempt_id"] == attempt_id]
+        if len(matches) != 1:
+            _fail("Job assurance Event names an unknown Attempt")
+        attempt = matches[0]
+        attempt_assurance = attempt["attempt_assurance_binding"]
+        if (
+            not job["attempt_summaries"]
+            or attempt_id != max(job["attempt_summaries"], key=lambda item: item["retry_ordinal"])["attempt_id"]
+            or attempt_assurance.get("kind") != evaluation
+            or payload["attempt_assurance_event_sigil"] != attempt_assurance["evaluation_event_sigil"]
+            or payload["evidence_set_sigil"] != attempt_assurance["evidence_set_sigil"]
+            or (evaluation == "CLAIMED" and (payload["assurance_claim_sigil"] != attempt_assurance["assurance_claim_sigil"] or reasons))
+            or (evaluation != "CLAIMED" and (payload["assurance_claim_sigil"] is not None or reasons != attempt_assurance["reason_codes"]))
+        ):
+            _fail("Job assurance Event disagrees with Attempt assurance")
+        base = {"kind": evaluation, "evaluation_event_id": event["event_id"],
+                "evaluation_event_sigil": event["event_sigil"], "evaluation_sequence": event["sequence"],
+                "attempt_id": attempt_id, "attempt_assurance_event_sigil": payload["attempt_assurance_event_sigil"],
+                "evidence_set_sigil": payload["evidence_set_sigil"]}
+        binding = {**base, "assurance_claim_sigil": payload["assurance_claim_sigil"]} if evaluation == "CLAIMED" else {**base, "reason_codes": reasons}
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["jobs"] = [{**job, "revision": job["revision"] + 1, "job_assurance_binding": binding,
+                        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}]
+    return build_execution_state_v1(reduced)
+
+
+_JOB_TERMINAL_EVENT_STATES_V1 = {
+    "job.succeeded": "SUCCEEDED", "job.failed": "FAILED", "job.cancelled": "CANCELLED",
+    "job.timed_out": "TIMED_OUT", "job.policy_violated": "POLICY_VIOLATION",
+}
+
+
+def _reduce_job_terminal_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Close a Job only from its finalized summaries and assurance roll-up."""
+    if len(state["jobs"]) != 1:
+        _fail("Job terminal reducer requires one Job")
+    job, payload, executor = state["jobs"][0], event["payload"], state["executor"]
+    terminal_state = _JOB_TERMINAL_EVENT_STATES_V1.get(event["event_type"])
+    if terminal_state is None:
+        _fail("Job terminal reducer received a nonterminal Event")
+    expected_revision = [{"entity_kind": "JOB", "entity_id": job["job_id"],
+                          "preceding_revision": job["revision"], "next_revision": job["revision"] + 1}]
+    cause = payload["transition_cause"]
+    required_cause = {
+        "job.failed": {"ADMISSION_INVALID", "FATAL_INFRASTRUCTURE", "INTEGRITY_FAILURE", "CLOCK_UNCERTAIN", "ATTEMPT_NONRETRYABLE", "ATTEMPT_REJECTED", "RETRY_EXHAUSTED", "RESULT_REQUIREMENT_FAILED", "OUTPUT_VALIDATION_FAILED", "TERMINAL_SOURCE_RETENTION_FAILED", "TERMINATION_FAILED", "CLEANUP_FAILED", "ASSURANCE_UNMET", "ASSURANCE_UNVERIFIABLE", "BUDGET_EXHAUSTED"},
+        "job.cancelled": {"CANCEL_REQUESTED"},
+        "job.timed_out": {"JOB_DEADLINE"},
+        "job.policy_violated": {"POLICY_VIOLATION"},
+    }
+    if (
+        (terminal_state == "SUCCEEDED" and job["state"] != "ACTIVE")
+        or (terminal_state != "SUCCEEDED" and job["state"] != "STOPPING")
+        or job["current_attempt_id"] is not None
+        or job["job_assurance_binding"].get("kind") == "PENDING"
+        or (
+            job["job_assurance_binding"].get("kind") == "NOT_APPLICABLE"
+            and terminal_state == "SUCCEEDED"
+        )
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"] != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != job["last_event_id"]
+        or event["entity_revisions"] != expected_revision
+        or payload["attempt_summaries"] != job["attempt_summaries"]
+        or payload["job_assurance_event_sigil"] != job["job_assurance_binding"]["evaluation_event_sigil"]
+        or payload["budget_ledger_sigil"] != job["budget_ledger"]["budget_ledger_sigil"]
+        or (
+            terminal_state == "SUCCEEDED" and (
+                cause["code"] != "COMPLETION_ESTABLISHED"
+                or cause["trigger_kind"] != "PRIOR_EVENT"
+                or cause["trigger_event_id"] != job["last_event_id"]
+                or cause["effective_sequence"] != job["job_assurance_binding"]["evaluation_sequence"]
+            )
+        )
+        or (terminal_state != "SUCCEEDED" and cause["code"] not in required_cause[event["event_type"]])
+        or (
+            terminal_state != "SUCCEEDED" and (
+                job["first_stop_or_fence_binding"].get("kind") != "PRESENT"
+                or cause["trigger_kind"] != "PRIOR_EVENT"
+                or cause["trigger_event_id"] != job["first_stop_or_fence_binding"]["event_id"]
+                or cause["effective_sequence"] != job["first_stop_or_fence_binding"]["effective_sequence"]
+            )
+        )
+    ):
+        _fail("Job terminal Event disagrees with finalized Job prefix")
+    selected = payload["selected_attempt_binding"]
+    summaries = job["attempt_summaries"]
+    by_id = {item["attempt_id"]: item for item in state["attempts"]}
+    if (
+        [summary["retry_ordinal"] for summary in summaries]
+        != sorted(summary["retry_ordinal"] for summary in summaries)
+        or len({summary["attempt_id"] for summary in summaries}) != len(summaries)
+        or set(job["attempt_ids"]) != set(by_id)
+        or set(job["attempt_ids"]) != {summary["attempt_id"] for summary in summaries}
+        or any(
+            summary["terminal_state"] != by_id[summary["attempt_id"]]["state"]
+            or summary["attempt_binding_sigil"] != by_id[summary["attempt_id"]]["attempt_binding_sigil"]
+            or summary["terminal_event_sigil"] != by_id[summary["attempt_id"]]["terminal_event_binding"].get("terminal_event_sigil")
+            or summary["budget_settlement_event_sigil"] != by_id[summary["attempt_id"]]["budget_settlement_binding"].get("event_sigil")
+            or summary["assurance_evaluation_event_sigil"] != by_id[summary["attempt_id"]]["attempt_assurance_binding"].get("evaluation_event_sigil")
+            for summary in summaries
+        )
+    ):
+        _fail("Job terminal Event has incomplete or non-final Attempt summaries")
+    if not job["attempt_summaries"]:
+        if (
+            selected != {"kind": "NONE"} or terminal_state == "SUCCEEDED"
+            or job["attempt_ids"] or state["attempts"]
+            or payload["completion_anchor_binding"] != {"kind": "NOT_ESTABLISHED"}
+            or payload["terminal_source_binding"] != {"kind": "NOT_APPLICABLE"}
+            or payload["first_stop_or_fence_binding"] != job["first_stop_or_fence_binding"]
+            or payload["output_hold_release_schedules"]
+        ):
+            _fail("No-attempt Job terminal Event has invalid selected Attempt")
+        expected_final_fence = {"kind": "NO_ATTEMPT", "final_fence_floor": 0}
+        if payload["storage_observation_binding"] != {"kind": "NOT_APPLICABLE"}:
+            _fail("No-attempt Job terminal Event requires inapplicable storage observation")
+    else:
+        attempt_id = max(job["attempt_summaries"], key=lambda item: item["retry_ordinal"])["attempt_id"]
+        matches = [item for item in state["attempts"] if item["attempt_id"] == attempt_id]
+        if len(matches) != 1:
+            _fail("Job terminal Event selected Attempt is unavailable")
+        attempt = matches[0]
+        expected_selected = {
+            "kind": "SELECTED", "attempt_id": attempt["attempt_id"],
+            "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+            "attempt_terminal_event_id": attempt["terminal_event_binding"]["terminal_event_id"],
+            "attempt_terminal_event_sigil": attempt["terminal_event_binding"]["terminal_event_sigil"],
+            "attempt_authorization_state": attempt["attempt_authorization_state"],
+            "worker_session_binding": attempt["worker_session_binding"],
+            "result_binding": attempt["result_binding"],
+            "completion_anchor_binding": attempt["completion_anchor_binding"],
+            "first_stop_or_fence_binding": attempt["first_stop_or_fence_binding"],
+            "storage_observation_binding": attempt["storage_observation_binding"],
+        }
+        if (
+            selected != expected_selected
+            or payload["completion_anchor_binding"] != attempt["completion_anchor_binding"]
+            or payload["first_stop_or_fence_binding"] != attempt["first_stop_or_fence_binding"]
+            or payload["storage_observation_binding"] != attempt["storage_observation_binding"]
+            or payload["terminal_source_binding"] != attempt["terminal_source_binding"]
+        ):
+            _fail("Job terminal Event does not exactly copy its selected Attempt")
+        if attempt["lease_terminal_binding"] is None:
+            expected_final_fence = {"kind": "ASSIGNED_NO_LEASE", "final_fence_floor": job["fence_floor"],
+                                    "attempt_id": attempt["attempt_id"],
+                                    "attempt_terminal_event_sigil": attempt["terminal_event_binding"]["terminal_event_sigil"]}
+        else:
+            lease = attempt["lease_terminal_binding"]
+            expected_final_fence = {"kind": "TOMBSTONE", "final_fence_floor": lease["final_fence_floor"],
+                                    "lease_id": lease["lease_id"], "lease_terminal_event_sigil": lease["terminal_event_sigil"],
+                                    "tombstone_event_sigil": lease["tombstone_event_sigil"]}
+        if terminal_state == "SUCCEEDED" and (
+            attempt["state"] != "SUCCEEDED" or job["job_assurance_binding"]["kind"] != "CLAIMED"
+            or attempt["completion_anchor_binding"]["kind"] == "NOT_ESTABLISHED"
+            or attempt["storage_observation_binding"].get("kind") != "FROZEN"
+            or attempt["terminal_source_binding"].get("kind") == "QUARANTINED"
+        ):
+            _fail("Succeeded Job terminal Event requires a claimed successful Attempt")
+    if payload["final_fence_binding"] != expected_final_fence:
+        _fail("Job terminal Event final fence disagrees with selected Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["jobs"] = [{
+        **job, "revision": job["revision"] + 1, "state": terminal_state,
+        "selected_attempt_binding": selected, "completion_anchor_binding": payload["completion_anchor_binding"],
+        "first_stop_or_fence_binding": payload["first_stop_or_fence_binding"],
+        "final_fence_binding": payload["final_fence_binding"],
+        "storage_observation_binding": payload["storage_observation_binding"],
+        "terminal_source_binding": payload["terminal_source_binding"],
+        "output_hold_release_schedules": payload["output_hold_release_schedules"],
+        "terminal_event_binding": {"kind": "PRESENT", "terminal_state": terminal_state,
+            "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
+            "terminal_sequence": event["sequence"], "terminal_recorded_at": event["recorded_at"]},
+        "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["deadlines"] = [deadline for deadline in state["deadlines"] if deadline["entity_id"] != job["job_id"]]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_lease_released_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Close active Worker authority and publish its higher fence tombstone."""
     if len(state["jobs"]) != 1 or len(state["attempts"]) != 1 or len(state["leases"]) != 1 or len(state["worker_sessions"]) != 1:
@@ -2672,6 +2949,12 @@ def replay_execution_supplied_state_suffix_v1(
                 "Budget settlement",
             )
             current = _reduce_job_budget_settled_v1(current, event, immutable_attempt)
+        elif event["event_type"] == "attempt.assurance_evaluated":
+            current = _reduce_attempt_assurance_evaluated_v1(current, event)
+        elif event["event_type"] == "job.assurance_evaluated":
+            current = _reduce_job_assurance_evaluated_v1(current, event)
+        elif event["event_type"] in _JOB_TERMINAL_EVENT_STATES_V1:
+            current = _reduce_job_terminal_v1(current, event)
         elif event["event_type"] == "lease.released":
             current = _reduce_lease_released_v1(current, event)
         elif event["event_type"] == "lease.expired":

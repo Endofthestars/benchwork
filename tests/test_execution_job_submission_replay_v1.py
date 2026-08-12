@@ -915,6 +915,92 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert settled_state["jobs"][0]["budget_ledger"] == settled_ledger
     assert settled_state["attempts"][0]["budget_settlement_binding"]["kind"] == "SETTLED"
 
+    attempt_assurance = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-ATTEMPTASSURANCE", "sequence": 19,
+        "event_type": "attempt.assurance_evaluated",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": receipt["received_at"], "observed_at": None,
+        "entity_revisions": [
+            {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 3, "next_revision": 4},
+            {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 14, "next_revision": 15},
+        ],
+        "causation_event_id": settled["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"evaluation": "CLAIMED", "assurance_claim_sigil": SIGIL,
+                    "reason_codes": [], "evidence_set_sigil": SIGIL},
+        "previous_event_sigil": settled["event_sigil"],
+    })
+    assured_state = replay_execution_supplied_state_suffix_v1(settled_state, [attempt_assurance])
+    assert assured_state["jobs"][0]["current_attempt_id"] is None
+    assert assured_state["attempts"][0]["attempt_assurance_binding"]["kind"] == "CLAIMED"
+    assert assured_state["jobs"][0]["attempt_summaries"][0]["attempt_id"] == "AT-ONE"
+
+    job_assurance = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-JOBASSURANCE", "sequence": 20, "event_type": "job.assurance_evaluated",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": receipt["received_at"], "observed_at": None,
+        "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID,
+                              "preceding_revision": 4, "next_revision": 5}],
+        "causation_event_id": attempt_assurance["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"evaluation": "CLAIMED", "attempt_id": "AT-ONE",
+                    "attempt_assurance_event_sigil": attempt_assurance["event_sigil"],
+                    "assurance_claim_sigil": SIGIL, "reason_codes": [],
+                    "evidence_set_sigil": SIGIL},
+        "previous_event_sigil": attempt_assurance["event_sigil"],
+    })
+    job_assured_state = replay_execution_supplied_state_suffix_v1(assured_state, [job_assurance])
+    assert job_assured_state["jobs"][0]["job_assurance_binding"]["kind"] == "CLAIMED"
+
+    selected_attempt = job_assured_state["attempts"][0]
+    selected_binding = {
+        "kind": "SELECTED", "attempt_id": "AT-ONE",
+        "attempt_binding_sigil": attempt["attempt_binding_sigil"],
+        "attempt_terminal_event_id": terminal["event_id"],
+        "attempt_terminal_event_sigil": terminal["event_sigil"],
+        "attempt_authorization_state": selected_attempt["attempt_authorization_state"],
+        "worker_session_binding": selected_attempt["worker_session_binding"],
+        "result_binding": selected_attempt["result_binding"],
+        "completion_anchor_binding": selected_attempt["completion_anchor_binding"],
+        "first_stop_or_fence_binding": selected_attempt["first_stop_or_fence_binding"],
+        "storage_observation_binding": selected_attempt["storage_observation_binding"],
+    }
+    job_terminal = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-JOBSUCCEEDED", "sequence": 21, "event_type": "job.succeeded",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": receipt["received_at"], "observed_at": None,
+        "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID,
+                              "preceding_revision": 5, "next_revision": 6}],
+        "causation_event_id": job_assurance["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {
+            "transition_cause": {"code": "COMPLETION_ESTABLISHED", "trigger_kind": "PRIOR_EVENT",
+                                 "trigger_event_id": job_assurance["event_id"], "effective_sequence": 20,
+                                 "evidence_sigil": SIGIL},
+            "attempt_summaries": job_assured_state["jobs"][0]["attempt_summaries"],
+            "selected_attempt_binding": selected_binding,
+            "completion_anchor_binding": selected_attempt["completion_anchor_binding"],
+            "first_stop_or_fence_binding": selected_attempt["first_stop_or_fence_binding"],
+            "job_assurance_event_sigil": job_assurance["event_sigil"],
+            "budget_ledger_sigil": settled_ledger["budget_ledger_sigil"],
+            "final_fence_binding": {"kind": "ASSIGNED_NO_LEASE", "final_fence_floor": 1,
+                                    "attempt_id": "AT-ONE", "attempt_terminal_event_sigil": terminal["event_sigil"]},
+            "cleanup_summary_sigil": SIGIL,
+            "storage_observation_binding": selected_attempt["storage_observation_binding"],
+            "terminal_source_binding": selected_attempt["terminal_source_binding"],
+            "output_hold_release_schedules": [],
+        },
+        "previous_event_sigil": job_assurance["event_sigil"],
+    })
+    terminal_job_state = replay_execution_supplied_state_suffix_v1(job_assured_state, [job_terminal])
+    assert terminal_job_state["jobs"][0]["state"] == "SUCCEEDED"
+
     duplicate_settlement = deepcopy(settled)
     duplicate_settlement["event_id"] = "JE-SETTLEDTWO"
     duplicate_settlement["sequence"] = 19
