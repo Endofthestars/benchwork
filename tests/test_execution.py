@@ -564,6 +564,10 @@ class ExecutionServiceTest(unittest.TestCase):
             self.service.cancel(
                 job["job_id"], job["job_binding_sigil"], True, "cancel-001", "reason"
             )
+        with self.assertRaisesRegex(AthanorError, "cancellation idempotency key"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], job["revision"], "\x00", "reason"
+            )
 
     def test_completed_job_records_terminal_cancellation_observation(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]

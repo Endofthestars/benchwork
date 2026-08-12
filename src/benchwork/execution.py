@@ -872,7 +872,12 @@ class ExecutionService:
             raise AthanorError("execution cancellation revision is invalid")
         if not isinstance(reason, str) or not reason or len(reason) > 4096:
             raise AthanorError("execution cancellation reason is invalid")
-        if not isinstance(idempotency_key, str) or not idempotency_key or len(idempotency_key) > 256:
+        if (
+            not isinstance(idempotency_key, str)
+            or not idempotency_key
+            or len(idempotency_key) > 256
+            or "\x00" in idempotency_key
+        ):
             raise AthanorError("execution cancellation idempotency key is invalid")
         key_sigil = content_sigil(["execution-cancel-idempotency-key/1.0", idempotency_key])
         if not self._journal_path.exists():
