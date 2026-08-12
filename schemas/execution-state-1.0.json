@@ -56,6 +56,41 @@
       "required": ["cpu_time_seconds", "storage_bytes_written", "network_egress_bytes"],
       "properties": {"cpu_time_seconds": {"$ref": "#/$defs/nullable_u63"}, "storage_bytes_written": {"$ref": "#/$defs/nullable_u63"}, "network_egress_bytes": {"$ref": "#/$defs/nullable_u63"}}
     },
+    "reason_codes": {"type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-claim/1.0#/$defs/resultReasonCode"}},
+    "attempt_assurance_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "assurance_claim_sigil", "evidence_set_sigil"], "properties": {"kind": {"const": "CLAIMED"}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "assurance_claim_sigil": {"$ref": "#/$defs/sigil"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "reason_codes", "evidence_set_sigil"], "properties": {"kind": {"const": "UNMET"}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "reason_codes": {"$ref": "#/$defs/reason_codes"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "reason_codes", "evidence_set_sigil"], "properties": {"kind": {"const": "UNVERIFIABLE"}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "reason_codes": {"$ref": "#/$defs/reason_codes"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "job_assurance_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "attempt_id", "attempt_assurance_event_sigil", "assurance_claim_sigil", "evidence_set_sigil"], "properties": {"kind": {"const": "CLAIMED"}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"}, "attempt_assurance_event_sigil": {"$ref": "#/$defs/sigil"}, "assurance_claim_sigil": {"$ref": "#/$defs/sigil"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "attempt_id", "attempt_assurance_event_sigil", "reason_codes", "evidence_set_sigil"], "properties": {"kind": {"enum": ["UNMET", "UNVERIFIABLE"]}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"}, "attempt_assurance_event_sigil": {"$ref": "#/$defs/sigil"}, "reason_codes": {"$ref": "#/$defs/reason_codes"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "evaluation_event_id", "evaluation_event_sigil", "evaluation_sequence", "reason", "evidence_set_sigil"], "properties": {"kind": {"const": "NOT_APPLICABLE"}, "evaluation_event_id": {"$ref": "#/$defs/event_id"}, "evaluation_event_sigil": {"$ref": "#/$defs/sigil"}, "evaluation_sequence": {"$ref": "#/$defs/positive_u63"}, "reason": {"const": "NO_ATTEMPT_ALLOCATED"}, "evidence_set_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "budget_dimension": {
+      "type": "object", "additionalProperties": false,
+      "required": ["limit", "reserved", "consumed", "exhaustion_status"],
+      "properties": {"limit": {"$ref": "#/$defs/u64"}, "reserved": {"$ref": "#/$defs/u64"}, "consumed": {"$ref": "#/$defs/u64"}, "exhaustion_status": {"enum": ["AVAILABLE", "EXHAUSTED", "EXCEEDED"]}}
+    },
+    "budget_ledger": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempts", "cpu_time_seconds", "storage_bytes_written", "output_bytes", "log_bytes", "process_starts", "network_egress_bytes", "network_requests", "budget_ledger_sigil"],
+      "properties": {"attempts": {"$ref": "#/$defs/budget_dimension"}, "cpu_time_seconds": {"$ref": "#/$defs/budget_dimension"}, "storage_bytes_written": {"$ref": "#/$defs/budget_dimension"}, "output_bytes": {"$ref": "#/$defs/budget_dimension"}, "log_bytes": {"$ref": "#/$defs/budget_dimension"}, "process_starts": {"$ref": "#/$defs/budget_dimension"}, "network_egress_bytes": {"$ref": "#/$defs/budget_dimension"}, "network_requests": {"$ref": "#/$defs/budget_dimension"}, "budget_ledger_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "budget_settlement_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "event_id", "event_sigil", "accounting_capture_event_id", "accounting_capture_event_sigil", "usage_status"], "properties": {"kind": {"const": "SETTLED"}, "event_id": {"$ref": "#/$defs/event_id"}, "event_sigil": {"$ref": "#/$defs/sigil"}, "accounting_capture_event_id": {"$ref": "#/$defs/event_id"}, "accounting_capture_event_sigil": {"$ref": "#/$defs/sigil"}, "usage_status": {"enum": ["MEASURED", "PARTIAL", "UNAVAILABLE"]}}}
+      ]
+    },
+    "attempt_authorization_requirement": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["kind", "effects"], "properties": {"kind": {"const": "NONE"}, "effects": {"type": "array", "maxItems": 0}}}, {"type": "object", "additionalProperties": false, "required": ["kind", "effects"], "properties": {"kind": {"const": "REQUIRED"}, "effects": {"type": "array", "minItems": 1, "maxItems": 128}}}]},
+    "attempt_authorization_state": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}}, {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}}, {"type": "object", "additionalProperties": false, "required": ["kind", "authorization_subject", "attempt_authorization_binding"], "properties": {"kind": {"const": "BOUND"}, "authorization_subject": {"type": "object"}, "attempt_authorization_binding": {"type": "object"}}}]},
     "worker_session_state": {"enum": ["REGISTERED", "READY", "BUSY", "DRAINING", "OFFLINE", "QUARANTINED", "CLOSED"]},
     "worker_session_projection": {
       "type": "object", "additionalProperties": false,
@@ -112,4 +147,3 @@
     "idempotency_record": {"oneOf": [{"$ref": "#/$defs/ordinary_idempotency_record"}, {"$ref": "#/$defs/log_pending_ack_record"}, {"$ref": "#/$defs/log_acked_record"}]}
   }
 }
-

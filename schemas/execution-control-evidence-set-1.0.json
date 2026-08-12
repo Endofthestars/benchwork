@@ -44,7 +44,12 @@
         "control_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlEvidenceId"},
         "control_evidence_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"}
       }
+    },
+    "controlEvidenceSetBinding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "control_evidence_set_id", "control_evidence_set_sigil"], "properties": {"kind": {"const": "FROZEN"}, "control_evidence_set_id": {"$ref": "#/$defs/controlEvidenceSetId"}, "control_evidence_set_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"}}}
+      ]
     }
   }
 }
-
