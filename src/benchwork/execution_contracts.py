@@ -1981,6 +1981,101 @@ def _reduce_lease_revoked_v1(state: dict[str, Any], event: dict[str, Any]) -> di
     return build_execution_state_v1(reduced)
 
 
+def _reduce_lease_fenced_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Tombstone an offered or active Lease after authority is lost.
+
+    This is the Recovery/epoch-loss branch. It only projects the already
+    journaled fence decision and does not infer process termination or any
+    later Attempt terminal state.
+    """
+    if (
+        len(state["jobs"]) != 1
+        or len(state["attempts"]) != 1
+        or len(state["leases"]) != 1
+        or len(state["worker_sessions"]) != 1
+    ):
+        _fail("Lease fencing reducer requires one Job, Attempt, Lease, and Session")
+    job, attempt, lease, session = (
+        state["jobs"][0],
+        state["attempts"][0],
+        state["leases"][0],
+        state["worker_sessions"][0],
+    )
+    executor, payload, cause = state["executor"], event["payload"], event["payload"]["transition_cause"]
+    active = lease["state"] == "ACTIVE"
+    capacity_after = session["capacity_in_use"] - 1 if active else session["capacity_in_use"]
+    final_floor = attempt["fencing_generation"] + 1
+    expected_revisions = [
+        {"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1},
+        {"entity_kind": "JOB", "entity_id": job["job_id"], "preceding_revision": job["revision"], "next_revision": job["revision"] + 1},
+        {"entity_kind": "ATTEMPT", "entity_id": attempt["attempt_id"], "preceding_revision": attempt["revision"], "next_revision": attempt["revision"] + 1},
+        {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": lease["revision"], "next_revision": lease["revision"] + 1},
+    ]
+    if (
+        event["event_type"] != "lease.fenced"
+        or lease["state"] not in {"OFFERED", "ACTIVE"}
+        or attempt["lease_id"] != lease["lease_id"]
+        or (active and session["capacity_in_use"] < 1)
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["entity_revisions"] != expected_revisions
+        or cause["code"] not in {"RECOVERY_FENCE", "EXECUTOR_EPOCH_CHANGED", "LOST_OWNERSHIP"}
+        or cause["trigger_kind"] not in {"PRIOR_EVENT", "RECOVERY_DERIVATION"}
+        or payload["prior_fence_floor"] != job["fence_floor"]
+        or payload["tombstone_generation"] != final_floor
+        or payload["session_capacity_after"] != capacity_after
+    ):
+        _fail("Lease fencing Event disagrees with Lease authority")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["worker_sessions"] = [{
+        **session,
+        "revision": session["revision"] + 1,
+        "state": "READY" if capacity_after == 0 else "BUSY",
+        "capacity_in_use": capacity_after,
+        "next_heartbeat_due_at": None if active else session["next_heartbeat_due_at"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["jobs"] = [{
+        **job,
+        "revision": job["revision"] + 1,
+        "fence_floor": final_floor,
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["attempts"] = [{
+        **attempt,
+        "revision": attempt["revision"] + 1,
+        "lease_terminal_binding": {
+            "kind": "TERMINAL", "lease_id": lease["lease_id"], "lease_state": "FENCED",
+            "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
+            "final_fence_floor": final_floor, "tombstone_event_sigil": payload["tombstone_publication_sigil"],
+        },
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    reduced["leases"] = [{
+        **lease,
+        "revision": lease["revision"] + 1,
+        "state": "FENCED",
+        "next_heartbeat_due_at": None,
+        "tombstone_generation": final_floor,
+        "tombstone_event_sigil": payload["tombstone_publication_sigil"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+        "terminal_event_binding": {
+            "kind": "PRESENT", "terminal_state": "FENCED",
+            "terminal_event_id": event["event_id"], "terminal_event_sigil": event["event_sigil"],
+            "terminal_sequence": event["sequence"], "terminal_recorded_at": event["recorded_at"],
+        },
+    }]
+    reduced["deadlines"] = [item for item in state["deadlines"] if not (
+        (item["entity_id"] == lease["lease_id"] and item["deadline_kind"] in {"LEASE_CLAIM_DEADLINE", "LEASE_EXPIRY"})
+        or (active and item["entity_id"] == session["worker_session_id"] and item["deadline_kind"] == "HEARTBEAT_TIMEOUT")
+    )]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_lease_tombstone_republished_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record an additional publication of an already terminal Lease tombstone."""
     if len(state["leases"]) != 1:
@@ -2351,6 +2446,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_lease_expired_v1(current, event)
         elif event["event_type"] == "lease.revoked":
             current = _reduce_lease_revoked_v1(current, event)
+        elif event["event_type"] == "lease.fenced":
+            current = _reduce_lease_fenced_v1(current, event)
         elif event["event_type"] == "lease.tombstone_republished":
             current = _reduce_lease_tombstone_republished_v1(current, event)
         elif event["event_type"] == "lease.message_rejected":

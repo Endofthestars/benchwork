@@ -589,6 +589,20 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert claimed_state["attempts"][0]["state"] == "LEASED"
     assert claimed_state["worker_sessions"][0]["capacity_in_use"] == 1
 
+    fenced = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-FENCED", "sequence": 9, "event_type": "lease.fenced", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:07Z", "observed_at": None, "entity_revisions": [{"entity_kind": "WORKER_SESSION", "entity_id": session_id, "preceding_revision": 3, "next_revision": 4}, {"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}, {"entity_kind": "ATTEMPT", "entity_id": "AT-ONE", "preceding_revision": 4, "next_revision": 5}, {"entity_kind": "LEASE", "entity_id": lease["lease_id"], "preceding_revision": 1, "next_revision": 2}], "causation_event_id": claimed["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"transition_cause": {"code": "RECOVERY_FENCE", "trigger_kind": "PRIOR_EVENT", "trigger_event_id": claimed["event_id"], "effective_sequence": claimed["sequence"], "evidence_sigil": SIGIL}, "prior_fence_floor": 1, "tombstone_generation": 2, "tombstone_publication_sigil": SIGIL, "session_capacity_after": 0}, "previous_event_sigil": claimed["event_sigil"]})
+    fenced_state = replay_execution_supplied_state_suffix_v1(claimed_state, [fenced])
+    assert fenced_state["leases"][0]["state"] == "FENCED"
+    assert fenced_state["attempts"][0]["lease_terminal_binding"]["lease_state"] == "FENCED"
+    assert fenced_state["worker_sessions"][0]["capacity_in_use"] == 0
+
+    wrong_fence = deepcopy(fenced)
+    wrong_fence["payload"]["transition_cause"]["code"] = "CANCEL_REQUESTED"
+    wrong_fence = build_execution_journal_event_v1({
+        key: value for key, value in wrong_fence.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="Lease fencing Event disagrees"):
+        replay_execution_supplied_state_suffix_v1(claimed_state, [wrong_fence])
+
     revocation_input = deepcopy(claimed_state)
     first_stop = {"kind": "PRESENT", "event_id": claimed["event_id"], "event_type": "lease.claimed", "event_sigil": claimed["event_sigil"], "effective_sequence": claimed["sequence"]}
     revocation_input["jobs"][0].update({"revision": 3, "state": "STOPPING", "first_stop_or_fence_binding": first_stop, "last_event_id": "JE-STOPLATCHED", "last_event_sigil": SIGIL})
