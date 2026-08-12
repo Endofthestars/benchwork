@@ -915,6 +915,20 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
     assert settled_state["jobs"][0]["budget_ledger"] == settled_ledger
     assert settled_state["attempts"][0]["budget_settlement_binding"]["kind"] == "SETTLED"
 
+    partial_undercharge = deepcopy(settled)
+    partial_undercharge["payload"].update({
+        "usage_status": "PARTIAL",
+        "measured": {name: 0 for name in reservation},
+        "charged": {name: 0 for name in reservation},
+    })
+    partial_undercharge = build_execution_journal_event_v1({
+        key: value for key, value in partial_undercharge.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="Partial budget settlement must charge"):
+        replay_execution_supplied_state_suffix_v1(
+            terminal_state, [partial_undercharge], supplied_attempts=[attempt]
+        )
+
     attempt_assurance = build_execution_journal_event_v1({
         "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
         "event_id": "JE-ATTEMPTASSURANCE", "sequence": 19,

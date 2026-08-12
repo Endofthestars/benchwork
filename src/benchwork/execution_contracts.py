@@ -1971,12 +1971,8 @@ def _reduce_job_budget_settled_v1(
         _fail("Unavailable budget settlement must charge the full reservation")
     if payload["usage_status"] == "MEASURED" and payload["charged"] != payload["measured"]:
         _fail("Measured budget settlement must charge measured usage")
-    if payload["usage_status"] == "PARTIAL" and any(
-        payload["charged"][dimension]
-        not in {payload["measured"][dimension], reservation[dimension]}
-        for dimension in dimensions
-    ):
-        _fail("Partial budget settlement must charge measured usage or the reservation per dimension")
+    if payload["usage_status"] == "PARTIAL" and payload["charged"] != reservation:
+        _fail("Partial budget settlement must charge the full reservation")
     if payload["charged"]["attempts"] != 1:
         _fail("Budget settlement must charge exactly one Attempt")
     if (
