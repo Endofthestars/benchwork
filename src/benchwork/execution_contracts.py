@@ -179,6 +179,9 @@ def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
 def validate_execution_result_ingress_receipt_v1(receipt: dict[str, Any]) -> None:
     validate_instance("execution-result-ingress-receipt-1.0.json", receipt)
     _check_nfc(receipt)
+    _validate_observation_owner_binding(receipt["owner_binding"])
+    if receipt["receiver_identity"]["executor_epoch"] != receipt["owner_binding"]["executor_epoch"]:
+        _fail("Result ingress receiver epoch disagrees with owner binding")
     if receipt["ingress_receipt_id"] != derive_result_ingress_receipt_id_v1(receipt):
         _fail("Result ingress receipt ID mismatch")
     verification = receipt["credential_verification"]
@@ -231,10 +234,23 @@ def _observation_owner(evidence: dict[str, Any]) -> dict[str, Any]:
     return {member: evidence[member] for member in members}
 
 
+def _validate_observation_owner_binding(owner: dict[str, Any]) -> None:
+    """Check local equality inside an O1/O2 owner binding.
+
+    This is deliberately a closed-record check only: it does not resolve any
+    Job, Attempt, Lease, Worker, or Journal record.
+    """
+    fence = owner["fence_tuple"]
+    for member in ("job_id", "attempt_id", "lease_id", "executor_epoch"):
+        if fence[member] != owner[member]:
+            _fail(f"Observation owner binding disagrees with fence_tuple: {member}")
+
+
 def validate_execution_observation_evidence_v1(evidence: dict[str, Any]) -> None:
     validate_instance("execution-observation-evidence-1.0.json", evidence)
     _check_nfc(evidence)
     owner = _observation_owner(evidence)
+    _validate_observation_owner_binding(owner)
     binding = evidence["result_observation_binding"]
     if binding["observation_evidence_subject_sigil"] != derive_observation_evidence_subject_sigil_v1(owner, binding):
         _fail("Observation Evidence subject Sigil mismatch")
@@ -245,8 +261,14 @@ def validate_execution_observation_evidence_v1(evidence: dict[str, Any]) -> None
     if not (_parse_time(runtime["started_at"]) <= _parse_time(runtime["ended_at"]) <= _parse_time(termination["observed_at"]) <= _parse_time(evidence["created_at"])):
         _fail("Observation Evidence time order mismatch")
     assessment = evidence["assessment"]
-    if assessment["kind"] == "MATCHED" and assessment["reason_bindings"]:
-        _fail("MATCHED Observation Evidence must have no reasons")
+    if assessment["kind"] == "MATCHED":
+        if assessment["reason_bindings"]:
+            _fail("MATCHED Observation Evidence must have no reasons")
+        if (
+            assessment["verified_runtime_observation"] != runtime
+            or assessment["verified_termination_observation"] != termination
+        ):
+            _fail("MATCHED Observation Evidence must copy the Result observation")
     if assessment["kind"] == "MISMATCHED" and any(reason["reason_code"] != "MISMATCH" for reason in assessment["reason_bindings"]):
         _fail("MISMATCHED Observation Evidence contains a non-MISMATCH reason")
     if evidence["observation_evidence_sigil"] != content_sigil(_without(evidence, "observation_evidence_sigil")):
@@ -257,6 +279,30 @@ def load_execution_observation_evidence_v1(raw: str | bytes | bytearray) -> dict
     evidence = _load_strict_object(raw, "Observation Evidence")
     validate_execution_observation_evidence_v1(evidence)
     return evidence
+
+
+def validate_execution_observation_evidence_supplied_receipt_v1(
+    evidence: dict[str, Any], receipt: dict[str, Any]
+) -> None:
+    """Compare an O1 record with one complete caller-supplied O2 receipt.
+
+    It intentionally grants no acceptance, append, replay, or resolver
+    authority; callers must independently establish that the supplied receipt
+    is the applicable durable record.
+    """
+    validate_execution_observation_evidence_v1(evidence)
+    validate_execution_result_ingress_receipt_v1(receipt)
+    binding = evidence["result_ingress_receipt_binding"]
+    expected_binding = {
+        "ingress_receipt_id": receipt["ingress_receipt_id"],
+        "ingress_receipt_sigil": receipt["ingress_receipt_sigil"],
+    }
+    if binding != expected_binding:
+        _fail("Observation Evidence ingress receipt binding disagrees with supplied receipt")
+    if _observation_owner(evidence) != receipt["owner_binding"]:
+        _fail("Observation Evidence owner binding disagrees with supplied receipt")
+    if evidence["result_observation_binding"] != receipt["result_observation_binding"]:
+        _fail("Observation Evidence result observation disagrees with supplied receipt")
 
 
 def _context_value(context: dict[str, Any], key: str) -> Any:

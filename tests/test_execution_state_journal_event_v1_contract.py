@@ -20,6 +20,7 @@ from benchwork.execution_contracts import (
     load_execution_result_ingress_receipt_v1,
     load_execution_state_v1,
     validate_execution_observation_evidence_v1,
+    validate_execution_observation_evidence_supplied_receipt_v1,
     validate_execution_result_ingress_receipt_v1,
 )
 
@@ -218,6 +219,43 @@ def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _reseal_receipt(receipt: dict[str, Any]) -> None:
+    receipt["ingress_receipt_id"] = derive_result_ingress_receipt_id_v1(receipt)
+    verification = receipt["credential_verification"]
+    verification["verification_sigil"] = content_sigil(
+        [
+            "execution-result-ingress-credential-verification/1.0",
+            receipt["owner_binding"],
+            receipt["result_sigil"],
+            receipt["received_at"],
+            receipt["control_channel_identity_sigil"],
+            verification["lease_credential_digest"],
+            verification["verification_profile_sigil"],
+            verification["verified_at"],
+        ]
+    )
+    receipt["ingress_receipt_sigil"] = content_sigil(
+        {key: member for key, member in receipt.items() if key != "ingress_receipt_sigil"}
+    )
+
+
+def _reseal_evidence(evidence: dict[str, Any]) -> None:
+    owner = {
+        member: evidence[member]
+        for member in (
+            "job_id", "job_binding_sigil", "attempt_id", "attempt_binding_sigil",
+            "lease_id", "lease_binding_sigil", "worker_id", "worker_binding_sigil",
+            "worker_session_id", "worker_session_binding_sigil", "executor_epoch", "fence_tuple",
+        )
+    }
+    binding = evidence["result_observation_binding"]
+    binding["observation_evidence_subject_sigil"] = derive_observation_evidence_subject_sigil_v1(owner, binding)
+    evidence["observation_evidence_id"] = derive_observation_evidence_id_v1(evidence)
+    evidence["observation_evidence_sigil"] = content_sigil(
+        {key: member for key, member in evidence.items() if key != "observation_evidence_sigil"}
+    )
+
+
 def test_state_closes_19_24_projection_members_and_all_11_ranks() -> None:
     schema = json.loads((SCHEMAS / "execution-state-1.0.json").read_text())
     assert len(schema["$defs"]["worker_session_projection"]["required"]) == 19
@@ -313,6 +351,39 @@ def test_jew4_owners_are_resolvable_direct_refs_and_validate_complete_roots() ->
     evidence = _evidence(receipt)
     validate_execution_observation_evidence_v1(evidence)
     assert load_execution_observation_evidence_v1(json.dumps(evidence)) == evidence
+    validate_execution_observation_evidence_supplied_receipt_v1(evidence, receipt)
+
+
+def test_jew4_owner_fences_and_supplied_receipt_comparison_fail_closed() -> None:
+    receipt = _receipt()
+    evidence = _evidence(receipt)
+
+    bad_owner = deepcopy(evidence)
+    bad_owner["fence_tuple"]["executor_epoch"] = 2
+    _reseal_evidence(bad_owner)
+    with pytest.raises(Exception, match="fence_tuple: executor_epoch"):
+        validate_execution_observation_evidence_v1(bad_owner)
+
+    bad_receipt = deepcopy(receipt)
+    bad_receipt["receiver_identity"]["executor_epoch"] = 2
+    _reseal_receipt(bad_receipt)
+    with pytest.raises(Exception, match="receiver epoch"):
+        validate_execution_observation_evidence_supplied_receipt_v1(evidence, bad_receipt)
+
+    mismatched_assessment = deepcopy(evidence)
+    mismatched_assessment["assessment"]["verified_runtime_observation"] = {
+        **mismatched_assessment["assessment"]["verified_runtime_observation"],
+        "process_count": 1,
+    }
+    _reseal_evidence(mismatched_assessment)
+    with pytest.raises(Exception, match="copy the Result observation"):
+        validate_execution_observation_evidence_v1(mismatched_assessment)
+
+    mismatched_receipt = deepcopy(evidence)
+    mismatched_receipt["result_ingress_receipt_binding"]["ingress_receipt_sigil"] = SIGIL
+    _reseal_evidence(mismatched_receipt)
+    with pytest.raises(Exception, match="ingress receipt binding"):
+        validate_execution_observation_evidence_supplied_receipt_v1(mismatched_receipt, receipt)
 
 
 @pytest.mark.parametrize(
