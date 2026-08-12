@@ -14,6 +14,7 @@ from benchwork.artifact_storage_contracts import (
     load_artifact_provenance_v1,
     load_artifact_provenance_policy_v1,
     load_artifact_storage_backend_v1,
+    load_artifact_storage_doctor_report_v1,
     load_artifact_retention_policy_v1,
     load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_recovery_marker_v1,
@@ -34,6 +35,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_provenance_policy_v1,
     validate_artifact_storage_state_supplied_provenance_policies_v1,
     validate_artifact_storage_backend_v1,
+    validate_artifact_storage_doctor_report_v1,
     validate_artifact_storage_state_supplied_provenance_v1,
     validate_artifact_retention_policy_v1,
     validate_artifact_storage_state_supplied_retention_policies_v1,
@@ -385,6 +387,32 @@ def _provenance_policy() -> dict[str, object]:
     return policy
 
 
+def _doctor_report() -> dict[str, object]:
+    check = {"check_id": "CHECK", "status": "INCOMPLETE", "subject_kind": "JOURNAL",
+             "subject_id": "SJ-ONE", "evidence_sigils": [], "reason": None}
+    report: dict[str, object] = {
+        "schema_version": "artifact-storage-doctor-report/1.0", "report_id": "REPORT",
+        "mode": "NORMAL", "project_id": "PROJECT", "storage_journal_id": None,
+        "journal_head_sigil": None, "chronicle_head_sigil": None,
+        "storage_format_version": None, "backend_profile_id": None,
+        "backend_profile_sigil": None, "conformance_profile_id": None,
+        "conformance_suite_sigil": None, "coordinator_epoch": None,
+        "journal_verification": check, "state_verification": check,
+        "backend_inventory": [], "replica_checks": [], "legacy_checks": [],
+        "quarantine_checks": [], "quota_checks": [], "reference_checks": [],
+        "open_intent_checks": [],
+        "bounds": {"max_inventory_entries": 0, "max_control_records": 0,
+                   "max_rehash_bytes": 0, "max_wall_millis": 0,
+                   "inventory_truncated": False, "rehash_truncated": False},
+        "incomplete_reasons": [], "overall_status": "INCOMPLETE",
+        "started_at": STAMP, "completed_at": STAMP, "report_sigil": "",
+    }
+    report["report_sigil"] = content_sigil({
+        key: member for key, member in report.items() if key != "report_sigil"
+    })
+    return report
+
+
 def _recovery_marker() -> dict[str, object]:
     marker: dict[str, object] = {
         "schema_version": "artifact-storage-recovery-marker/1.0", "recovery_id": "RECOVERY",
@@ -707,6 +735,20 @@ def test_provenance_policy_is_self_signed_and_matches_state_projection() -> None
     missing = deepcopy(state)
     with pytest.raises(AthanorError, match="Provenance Policy projection lacks"):
         validate_artifact_storage_state_supplied_provenance_policies_v1(missing, policies=[])
+
+
+def test_doctor_report_is_self_signed_and_nonnegative_in_duration() -> None:
+    report = _doctor_report()
+    validate_artifact_storage_doctor_report_v1(report)
+    assert load_artifact_storage_doctor_report_v1(json.dumps(report)) == report
+
+    reversed_times = deepcopy(report)
+    reversed_times["completed_at"] = "2026-08-05T23:59:59Z"
+    reversed_times["report_sigil"] = content_sigil({
+        key: member for key, member in reversed_times.items() if key != "report_sigil"
+    })
+    with pytest.raises(AthanorError, match="completes before"):
+        validate_artifact_storage_doctor_report_v1(reversed_times)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:

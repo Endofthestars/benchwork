@@ -379,6 +379,22 @@ def load_artifact_provenance_policy_v1(raw: str | bytes | bytearray) -> dict[str
     return policy
 
 
+def validate_artifact_storage_doctor_report_v1(report: dict[str, Any]) -> None:
+    """Validate a read-only Doctor report without trusting its observations."""
+    validate_instance("artifact-storage-doctor-report-1.0.json", report)
+    _check_nfc_and_numbers(report)
+    if report["report_sigil"] != content_sigil(_without(report, "report_sigil")):
+        _fail("Artifact Storage Doctor Report self-Sigil mismatch")
+    if _parse_time(report["completed_at"]) < _parse_time(report["started_at"]):
+        _fail("Artifact Storage Doctor Report completes before it starts")
+
+
+def load_artifact_storage_doctor_report_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    report = _load_strict_object(raw, "Artifact Storage Doctor Report")
+    validate_artifact_storage_doctor_report_v1(report)
+    return report
+
+
 def validate_artifact_storage_state_supplied_provenance_policies_v1(
     state: dict[str, Any], *, policies: list[dict[str, Any]],
 ) -> None:
