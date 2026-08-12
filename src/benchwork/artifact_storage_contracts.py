@@ -988,6 +988,60 @@ def _reduce_artifact_storage_message_rejected_v1(
     return reduced
 
 
+def _reduce_artifact_storage_legacy_protection_failed_v1(
+    state: dict[str, Any], event: dict[str, Any],
+) -> dict[str, Any]:
+    """Retain one failed v1 compatibility protection during initialization.
+
+    A failed historical-artifact copy is durable negative evidence.  It never
+    activates the store and cannot be overwritten by a later success record.
+    """
+    payload = event["payload"]
+    if state["store_status"] != "INITIALIZING" or event["event_type"] != "legacy_v1.protection_failed":
+        _fail("Artifact Storage legacy protection failure has an invalid source State or Event")
+    existing = [
+        item for item in state["legacy_v1_protections"]
+        if item["protection_id"] == payload["protection_id"]
+        or item["artifact_id"] == payload["artifact_id"]
+    ]
+    expected_revisions = [{
+        "entity_type": "LEGACY_PROTECTION", "entity_id": payload["protection_id"],
+        "previous_revision": None, "next_revision": 1,
+    }]
+    reason = payload["reason"]
+    if (
+        event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"] != expected_revisions
+        or event["quota_effects"]
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] is not None
+        or existing
+        or reason["evidence_sigils"] != sorted(set(reason["evidence_sigils"]))
+    ):
+        _fail("Artifact Storage legacy protection failure Event disagrees with prior State")
+    reduced = _without(state, "state_sigil")
+    reduced.update({
+        "legacy_v1_protections": [
+            *state["legacy_v1_protections"],
+            {
+                "protection_id": payload["protection_id"],
+                "artifact_id": payload["artifact_id"],
+                "state": "FAILED", "record": None,
+                "receipt_sigil": payload["receipt_sigil"], "reason": reason,
+                "revision": 1, "last_event_sigil": event["event_sigil"],
+            },
+        ],
+        "applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"],
+    })
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1014,6 +1068,8 @@ def replay_artifact_storage_journal_prefix_v1(
             state = _reduce_artifact_storage_recovery_completed_v1(state, event)
         elif event["event_type"] == "storage.message_rejected":
             state = _reduce_artifact_storage_message_rejected_v1(state, event)
+        elif event["event_type"] == "legacy_v1.protection_failed":
+            state = _reduce_artifact_storage_legacy_protection_failed_v1(state, event)
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for this Event")
     if head is not None:

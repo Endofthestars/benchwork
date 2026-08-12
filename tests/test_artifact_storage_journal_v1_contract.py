@@ -249,6 +249,60 @@ def test_storage_replay_activates_the_empty_initialized_store() -> None:
         replay_artifact_storage_journal_prefix_v1([initial, wrong_revision])
 
 
+def test_storage_replay_retains_failed_legacy_protection_and_blocks_activation() -> None:
+    initial = _initial_replay_event()
+    failed = _next_event(initial)
+    failed["event_type"] = "legacy_v1.protection_failed"
+    failed["entity_revisions"] = [{
+        "entity_type": "LEGACY_PROTECTION", "entity_id": "PROTECTION",
+        "previous_revision": None, "next_revision": 1,
+    }]
+    failed["quota_effects"] = []
+    failed["payload"] = {
+        "protection_id": "PROTECTION", "artifact_id": "ARTIFACT",
+        "receipt_sigil": None,
+        "reason": {"code": "BACKEND_UNAVAILABLE", "evidence_sigils": []},
+    }
+    failed["event_sigil"] = content_sigil({
+        key: value for key, value in failed.items() if key != "event_sigil"
+    })
+    failed_state = replay_artifact_storage_journal_prefix_v1([initial, failed])
+    assert failed_state["legacy_v1_protections"] == [{
+        "protection_id": "PROTECTION", "artifact_id": "ARTIFACT",
+        "state": "FAILED", "record": None, "receipt_sigil": None,
+        "reason": failed["payload"]["reason"], "revision": 1,
+        "last_event_sigil": failed["event_sigil"],
+    }]
+
+    activation = _next_event(failed)
+    activation["event_id"] = "SE-THREE"
+    activation["sequence"] = 3
+    activation["event_type"] = "storage.activation_completed"
+    activation["entity_revisions"] = [{
+        "entity_type": "STORE", "entity_id": "STORE", "previous_revision": 1, "next_revision": 2,
+    }]
+    activation["quota_effects"] = []
+    activation["payload"] = {
+        "legacy_protection_ids": ["PROTECTION"], "activation_evidence_sigil": SIGIL,
+        "clock": initial["payload"]["clock"],
+    }
+    activation["event_sigil"] = content_sigil({
+        key: value for key, value in activation.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="failed legacy protection"):
+        replay_artifact_storage_journal_prefix_v1([initial, failed, activation])
+
+    duplicate = deepcopy(failed)
+    duplicate["event_id"] = "SE-FOUR"
+    duplicate["sequence"] = 3
+    duplicate["previous_event_sigil"] = failed["event_sigil"]
+    duplicate["event_sigil"] = content_sigil({
+        key: value for key, value in duplicate.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="disagrees"):
+        replay_artifact_storage_journal_prefix_v1([initial, failed, duplicate])
+
+
 def test_storage_replay_completes_an_empty_recovery_to_its_frozen_origin() -> None:
     initial = _initial_replay_event()
     activation = _next_event(initial)
