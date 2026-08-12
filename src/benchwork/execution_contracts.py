@@ -2297,6 +2297,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_attempt_authorization_bound_v1(
                 current, event, immutable_job, immutable_attempt
             )
+        elif event["event_type"] == "attempt.preflight_progressed":
+            current = _reduce_attempt_preflight_progressed_v1(current, event)
         elif event["event_type"] in {"worker.draining", "worker.quarantined"}:
             current = _reduce_worker_draining_or_quarantined_v1(current, event)
         elif event["event_type"] == "worker.retired":
@@ -2896,6 +2898,56 @@ def _reduce_attempt_preflight_started_v1(
     return build_execution_state_v1(reduced)
 
 
+_PREFLIGHT_PROGRESS_STEPS_V1 = {
+    "TASK_BINDINGS_VERIFIED",
+    "POLICIES_VERIFIED",
+    "BASE_INPUTS_VERIFIED",
+    "BACKEND_VERIFIED",
+    "MATERIALIZATION_CREATED",
+    "OUTPUT_NAMESPACE_CREATED",
+}
+
+
+def _reduce_attempt_preflight_progressed_v1(
+    state: dict[str, Any], event: dict[str, Any]
+) -> dict[str, Any]:
+    """Record one bounded preflight progress observation.
+
+    The immutable evidence Sigil is retained by the Event itself. State has no
+    mutable progress field, so this reducer validates ordering and the allowed
+    step without promoting the evidence to authority.
+    """
+    if len(state["attempts"]) != 1:
+        _fail("Preflight progress reducer requires one Attempt")
+    attempt, payload, executor = state["attempts"][0], event["payload"], state["executor"]
+    if (
+        event["event_type"] != "attempt.preflight_progressed"
+        or attempt["state"] != "PREFLIGHTING"
+        or payload["step"] not in _PREFLIGHT_PROGRESS_STEPS_V1
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
+        or event["causation_event_id"] != attempt["last_event_id"]
+        or event["entity_revisions"]
+        != [{
+            "entity_kind": "ATTEMPT",
+            "entity_id": attempt["attempt_id"],
+            "preceding_revision": attempt["revision"],
+            "next_revision": attempt["revision"] + 1,
+        }]
+    ):
+        _fail("Preflight progress Event disagrees with preflighting Attempt")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["attempts"] = [{
+        **attempt,
+        "revision": attempt["revision"] + 1,
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_attempt_preflight_passed_v1(
     state: dict[str, Any], event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -3418,6 +3470,8 @@ def replay_execution_journal_supplied_facts_v1(
             )
         elif event["event_type"] == "attempt.preflight_started":
             state = _reduce_attempt_preflight_started_v1(state, event)
+        elif event["event_type"] == "attempt.preflight_progressed":
+            state = _reduce_attempt_preflight_progressed_v1(state, event)
         elif event["event_type"] == "attempt.preflight_passed":
             state = _reduce_attempt_preflight_passed_v1(state, event)
         else:

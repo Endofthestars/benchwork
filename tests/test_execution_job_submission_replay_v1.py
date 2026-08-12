@@ -335,6 +335,33 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         supplied_jobs=[job], supplied_attempts=[attempt],
     )
     assert preflight_state["attempts"][0]["state"] == "PREFLIGHTING"
+    preflight_progress = build_execution_journal_event_v1({
+        "schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"],
+        "event_id": "JE-PREFLIGHTPROGRESS", "sequence": 6,
+        "event_type": "attempt.preflight_progressed",
+        "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1,
+        "executor_build_sigil": INITIAL["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
+        "entity_revisions": [{
+            "entity_kind": "ATTEMPT", "entity_id": "AT-ONE",
+            "preceding_revision": 1, "next_revision": 2,
+        }],
+        "causation_event_id": preflight["event_id"], "idempotency_key_sigil": None,
+        "recovery_action_binding": None,
+        "payload": {"step": "TASK_BINDINGS_VERIFIED", "progress_evidence_sigil": SIGIL},
+        "previous_event_sigil": preflight["event_sigil"],
+    })
+    progressed_state = replay_execution_supplied_state_suffix_v1(
+        preflight_state, [preflight_progress]
+    )
+    assert progressed_state["attempts"][0]["revision"] == 2
+    invalid_progress = deepcopy(preflight_progress)
+    invalid_progress["payload"]["step"] = "NOT_A_PREFLIGHT_STEP"
+    invalid_progress = build_execution_journal_event_v1({
+        key: value for key, value in invalid_progress.items() if key != "event_sigil"
+    })
+    with pytest.raises(AthanorError, match="Preflight progress Event disagrees"):
+        replay_execution_supplied_state_suffix_v1(preflight_state, [invalid_progress])
     preflight_passed = _preflight_passed_event(preflight)
     ready_state = replay_execution_journal_prefix_v1(
         [INITIAL, event, queued, allocated, preflight, preflight_passed],
