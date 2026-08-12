@@ -1460,6 +1460,58 @@ def _reduce_worker_retired_v1(state: dict[str, Any], event: dict[str, Any]) -> d
     return build_execution_state_v1(reduced)
 
 
+def _reduce_worker_session_lifecycle_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    """Transition a Session while requiring an exact Lease inventory."""
+    matches = [session for session in state["worker_sessions"] if session["worker_session_id"] == event["entity_revisions"][0]["entity_id"]]
+    if len(matches) != 1:
+        _fail("Worker-Session lifecycle Event has no unique Session projection")
+    session, payload, executor = matches[0], event["payload"], state["executor"]
+    session_leases = [lease for lease in state["leases"] if lease["worker_session_id"] == session["worker_session_id"]]
+    active_ids = sorted((lease["lease_id"] for lease in session_leases if lease["state"] == "ACTIVE"), key=lambda value: _unsigned_ascii(value, "Lease ID"))
+    terminal_states = {"RELEASED", "REVOKED", "EXPIRED", "FENCED"}
+    event_type = event["event_type"]
+    target_by_event = {
+        "worker_session.draining": "DRAINING", "worker_session.offline": "OFFLINE",
+        "worker_session.quarantined": "QUARANTINED", "worker_session.closed": "CLOSED",
+    }
+    target = target_by_event.get(event_type)
+    if target is None:
+        _fail("Unknown Worker-Session lifecycle Event")
+    valid_sources = {
+        "DRAINING": {"READY", "BUSY"}, "OFFLINE": {"REGISTERED", "READY", "BUSY", "DRAINING"},
+        "QUARANTINED": {"REGISTERED", "READY", "BUSY", "DRAINING"},
+        "CLOSED": {"REGISTERED", "READY", "DRAINING", "OFFLINE", "QUARANTINED"},
+    }
+    if event_type == "worker_session.closed":
+        inventory_ok = (
+            payload["terminal_lease_ids"] == sorted((lease["lease_id"] for lease in session_leases), key=lambda value: _unsigned_ascii(value, "Lease ID"))
+            and all(lease["state"] in terminal_states for lease in session_leases)
+        )
+    else:
+        inventory_ok = payload["active_lease_ids"] == active_ids
+    if (
+        session["state"] not in valid_sources[target] or not inventory_ok
+        or (event_type == "worker_session.draining" and not payload["reason_code"])
+        or (event_type == "worker_session.offline" and payload["last_heartbeat_sequence"] != session["last_heartbeat_sequence"])
+        or (event_type == "worker_session.quarantined" and not payload["reason_codes"])
+        or event["executor_instance_id"] != executor["executor_instance_id"] or event["executor_epoch"] != session["executor_epoch"]
+        or event["causation_event_id"] != session["last_event_id"]
+        or event["entity_revisions"] != [{"entity_kind": "WORKER_SESSION", "entity_id": session["worker_session_id"], "preceding_revision": session["revision"], "next_revision": session["revision"] + 1}]
+    ):
+        _fail("Worker-Session lifecycle Event disagrees with Session or Lease projections")
+    reduced = _advance_journal_binding_v1(state, event)
+    reduced["worker_sessions"] = [
+        {**candidate, "revision": candidate["revision"] + 1, "state": target,
+         "next_heartbeat_due_at": None if target in {"OFFLINE", "QUARANTINED", "CLOSED"} else candidate["next_heartbeat_due_at"],
+         "last_event_id": event["event_id"], "last_event_sigil": event["event_sigil"]}
+        if candidate["worker_session_id"] == session["worker_session_id"] else candidate
+        for candidate in state["worker_sessions"]
+    ]
+    if target in {"OFFLINE", "QUARANTINED", "CLOSED"}:
+        reduced["deadlines"] = [item for item in state["deadlines"] if not (item["deadline_kind"] == "HEARTBEAT_TIMEOUT" and item["entity_id"] == session["worker_session_id"])]
+    return build_execution_state_v1(reduced)
+
+
 def _reduce_log_chunk_duplicate_observed_v1(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     """Record a duplicate chunk observation without appending bytes twice."""
     payload, executor = event["payload"], state["executor"]
@@ -2013,6 +2065,8 @@ def replay_execution_supplied_state_suffix_v1(
             current = _reduce_worker_draining_or_quarantined_v1(current, event)
         elif event["event_type"] == "worker.retired":
             current = _reduce_worker_retired_v1(current, event)
+        elif event["event_type"] in {"worker_session.draining", "worker_session.offline", "worker_session.quarantined", "worker_session.closed"}:
+            current = _reduce_worker_session_lifecycle_v1(current, event)
         elif event["event_type"] == "lease.claimed":
             current = _reduce_lease_claimed_v1(current, event)
         elif event["event_type"] == "attempt.starting":
