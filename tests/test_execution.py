@@ -227,6 +227,18 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "recorded_at is invalid"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_resealed_decreasing_event_time_fails_in_loader(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["recorded_at"] = "1970-01-01T00:00:00Z"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "time is decreasing"):
+            self.service.observe(observation["job"]["job_id"])
+
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)

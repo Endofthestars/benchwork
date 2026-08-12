@@ -236,6 +236,7 @@ class ExecutionService:
             return []
         events: list[dict[str, Any]] = []
         previous: str | None = None
+        previous_recorded_at: datetime | None = None
         event_ids: set[str] = set()
         for line_number, line in enumerate(self._journal_path.read_text(encoding="utf-8").splitlines(), 1):
             try:
@@ -277,6 +278,8 @@ class ExecutionService:
                 raise AthanorError("execution journal Event recorded_at is invalid") from error
             if not event["recorded_at"].endswith("Z") or recorded_at.tzinfo != UTC:
                 raise AthanorError("execution journal Event recorded_at is invalid")
+            if previous_recorded_at is not None and recorded_at < previous_recorded_at:
+                raise AthanorError("execution journal Event time is decreasing")
             if previous is None:
                 if event["previous_event_sigil"] is not None:
                     raise AthanorError("execution journal chain is broken")
@@ -298,6 +301,7 @@ class ExecutionService:
             events.append(event)
             event_ids.add(event["event_id"])
             previous = event["event_sigil"]
+            previous_recorded_at = recorded_at
         return events
 
     def _write_head_unlocked(self, events: list[dict[str, Any]]) -> None:
