@@ -825,6 +825,8 @@ def replay_artifact_storage_journal_prefix_v1(
             state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
         return state
     if len(events) == 4 and [event["event_type"] for event in events[1:]] == [
         "storage.activation_completed", "storage.clock_uncertain", "storage.clock_restored",
@@ -832,6 +834,8 @@ def replay_artifact_storage_journal_prefix_v1(
         state = _reduce_artifact_storage_activation_v1(state, events[1])
         state = _reduce_artifact_storage_clock_gate_v1(state, events[2], restoring=False)
         state = _reduce_artifact_storage_clock_gate_v1(state, events[3], restoring=True)
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[3], state["state_sigil"])
         return state
     _fail("Artifact Storage Journal replay reducer is unavailable for later Events")
 

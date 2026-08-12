@@ -293,6 +293,9 @@ def test_storage_replay_applies_empty_clock_gate_round_trip() -> None:
     state = replay_artifact_storage_journal_prefix_v1([initial, activation, uncertain, restored])
     assert state["clock_status"] == "TRUSTED"
     assert state["clock_anchor"] == restored["payload"]["new_clock"]
+    head = _head(restored)
+    head.update({"event_count": 4, "last_sequence": 4, "current_epoch": 1, "state_sigil": state["state_sigil"]})
+    replay_artifact_storage_journal_prefix_v1([initial, activation, uncertain, restored], head=head)
 
     wrong_anchor = deepcopy(uncertain)
     wrong_anchor["payload"]["previous_clock"]["utc"] = "2026-08-06T00:00:01Z"
