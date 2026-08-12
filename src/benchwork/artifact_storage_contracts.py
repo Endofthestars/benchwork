@@ -1643,6 +1643,24 @@ def _reduce_artifact_storage_canonical_reference_committed_v1(
     return reduced
 
 
+def _reduce_artifact_storage_canonical_reference_released_v1(
+    state: dict[str, Any], event: dict[str, Any], intent: dict[str, Any],
+) -> dict[str, Any]:
+    """Reject untrusted abort facts pending an authoritative Chronicle resolver.
+
+    A self-consistent supplied head and absence Sigil cannot prove the required
+    negative fact: that the complete Chronicle suffix contains no Event bound
+    to this immutable request.  Generic Storage replay has no Chronicle
+    authority, therefore it must retain the OPEN pin rather than project a
+    RELEASED state.  The local fact checker remains available for the future
+    authoritative resolver boundary.
+    """
+    _fail(
+        "Canonical Reference release replay requires authoritative Chronicle "
+        "absence proof and remains fail-closed"
+    )
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
     supplied_reference_sets: list[dict[str, Any]] | None = None,
@@ -1709,6 +1727,13 @@ def replay_artifact_storage_journal_prefix_v1(
             state = _reduce_artifact_storage_canonical_reference_committed_v1(
                 state, event, intent_matches[0], commit_matches[0]
             )
+        elif event["event_type"] == "canonical_reference.released":
+            if supplied_reference_intents is None:
+                _fail("Canonical Reference release replay requires its supplied control record")
+            matches = [record for record in supplied_reference_intents if record.get("reference_intent_id") == event["payload"]["reference_intent_id"]]
+            if len(matches) != 1:
+                _fail("Canonical Reference release replay requires exactly one supplied record")
+            state = _reduce_artifact_storage_canonical_reference_released_v1(state, event, matches[0])
         else:
             _fail("Artifact Storage Journal replay reducer is unavailable for this Event")
     if head is not None:

@@ -1393,6 +1393,16 @@ def test_storage_replay_projects_canonical_reference_write_ahead_pin() -> None:
     assert [counter["reserved"] for counter in state["quota_counters"] if counter["quota_class"]
             in {"JOURNAL", "CONTROL_RECORD"}] == [1, 1]
 
+    abort_authority = {"kind": "HEAD_SUPERSEDED_WITHOUT_BOUND_EVENT", "reference_intent_id": intent["reference_intent_id"], "reference_intent_record_sigil": intent["record_sigil"], "transition_request_id": intent["transition_request_id"], "transition_request_sigil": intent["transition_request_sigil"], "expected_chronicle_head": intent["expected_chronicle_head"], "verified_chronicle_head": {"schema_version": "chronicle-head/1.1", "event_count": 1, "terminal_receipt_sigil": SIGIL}, "absence_evidence_sigil": "", "authority_sigil": ""}
+    abort_authority["absence_evidence_sigil"] = content_sigil(["artifact-storage-canonical-precommit-absence/1.0", intent["reference_intent_id"], intent["record_sigil"], intent["transition_request_id"], intent["transition_request_sigil"], intent["expected_chronicle_head"], abort_authority["verified_chronicle_head"]])
+    abort_authority["authority_sigil"] = content_sigil({key: value for key, value in abort_authority.items() if key != "authority_sigil"})
+    release_reason = {"code": "CHRONICLE_REFERENCE_CHANGED", "evidence_sigils": sorted([abort_authority["authority_sigil"], abort_authority["absence_evidence_sigil"], intent["record_sigil"], intent["transition_request_sigil"]])}
+    released = _next_event(recorded)
+    released.update({"event_id": "SE-RELEASE", "sequence": 5, "event_type": "canonical_reference.released", "recorded_at": "2026-08-06T00:00:04Z", "observed_at": None, "entity_revisions": [{"entity_type": "REFERENCE_INTENT", "entity_id": intent["reference_intent_id"], "previous_revision": 1, "next_revision": 2}, {"entity_type": "QUOTA", "entity_id": reservation["reservation_id"], "previous_revision": 1, "next_revision": 2}], "causation_event_id": "SE-INTENT", "idempotency_key_sigil": SIGIL, "quota_effects": [{"kind": "SETTLE", "reservation_id": reservation["reservation_id"], "state_after": "SETTLED", "consumed_claims": [deepcopy(reservation["claims"][1])], "released_claims": [deepcopy(reservation["claims"][0])], "remaining_claims": [], "usage_additions": [deepcopy(reservation["claims"][1])], "retained_for_event_types": []}], "payload": {"reference_intent_id": intent["reference_intent_id"], "release_kind": "ABORTED_BEFORE_CANONICAL_COMMIT", "chronicle_commit": None, "abort_authority": abort_authority, "reason": release_reason}})
+    released["event_sigil"] = content_sigil({key: value for key, value in released.items() if key != "event_sigil"})
+    with pytest.raises(AthanorError, match="authoritative Chronicle absence proof"):
+        replay_artifact_storage_journal_prefix_v1([initial, activation, registered, recorded, released], supplied_reference_sets=[reference_set], supplied_reference_intents=[intent])
+
     chronicle_event: dict[str, Any] = {
         "schema_version": "chronicle-event/1.1", "event_id": "CE-ONE", "sequence": 1,
         "type": "patch.proposed", "object_id": "PATCH-ONE", "occurred_at": "2026-08-06T00:00:04Z",
