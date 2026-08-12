@@ -1132,6 +1132,10 @@ def validate_execution_recovery_completion_supplied_action_set_v1(
         or event["journal_id"] != state["journal_binding"]["journal_id"]
         or event["sequence"] != state["journal_binding"]["through_sequence"] + 1
         or event["previous_event_sigil"] != state["journal_binding"]["through_event_sigil"]
+        or event["executor_instance_id"] != executor["executor_instance_id"]
+        or event["executor_epoch"] != executor["executor_epoch"]
+        or event["executor_build_sigil"]
+        != executor["executor_build_binding"]["executor_build_sigil"]
         or event["entity_revisions"] != expected_revisions
         or recovery["state"] != "FINALIZING"
         or payload["recovery_id"] != recovery["recovery_id"]

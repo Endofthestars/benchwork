@@ -1133,9 +1133,11 @@ def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
         "current_action_set_sigil": action_set["action_set_sigil"],
         "last_event_id": "JE-THREE", "last_event_sigil": SIGIL_B}]
     _reseal_state(state)
+    executor_build_sigil = state["executor"]["executor_build_binding"]["executor_build_sigil"]
     event = {"schema_version": "execution-journal-event/1.0", "journal_id": "EJ-ONE",
         "event_id": "JE-FOUR", "sequence": 4, "event_type": "recovery.completed",
-        "executor_instance_id": "XI-ONE", "executor_epoch": 1, "executor_build_sigil": SIGIL,
+        "executor_instance_id": "XI-ONE", "executor_epoch": 1,
+        "executor_build_sigil": executor_build_sigil,
         "recorded_at": "2026-08-06T00:00:03Z", "observed_at": None,
         "entity_revisions": [
             {"entity_kind": "EXECUTOR", "entity_id": "XI-ONE", "preceding_revision": 2, "next_revision": 3},
@@ -1155,6 +1157,16 @@ def test_recovery_completion_binds_finalizing_state_and_action_set() -> None:
     })
     with pytest.raises(Exception, match="completion disagrees"):
         validate_execution_recovery_completion_supplied_action_set_v1(state, event, wrong_set)
+
+    wrong_epoch = deepcopy(event)
+    wrong_epoch["executor_epoch"] = 2
+    wrong_epoch["event_sigil"] = content_sigil({
+        key: member for key, member in wrong_epoch.items() if key != "event_sigil"
+    })
+    with pytest.raises(Exception, match="completion disagrees"):
+        validate_execution_recovery_completion_supplied_action_set_v1(
+            state, wrong_epoch, action_set,
+        )
 
 
 def test_recovery_action_event_matches_its_supplied_frozen_envelope() -> None:
