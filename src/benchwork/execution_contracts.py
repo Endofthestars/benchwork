@@ -957,6 +957,54 @@ def load_execution_storage_root_manifest_v1(raw: str | bytes | bytearray) -> dic
     return manifest
 
 
+def derive_execution_root_hold_release_authorization_id_v1(
+    authorization: dict[str, Any],
+) -> str:
+    """Derive the immutable EHR-ID from the held execution root."""
+    digest = content_sigil([
+        "execution-root-hold-release-authorization-id/1.0",
+        authorization["storage_root"]["hold_id"],
+    ]).removeprefix("sha256:").upper()
+    return f"EHR-{digest}"
+
+
+def validate_execution_root_hold_release_authorization_v1(
+    authorization: dict[str, Any],
+) -> None:
+    """Validate an EHR's local bindings without authorizing a Storage release."""
+    validate_instance("execution-root-hold-release-authorization-1.0.json", authorization)
+    _check_nfc(authorization)
+    if authorization["release_authorization_id"] != derive_execution_root_hold_release_authorization_id_v1(authorization):
+        _fail("Execution Root Hold Release Authorization ID mismatch")
+    if authorization["release_authorization_sigil"] != content_sigil(
+        _without(authorization, "release_authorization_sigil")
+    ):
+        _fail("Execution Root Hold Release Authorization self-Sigil mismatch")
+    basis = authorization["basis"]
+    if basis["kind"] == "OWNER_TERMINAL":
+        validate_execution_journal_head_v1(basis["verification_head"])
+        if basis["activation_event_sequence"] >= basis["terminal_event_sequence"]:
+            _fail("Execution Root Hold Release owner-terminal event order is invalid")
+        if basis["verification_head"]["last_sequence"] < basis["terminal_event_sequence"]:
+            _fail("Execution Root Hold Release verification Head predates terminal Event")
+    elif basis["kind"] == "OUTPUT_DEADLINE":
+        validate_execution_journal_head_v1(basis["verification_head"])
+        if basis["activation_event_sequence"] >= basis["terminal_event_sequence"]:
+            _fail("Execution Root Hold Release output-deadline event order is invalid")
+        if basis["verification_head"]["last_sequence"] < basis["terminal_event_sequence"]:
+            _fail("Execution Root Hold Release verification Head predates terminal Event")
+    else:
+        validate_execution_journal_head_v1(basis["absence_head"])
+
+
+def load_execution_root_hold_release_authorization_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    authorization = _load_strict_object(raw, "Execution Root Hold Release Authorization")
+    validate_execution_root_hold_release_authorization_v1(authorization)
+    return authorization
+
+
 def derive_observation_evidence_subject_sigil_v1(
     owner_binding: dict[str, Any], result_observation_binding: dict[str, Any]
 ) -> str:

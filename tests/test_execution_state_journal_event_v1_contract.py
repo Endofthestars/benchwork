@@ -14,6 +14,7 @@ from benchwork.execution_contracts import (
     derive_observation_evidence_subject_sigil_v1,
     derive_execution_observation_cursor_sigil_v1,
     derive_execution_storage_root_manifest_id_v1,
+    derive_execution_root_hold_release_authorization_id_v1,
     derive_result_ingress_receipt_id_v1,
     expected_event_causation_v1,
     expected_event_idempotency_v1,
@@ -26,6 +27,7 @@ from benchwork.execution_contracts import (
     load_execution_recovery_action_set_v1,
     load_execution_state_v1,
     load_execution_storage_root_manifest_v1,
+    load_execution_root_hold_release_authorization_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
     validate_execution_observation_evidence_v1,
@@ -37,6 +39,7 @@ from benchwork.execution_contracts import (
     validate_execution_result_ingress_index_v1,
     validate_execution_recovery_action_set_v1,
     validate_execution_storage_root_manifest_v1,
+    validate_execution_root_hold_release_authorization_v1,
 )
 ROOT = Path(__file__).parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -342,6 +345,37 @@ def _storage_root_manifest() -> dict[str, Any]:
     manifest["manifest_id"] = derive_execution_storage_root_manifest_id_v1(manifest)
     manifest["manifest_sigil"] = content_sigil({key: member for key, member in manifest.items() if key != "manifest_sigil"})
     return manifest
+
+
+def _root_hold_release_authorization() -> dict[str, Any]:
+    root = {
+        "root_kind": "JOB_INPUT", "job_id": JOB_ID, "attempt_id": None,
+        "storage_root_manifest_id": "ESM-" + "A" * 64, "storage_root_manifest_sigil": SIGIL,
+        "reference_set_id": "RS-ONE", "reference_set_sigil": SIGIL, "hold_id": "SH-ONE",
+        "hold_set_event": {"journal_id": "EJ-ONE", "event_id": "JE-ONE", "sequence": 1, "event_sigil": SIGIL},
+    }
+    head = {
+        "schema_version": "execution-journal-head/1.0", "limit_profile": "EXECUTION_JOURNAL_V1_FIXED_LIMITS",
+        "journal_id": "EJ-ONE", "last_sequence": 3, "last_event_id": "JE-THREE",
+        "last_event_sigil": SIGIL, "updated_at": STAMP, "head_sigil": "",
+    }
+    head["head_sigil"] = content_sigil({key: member for key, member in head.items() if key != "head_sigil"})
+    authorization = {
+        "schema_version": "execution-root-hold-release-authorization/1.0", "release_authorization_id": "",
+        "execution_journal_id": "EJ-ONE", "storage_root": root,
+        "policy": {"policy_id": "SP-EXECUTION-ROOT-HOLD-V1", "policy_sigil": SIGIL},
+        "hold_set_authorization_sigil": SIGIL,
+        "basis": {"kind": "OWNER_TERMINAL", "activation_event_id": "JE-ONE", "activation_event_sequence": 1,
+                  "activation_event_sigil": SIGIL, "terminal_event_id": "JE-TWO", "terminal_event_sequence": 2,
+                  "terminal_event_sigil": SIGIL_B, "terminal_event_type": "job.succeeded",
+                  "verification_head": head, "verification_state_sigil": SIGIL},
+        "release_authorization_sigil": "",
+    }
+    authorization["release_authorization_id"] = derive_execution_root_hold_release_authorization_id_v1(authorization)
+    authorization["release_authorization_sigil"] = content_sigil({
+        key: member for key, member in authorization.items() if key != "release_authorization_sigil"
+    })
+    return authorization
 
 
 def _evidence(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -1264,6 +1298,39 @@ def test_storage_root_manifest_closes_local_owner_and_blob_integrity() -> None:
     })
     with pytest.raises(Exception, match="claimed Blob disagrees with subject"):
         validate_execution_storage_root_manifest_v1(mismatched_output_blob)
+
+
+def test_root_hold_release_authorization_closes_id_sigil_and_prefix_bounds() -> None:
+    authorization = _root_hold_release_authorization()
+    validate_execution_root_hold_release_authorization_v1(authorization)
+    assert load_execution_root_hold_release_authorization_v1(json.dumps(authorization)) == authorization
+
+    stale_id = deepcopy(authorization)
+    stale_id["release_authorization_id"] = "EHR-" + "A" * 64
+    stale_id["release_authorization_sigil"] = content_sigil({
+        key: member for key, member in stale_id.items() if key != "release_authorization_sigil"
+    })
+    with pytest.raises(Exception, match="Authorization ID mismatch"):
+        validate_execution_root_hold_release_authorization_v1(stale_id)
+
+    reversed_events = deepcopy(authorization)
+    reversed_events["basis"]["terminal_event_sequence"] = 1
+    reversed_events["release_authorization_sigil"] = content_sigil({
+        key: member for key, member in reversed_events.items() if key != "release_authorization_sigil"
+    })
+    with pytest.raises(Exception, match="event order"):
+        validate_execution_root_hold_release_authorization_v1(reversed_events)
+
+    short_head = deepcopy(authorization)
+    short_head["basis"]["verification_head"]["last_sequence"] = 1
+    short_head["basis"]["verification_head"]["head_sigil"] = content_sigil({
+        key: member for key, member in short_head["basis"]["verification_head"].items() if key != "head_sigil"
+    })
+    short_head["release_authorization_sigil"] = content_sigil({
+        key: member for key, member in short_head.items() if key != "release_authorization_sigil"
+    })
+    with pytest.raises(Exception, match="Head predates"):
+        validate_execution_root_hold_release_authorization_v1(short_head)
 
 
 
