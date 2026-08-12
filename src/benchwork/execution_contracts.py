@@ -676,21 +676,21 @@ def _reduce_recovery_started_after_clock_uncertain_v1(
     return build_execution_state_v1(reduced)
 
 
-def replay_execution_journal_prefix_v1(
-    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
+def validate_execution_journal_prefix_wire_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
+) -> None:
+    """Validate a caller-supplied Journal chain without reducing its State.
 
-    Prefix integrity is checked before reducer dispatch.  A syntactically valid
-    Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
-    fails closed rather than being interpreted as a no-op or guessed transition.
+    This checks only closed Event bytes, ordering, and an optionally supplied
+    Head endpoint.  It does not establish completeness, durability, currentness,
+    replay equivalence, append authority, or any runtime authority.
     """
     if not events:
-        _fail("Execution Journal replay requires a nonempty prefix")
+        _fail("Execution Journal prefix requires a nonempty sequence")
     if not all(isinstance(event, dict) for event in events):
-        _fail("Execution Journal replay prefix contains a nonobject Event")
+        _fail("Execution Journal prefix contains a nonobject Event")
     if events[0].get("event_type") != "executor.epoch_started":
-        _fail("Execution Journal replay prefix must begin with executor epoch start")
+        _fail("Execution Journal prefix must begin with executor epoch start")
     journal_id = events[0].get("journal_id")
     previous_sigil: str | None = None
     previous_recorded_at: datetime | None = None
@@ -698,18 +698,18 @@ def replay_execution_journal_prefix_v1(
     for expected_sequence, event in enumerate(events, 1):
         validate_execution_journal_event_v1(event)
         if event["journal_id"] != journal_id:
-            _fail("Execution Journal replay prefix contains multiple journal identities")
+            _fail("Execution Journal prefix contains multiple journal identities")
         if event["sequence"] != expected_sequence:
-            _fail("Execution Journal replay prefix has a sequence gap")
+            _fail("Execution Journal prefix has a sequence gap")
         if event["previous_event_sigil"] != previous_sigil:
-            _fail("Execution Journal replay prefix has a broken Event chain")
+            _fail("Execution Journal prefix has a broken Event chain")
         recorded_at = _parse_time(event["recorded_at"])
         if previous_recorded_at is not None and recorded_at < previous_recorded_at:
-            _fail("Execution Journal replay prefix has decreasing recorded_at time")
+            _fail("Execution Journal prefix has decreasing recorded_at time")
         epoch_key = (event["executor_instance_id"], event["executor_epoch"])
         prior_build_sigil = epoch_build_sigils.setdefault(epoch_key, event["executor_build_sigil"])
         if event["executor_build_sigil"] != prior_build_sigil:
-            _fail("Execution Journal replay prefix has conflicting Executor build Sigils")
+            _fail("Execution Journal prefix has conflicting Executor build Sigils")
         previous_sigil = event["event_sigil"]
         previous_recorded_at = recorded_at
     if head is not None:
@@ -721,7 +721,21 @@ def replay_execution_journal_prefix_v1(
             or head["last_event_id"] != last["event_id"]
             or head["last_event_sigil"] != last["event_sigil"]
         ):
-            _fail("Execution Journal Head disagrees with replay prefix")
+            _fail("Execution Journal Head disagrees with supplied prefix")
+
+
+def replay_execution_journal_prefix_v1(
+    events: list[dict[str, Any]], *, head: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Verify a v1 Journal prefix and reduce its installed bounded suffixes.
+
+    Prefix integrity is checked before reducer dispatch.  A syntactically valid
+    Event outside the explicitly installed ISR3/clock-gate/empty-Recovery path
+    fails closed rather than being interpreted as a no-op or guessed transition.
+    """
+    if not events:
+        _fail("Execution Journal replay requires a nonempty prefix")
+    validate_execution_journal_prefix_wire_v1(events, head=head)
     initial_state = replay_execution_initial_prefix_v1([events[0]])
     if len(events) == 1:
         if head is not None:
@@ -857,7 +871,7 @@ def validate_execution_recovery_action_set_supplied_prefix_v1(
     validate_execution_recovery_action_set_v1(action_set)
     if not events:
         _fail("Execution Recovery action set requires a nonempty supplied prefix")
-    replay_execution_journal_prefix_v1(events)
+    validate_execution_journal_prefix_wire_v1(events)
     last = events[-1]
     if (
         action_set["derived_from_journal_id"] != last["journal_id"]

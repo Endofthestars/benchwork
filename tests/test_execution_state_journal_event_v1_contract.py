@@ -36,6 +36,7 @@ from benchwork.execution_contracts import (
     load_execution_output_storage_observation_set_v1,
     replay_execution_initial_prefix_v1,
     replay_execution_journal_prefix_v1,
+    validate_execution_journal_prefix_wire_v1,
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
     validate_execution_journal_head_v1,
@@ -817,6 +818,37 @@ def test_recovery_action_set_anchors_to_its_supplied_prefix() -> None:
         validate_execution_recovery_action_set_supplied_prefix_v1(
             action_set, [initial, broken_prefix],
         )
+
+    later = _event_unsigned()
+    later.update({
+        "event_id": "JE-FOUR", "sequence": 4, "event_type": "log.chunk_committed",
+        "executor_instance_id": initial["executor_instance_id"],
+        "executor_epoch": initial["executor_epoch"],
+        "executor_build_sigil": initial["executor_build_sigil"],
+        "recorded_at": "2026-08-06T00:00:03Z",
+        "previous_event_sigil": _recovery_started_event(clock_uncertain)["event_sigil"],
+    })
+    later["event_sigil"] = content_sigil({
+        key: member for key, member in later.items() if key != "event_sigil"
+    })
+    recovery_started = _recovery_started_event(clock_uncertain)
+    later["previous_event_sigil"] = recovery_started["event_sigil"]
+    later["event_sigil"] = content_sigil({
+        key: member for key, member in later.items() if key != "event_sigil"
+    })
+    later_action_set = deepcopy(action_set)
+    later_action_set["derived_through_sequence"] = 4
+    later_action_set["derived_through_event_sigil"] = later["event_sigil"]
+    later_action_set["actions"][0]["target_sequence"] = 6
+    later_action_set["action_set_sigil"] = content_sigil({
+        key: member for key, member in later_action_set.items() if key != "action_set_sigil"
+    })
+    validate_execution_journal_prefix_wire_v1([initial, clock_uncertain, recovery_started, later])
+    validate_execution_recovery_action_set_supplied_prefix_v1(
+        later_action_set, [initial, clock_uncertain, recovery_started, later],
+    )
+    with pytest.raises(Exception, match="reducer is unavailable"):
+        replay_execution_journal_prefix_v1([initial, clock_uncertain, recovery_started, later])
 
 
 def test_recovery_start_binds_its_started_action_set_and_prefix() -> None:
