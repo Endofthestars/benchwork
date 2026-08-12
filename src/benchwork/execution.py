@@ -329,9 +329,13 @@ class ExecutionService:
         previous_recorded_at: datetime | None = None
         event_ids: set[str] = set()
         try:
-            lines = self._journal_path.read_text(encoding="utf-8").splitlines()
+            journal_bytes = self._journal_path.read_bytes()
+            journal_text = journal_bytes.decode("utf-8", errors="strict")
         except (OSError, UnicodeDecodeError) as error:
             raise AthanorError("execution journal is unreadable") from error
+        if journal_text and not journal_text.endswith("\n"):
+            raise AthanorError("execution journal has an incomplete tail")
+        lines = journal_text.splitlines()
         for line_number, line in enumerate(lines, 1):
             try:
                 event = _load_strict_local_json_object(

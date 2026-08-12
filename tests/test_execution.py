@@ -386,6 +386,13 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
             self.service.observe(observation["job"]["job_id"])
 
+    def test_local_journal_rejects_an_unterminated_tail_on_recovery(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.write_bytes(journal.read_bytes().rstrip(b"\n"))
+        with self.assertRaisesRegex(AthanorError, "incomplete tail"):
+            self.service.observe(observation["job"]["job_id"])
+
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
         with self.assertRaisesRegex(AthanorError, "unknown execution Job"):
             self.service.observe("JB-" + "A" * 64)
