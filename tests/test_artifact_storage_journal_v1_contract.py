@@ -1368,3 +1368,19 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="exceeds its original claim"):
         validate_artifact_storage_state_v1(exceeds_claim)
+
+    unpartitioned = deepcopy(quota_state)
+    unpartitioned["quota_reservations"][0]["remaining_claims"] = []
+    unpartitioned["state_sigil"] = content_sigil({
+        key: member for key, member in unpartitioned.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="do not partition original claim"):
+        validate_artifact_storage_state_v1(unpartitioned)
+
+    retained_without_events = deepcopy(quota_state)
+    retained_without_events["quota_reservations"][0]["state"] = "RETAINED"
+    retained_without_events["state_sigil"] = content_sigil({
+        key: member for key, member in retained_without_events.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="retained Quota Reservation lacks"):
+        validate_artifact_storage_state_v1(retained_without_events)

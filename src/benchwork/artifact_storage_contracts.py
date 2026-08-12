@@ -869,6 +869,35 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
                     for dimension in _QUOTA_CLAIM_FIELDS
                 ):
                     _fail("Artifact Storage Quota Reservation exceeds its original claim")
+        partition_by_class = {
+            field: {claim["quota_class"]: claim for claim in reservation[field]}
+            for field in ("consumed_claims", "released_claims", "remaining_claims")
+        }
+        for quota_class, original in claimed_by_class.items():
+            if any(
+                sum(
+                    partition_by_class[field].get(quota_class, {}).get(dimension, 0)
+                    for field in ("consumed_claims", "released_claims", "remaining_claims")
+                ) != original[dimension]
+                for dimension in _QUOTA_CLAIM_FIELDS
+            ):
+                _fail("Artifact Storage Quota Reservation claims do not partition original claim")
+        reservation_state = reservation["state"]
+        if reservation_state == "ACTIVE" and (
+            reservation["consumed_claims"]
+            or reservation["released_claims"]
+            or reservation["remaining_claims"] != reservation["reservation"]["claims"]
+            or reservation["retained_for_event_types"]
+        ):
+            _fail("Artifact Storage active Quota Reservation is not unspent")
+        if reservation_state == "RETAINED" and (
+            not reservation["remaining_claims"] or not reservation["retained_for_event_types"]
+        ):
+            _fail("Artifact Storage retained Quota Reservation lacks remaining claims or events")
+        if reservation_state == "SETTLED" and (
+            reservation["remaining_claims"] or reservation["retained_for_event_types"]
+        ):
+            _fail("Artifact Storage settled Quota Reservation retains claims or events")
 
 
 def load_artifact_storage_state_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
