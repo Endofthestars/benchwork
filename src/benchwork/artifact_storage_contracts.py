@@ -178,6 +178,22 @@ def load_artifact_storage_reference_intent_v1(
     return intent
 
 
+def validate_artifact_storage_legacy_protection_v1(protection: dict[str, Any]) -> None:
+    """Validate a Legacy Protection record without resolving its evidence."""
+    validate_instance("artifact-storage-legacy-protection-1.0.json", protection)
+    _check_nfc_and_numbers(protection)
+    if protection["record_sigil"] != content_sigil(_without(protection, "record_sigil")):
+        _fail("Artifact Storage Legacy Protection self-Sigil mismatch")
+
+
+def load_artifact_storage_legacy_protection_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    protection = _load_strict_object(raw, "Artifact Storage Legacy Protection")
+    validate_artifact_storage_legacy_protection_v1(protection)
+    return protection
+
+
 def validate_artifact_storage_state_supplied_control_records_v1(
     state: dict[str, Any], *, reference_sets: list[dict[str, Any]],
     reference_intents: list[dict[str, Any]],
@@ -418,6 +434,17 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     for quarantine in state["quarantines"]:
         if quarantine["record_sigil"] != content_sigil(_without(quarantine, "record_sigil")):
             _fail("Artifact Storage State Quarantine record self-Sigil mismatch")
+    for protection in state["legacy_v1_protections"]:
+        if protection["state"] != "PROTECTED":
+            continue
+        record = protection["record"]
+        validate_artifact_storage_legacy_protection_v1(record)
+        if (
+            record["protection_id"] != protection["protection_id"]
+            or record["artifact_id"] != protection["artifact_id"]
+            or record["artifact_receipt_sigil"] != protection["receipt_sigil"]
+        ):
+            _fail("Artifact Storage State Legacy Protection disagrees with its record")
     for request in state["transfer_requests"]:
         selected = request["selected_attempt_id"]
         if selected is not None and selected not in request["attempt_ids"]:

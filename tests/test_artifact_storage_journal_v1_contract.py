@@ -9,6 +9,7 @@ from benchwork.artifact_storage_contracts import (
     derive_artifact_storage_reference_set_id_v1,
     load_artifact_storage_journal_event_v1,
     load_artifact_storage_journal_head_v1,
+    load_artifact_storage_legacy_protection_v1,
     load_artifact_storage_reference_intent_v1,
     load_artifact_storage_reference_set_v1,
     load_artifact_storage_state_v1,
@@ -19,6 +20,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_journal_head_supplied_prefix_v1,
     validate_artifact_storage_journal_head_v1,
     validate_artifact_storage_journal_prefix_v1,
+    validate_artifact_storage_legacy_protection_v1,
     validate_artifact_storage_head_supplied_state_v1,
     validate_artifact_storage_state_v1,
     validate_artifact_storage_reference_intent_v1,
@@ -159,6 +161,29 @@ def _reference_set() -> dict[str, object]:
     return reference_set
 
 
+def _legacy_protection() -> dict[str, object]:
+    protection: dict[str, object] = {
+        "schema_version": "artifact-storage-legacy-protection/1.0", "protection_id": "PROTECTION",
+        "artifact_id": "ARTIFACT", "program_id": "PROGRAM", "artifact_receipt_sigil": SIGIL,
+        "recorded_uri_sigil": SIGIL, "lexical_identity_sigil": SIGIL,
+        "resolved_file_identity_sigil": SIGIL, "anchor_observation_sigil": SIGIL,
+        "blob": {"blob_sigil": SIGIL, "size_bytes": 1}, "protected_replica_id": "SR-ONE",
+        "transfer": {"transfer_id": "ST-ONE", "transfer_attempt_id": "SA-ONE",
+                     "request_record_sigil": SIGIL, "attempt_record_sigil": SIGIL,
+                     "terminal_event": {"journal_id": "SJ-ONE", "event_id": "SE-ONE",
+                                        "sequence": 1, "event_sigil": SIGIL}},
+        "verification": {"method": "FULL_READBACK_SHA256", "evidence_sigil": SIGIL,
+                         "verified_at": STAMP, "next_due_at": None},
+        "exclusion": {"anchor_disposition": "PERMANENTLY_EXCLUDED",
+                      "managed_copy_gc": "PERMANENTLY_PROTECTED", "policy_id": "SP-ONE",
+                      "authorization_sigil": SIGIL}, "registered_at": STAMP, "record_sigil": "",
+    }
+    protection["record_sigil"] = content_sigil({
+        key: member for key, member in protection.items() if key != "record_sigil"
+    })
+    return protection
+
+
 def test_storage_journal_event_checks_self_sigil_order_and_strict_loading() -> None:
     event = _event()
     validate_artifact_storage_journal_event_v1(event)
@@ -272,6 +297,36 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
         validate_artifact_storage_state_supplied_control_records_v1(
             state, reference_sets=[reference_set], reference_intents=[]
         )
+
+
+def test_legacy_protection_is_self_signed_and_matches_state_projection() -> None:
+    protection = _legacy_protection()
+    validate_artifact_storage_legacy_protection_v1(protection)
+    assert load_artifact_storage_legacy_protection_v1(json.dumps(protection)) == protection
+
+    stale = deepcopy(protection)
+    stale["program_id"] = "OTHER"
+    with pytest.raises(AthanorError, match="Legacy Protection self-Sigil"):
+        validate_artifact_storage_legacy_protection_v1(stale)
+
+    state = _state()
+    state["legacy_v1_protections"] = [{
+        "protection_id": "PROTECTION", "artifact_id": "ARTIFACT", "state": "PROTECTED",
+        "record": protection, "receipt_sigil": SIGIL, "reason": None, "revision": 1,
+        "last_event_sigil": SIGIL,
+    }]
+    state["state_sigil"] = content_sigil({
+        key: member for key, member in state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(state)
+
+    mismatched = deepcopy(state)
+    mismatched["legacy_v1_protections"][0]["receipt_sigil"] = SIGIL_B  # type: ignore[index]
+    mismatched["state_sigil"] = content_sigil({
+        key: member for key, member in mismatched.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="Legacy Protection disagrees"):
+        validate_artifact_storage_state_v1(mismatched)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
