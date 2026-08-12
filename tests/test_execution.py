@@ -124,6 +124,19 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "Blob record is invalid"):
             self.store.read_bytes(record["blob_sigil"])
 
+    def test_readback_rejects_a_symlinked_blob_path(self) -> None:
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        blob_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "blobs"
+            / record["blob_sigil"].removeprefix("sha256:")
+        )
+        target = Path(self.directory.name) / "outside-blob"
+        target.write_bytes(b"phase-three")
+        blob_path.unlink()
+        blob_path.symlink_to(target)
+        with self.assertRaisesRegex(AthanorError, "Blob is unavailable"):
+            self.store.read_bytes(record["blob_sigil"])
+
 
 class ExecutionServiceTest(unittest.TestCase):
     def setUp(self) -> None:
