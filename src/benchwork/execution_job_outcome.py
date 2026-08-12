@@ -405,7 +405,11 @@ def derive_execution_job_outcome_derivation_profile_v1() -> dict[str, str]:
 def _validate_attempt_selection(outcome: dict[str, Any]) -> None:
     summaries = outcome["attempt_summaries"]
     ordinals = [row["retry_ordinal"] for row in summaries]
-    if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)):
+    if (
+        any(ordinal < 1 for ordinal in ordinals)
+        or ordinals != sorted(ordinals)
+        or len(ordinals) != len(set(ordinals))
+    ):
         _fail("Outcome Attempt summaries are not unique and ordered by retry ordinal")
     ids = [row["attempt_id"] for row in summaries]
     if len(ids) != len(set(ids)):

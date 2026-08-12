@@ -366,6 +366,14 @@ def test_selected_outcome_cannot_omit_invalid_attempt_authorization_matrix_reaso
     validate_execution_job_outcome_v1(outcome)
 
 
+def test_selected_outcome_rejects_nonpositive_attempt_retry_ordinal() -> None:
+    outcome, _ = _selected()
+    outcome["attempt_summaries"][0]["retry_ordinal"] = 0
+    _seal(outcome)
+    with pytest.raises(AthanorError, match="retry ordinal"):
+        validate_execution_job_outcome_v1(outcome)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
