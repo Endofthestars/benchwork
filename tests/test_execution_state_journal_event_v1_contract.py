@@ -295,6 +295,10 @@ def test_rfc0015_request_loaders_are_strict_and_cursor_bound_to_fixed_prefix() -
     ):
         with pytest.raises(Exception):
             load_execution_request_v1("observe", raw)
+    for invalid_limit in (1.0, True):
+        noncanonical = {**observe, "limit": invalid_limit}
+        with pytest.raises(Exception):
+            validate_execution_request_v1("observe", noncanonical)
     wrong_job = deepcopy(observe)
     wrong_job["cursor"]["job_id"] = "JB-" + "B" * 64
     wrong_job["cursor"]["cursor_sigil"] = derive_execution_observation_cursor_sigil_v1(wrong_job["cursor"])
@@ -357,6 +361,13 @@ def test_event_round_trip_unknown_duplicate_and_jew_matrix_helpers() -> None:
     raw = (FIXTURES / "execution-journal-event-v1" / "invalid-duplicate-key.json").read_text()
     with pytest.raises(Exception, match="duplicate JSON key"):
         load_execution_journal_event_v1(raw)
+    non_scalar = _event_unsigned()
+    non_scalar["payload"]["intake_id"] = "\ud800"
+    non_scalar["event_sigil"] = content_sigil(
+        {key: value for key, value in non_scalar.items() if key != "event_sigil"}
+    )
+    with pytest.raises(Exception, match="non-Unicode-scalar"):
+        load_execution_journal_event_v1(json.dumps(non_scalar, ensure_ascii=True))
 
     output = {
         "event_type": "attempt.output_staging_preallocated",

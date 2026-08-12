@@ -108,6 +108,10 @@ def _load_strict_object(raw: str | bytes | bytearray, label: str) -> dict[str, A
 
 def _check_nfc(value: Any) -> None:
     if isinstance(value, str):
+        try:
+            value.encode("utf-8", errors="strict")
+        except UnicodeEncodeError:
+            _fail("JSON string contains a non-Unicode-scalar value")
         if unicodedata.normalize("NFC", value) != value:
             _fail("JSON string is not NFC-normalized")
     elif isinstance(value, dict):
@@ -117,8 +121,10 @@ def _check_nfc(value: Any) -> None:
     elif isinstance(value, list):
         for member in value:
             _check_nfc(member)
-    elif isinstance(value, float) and not math.isfinite(value):
-        _fail("non-finite JSON number is forbidden")
+    elif isinstance(value, float):
+        if not math.isfinite(value):
+            _fail("non-finite JSON number is forbidden")
+        _fail("JSON float is forbidden by canonical execution wire")
 
 
 def _without(value: dict[str, Any], member: str) -> dict[str, Any]:
