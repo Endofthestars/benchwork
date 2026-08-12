@@ -840,6 +840,31 @@ def _reduce_artifact_storage_epoch_started_v1(
     return reduced
 
 
+def _reduce_artifact_storage_message_rejected_v1(
+    state: dict[str, Any], event: dict[str, Any],
+) -> dict[str, Any]:
+    """Replay a bounded rejected message without changing Storage objects."""
+    if event["event_type"] != "storage.message_rejected":
+        _fail("Artifact Storage message rejection reducer has the wrong Event")
+    if (
+        event["journal_id"] != state["journal_id"]
+        or event["epoch"] != state["current_epoch"]
+        or event["sequence"] != state["applied_event_count"] + 1
+        or event["previous_event_sigil"] != state["last_event_sigil"]
+        or event["entity_revisions"]
+        or event["quota_effects"]
+        or event["observed_at"] is not None
+        or event["causation_event_id"] is not None
+        or event["idempotency_key_sigil"] is not None
+    ):
+        _fail("Artifact Storage message rejection Event disagrees with prior State")
+    reduced = _without(state, "state_sigil")
+    reduced.update({"applied_event_count": event["sequence"], "last_event_sigil": event["event_sigil"]})
+    reduced["state_sigil"] = content_sigil(reduced)
+    validate_artifact_storage_state_v1(reduced)
+    return reduced
+
+
 def replay_artifact_storage_journal_prefix_v1(
     events: list[dict[str, Any]], *, head: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -858,6 +883,12 @@ def replay_artifact_storage_journal_prefix_v1(
     if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed" and events[2]["event_type"] == "storage.epoch_started":
         state = _reduce_artifact_storage_activation_v1(state, events[1])
         state = _reduce_artifact_storage_epoch_started_v1(state, events[2])
+        if head is not None:
+            validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
+        return state
+    if len(events) == 3 and events[1]["event_type"] == "storage.activation_completed" and events[2]["event_type"] == "storage.message_rejected":
+        state = _reduce_artifact_storage_activation_v1(state, events[1])
+        state = _reduce_artifact_storage_message_rejected_v1(state, events[2])
         if head is not None:
             validate_artifact_storage_journal_head_supplied_event_v1(head, events[2], state["state_sigil"])
         return state
