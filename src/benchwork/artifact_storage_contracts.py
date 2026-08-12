@@ -221,6 +221,35 @@ _STATE_WRAPPER_SCHEMAS = {
     "materializations": "artifact-materialization-1.0.json",
 }
 
+_QUOTA_CLAIM_FIELDS = (
+    "byte_count", "object_count", "inode_count", "stream_count", "journal_bytes",
+    "control_record_bytes",
+)
+_QUOTA_CLASS_ALLOWED_FIELDS = {
+    "JOURNAL": {"journal_bytes"},
+    "CONTROL_RECORD": {"control_record_bytes"},
+    "STAGING": {"byte_count", "object_count"},
+    "QUARANTINE": {"byte_count", "object_count"},
+    "COMMITTED": {"byte_count", "object_count"},
+    "MATERIALIZATION": {"byte_count", "object_count"},
+    "STREAM": {"stream_count"},
+    "INODE": {"inode_count"},
+}
+
+
+def _validate_quota_claim_array(claims: list[dict[str, Any]], label: str) -> None:
+    classes = [claim["quota_class"] for claim in claims]
+    if len(set(classes)) != len(classes):
+        _fail(f"Artifact Storage {label} has duplicate quota classes")
+    if classes != sorted(classes):
+        _fail(f"Artifact Storage {label} is not quota-class sorted")
+    for claim in claims:
+        allowed = _QUOTA_CLASS_ALLOWED_FIELDS[claim["quota_class"]]
+        if not any(claim[field] for field in allowed):
+            _fail(f"Artifact Storage {label} has an empty quota claim")
+        if any(claim[field] for field in set(_QUOTA_CLAIM_FIELDS) - allowed):
+            _fail(f"Artifact Storage {label} has an illegal quota dimension")
+
 
 def _identity_sort_key(value: str | tuple[str, str]) -> bytes | tuple[bytes, bytes]:
     if isinstance(value, tuple):
@@ -279,6 +308,21 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
     }
     if state["availability_counters"] != expected_availability_counters:
         _fail("Artifact Storage State availability counters disagree with Blob records")
+    for reservation in state["quota_reservations"]:
+        for field in ("consumed_claims", "released_claims", "remaining_claims"):
+            _validate_quota_claim_array(reservation[field], f"Quota Reservation {field}")
+        _validate_quota_claim_array(reservation["reservation"]["claims"], "Reservation claims")
+        claimed_by_class = {
+            claim["quota_class"]: claim for claim in reservation["reservation"]["claims"]
+        }
+        for field in ("consumed_claims", "released_claims", "remaining_claims"):
+            for claim in reservation[field]:
+                original = claimed_by_class.get(claim["quota_class"])
+                if original is None or any(
+                    claim[dimension] > original[dimension]
+                    for dimension in _QUOTA_CLAIM_FIELDS
+                ):
+                    _fail("Artifact Storage Quota Reservation exceeds its original claim")
 
 
 def load_artifact_storage_state_v1(raw: str | bytes | bytearray) -> dict[str, Any]:

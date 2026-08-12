@@ -365,3 +365,45 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     })
     with pytest.raises(AthanorError, match="availability counters disagree"):
         validate_artifact_storage_state_v1(bad_counters)
+
+    quota_state = deepcopy(state)
+    claim = {
+        "quota_class": "STAGING", "byte_count": 1, "object_count": 0,
+        "inode_count": 0, "stream_count": 0, "journal_bytes": 0,
+        "control_record_bytes": 0,
+    }
+    quota_state["quota_reservations"] = [{
+        "reservation": {
+            "reservation_id": "RESERVATION", "claims": [claim],
+            "capacity_plan": {
+                "allowed_event_types": ["transfer.prepared"], "max_event_frame_count": 1,
+                "max_control_record_count": 0, "max_recovery_evidence_count": 0,
+                "max_event_frame_bytes": 1, "max_control_record_bytes": 1,
+                "max_recovery_evidence_bytes": 1,
+            }, "expires_at": None, "created_clock": state["clock_anchor"],
+            "remaining_micros_at_creation": None,
+        }, "owner_kind": "TRANSFER_ATTEMPT", "owner_id": "SA-ONE",
+        "purpose": "PAYLOAD_LIFECYCLE", "state": "ACTIVE", "consumed_claims": [],
+        "released_claims": [], "remaining_claims": [deepcopy(claim)], "retained_for_event_types": [],
+        "revision": 1, "last_event_sigil": SIGIL,
+    }]
+    quota_state["state_sigil"] = content_sigil({
+        key: member for key, member in quota_state.items() if key != "state_sigil"
+    })
+    validate_artifact_storage_state_v1(quota_state)
+
+    bad_claim = deepcopy(quota_state)
+    bad_claim["quota_reservations"][0]["remaining_claims"][0]["journal_bytes"] = 1
+    bad_claim["state_sigil"] = content_sigil({
+        key: member for key, member in bad_claim.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="illegal quota dimension"):
+        validate_artifact_storage_state_v1(bad_claim)
+
+    exceeds_claim = deepcopy(quota_state)
+    exceeds_claim["quota_reservations"][0]["remaining_claims"][0]["byte_count"] = 2
+    exceeds_claim["state_sigil"] = content_sigil({
+        key: member for key, member in exceeds_claim.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="exceeds its original claim"):
+        validate_artifact_storage_state_v1(exceeds_claim)
