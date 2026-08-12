@@ -246,6 +246,62 @@ def load_execution_journal_head_v1(raw: str | bytes | bytearray) -> dict[str, An
     return head
 
 
+def validate_execution_initial_state_supplied_facts_v1(
+    event: dict[str, Any], state: dict[str, Any], head: dict[str, Any]
+) -> None:
+    """Compare an ISR3 initial State with caller-supplied Event and Head bytes.
+
+    This does not authenticate the supplied records or establish a durable
+    prefix; it only verifies the exact RFC-0012 initial-projection equations.
+    """
+    validate_execution_journal_event_v1(event)
+    validate_execution_state_v1(state)
+    validate_execution_journal_head_v1(head)
+    if event["sequence"] != 1 or event["event_type"] != "executor.epoch_started":
+        _fail("ISR3 supplied Event is not the sequence-one executor epoch start")
+    if event["previous_event_sigil"] is not None:
+        _fail("ISR3 sequence-one Event must have null predecessor")
+    expected_journal = {
+        "journal_id": event["journal_id"],
+        "through_sequence": event["sequence"],
+        "through_event_id": event["event_id"],
+        "through_event_sigil": event["event_sigil"],
+    }
+    if state["journal_binding"] != expected_journal:
+        _fail("ISR3 State journal binding disagrees with supplied Event")
+    expected_head = {
+        "journal_id": event["journal_id"],
+        "last_sequence": event["sequence"],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }
+    if any(head[member] != value for member, value in expected_head.items()):
+        _fail("ISR3 Head disagrees with supplied Event")
+    payload = event["payload"]
+    executor = state["executor"]
+    expected_executor = {
+        "executor_instance_id": event["executor_instance_id"],
+        "executor_epoch": event["executor_epoch"],
+        "executor_build_binding": payload["executor_build_binding"],
+        "revision": 0,
+        "clock_state": "TRUSTED",
+        "last_trusted_utc": event["recorded_at"],
+        "clock_uncertain_event_id": None,
+        "active_recovery_id": None,
+        "authority_gates": [],
+        "last_event_id": event["event_id"],
+        "last_event_sigil": event["event_sigil"],
+    }
+    if executor != expected_executor:
+        _fail("ISR3 State executor projection disagrees with supplied Event")
+    arrays = (
+        "recoveries", "workers", "worker_sessions", "jobs", "attempts",
+        "leases", "log_streams", "deadlines", "idempotency_records",
+    )
+    if any(state[member] for member in arrays):
+        _fail("ISR3 State contains a noninitial projection member")
+
+
 def derive_result_ingress_receipt_id_v1(receipt: dict[str, Any]) -> str:
     owner = receipt["owner_binding"]
     digest = content_sigil([

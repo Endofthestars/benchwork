@@ -25,6 +25,7 @@ from benchwork.execution_contracts import (
     validate_execution_observation_evidence_v1,
     validate_execution_observation_evidence_supplied_receipt_v1,
     validate_execution_journal_head_v1,
+    validate_execution_initial_state_supplied_facts_v1,
     validate_execution_request_v1,
     validate_execution_result_ingress_receipt_v1,
 )
@@ -285,6 +286,7 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     assert load_execution_state_v1(json.dumps(state)) == state
     validate_execution_journal_head_v1(head)
     assert load_execution_journal_head_v1(json.dumps(head)) == head
+    validate_execution_initial_state_supplied_facts_v1(event, state, head)
     assert head["head_sigil"] == content_sigil(
         {key: member for key, member in head.items() if key != "head_sigil"}
     )
@@ -308,6 +310,21 @@ def test_isr3_initial_event_state_head_triplet_is_closed_and_cross_bound() -> No
     )
     with pytest.raises(Exception, match="executor build self-Sigil"):
         load_execution_state_v1(json.dumps(tampered))
+
+    changed_executor = deepcopy(state)
+    changed_executor["executor"]["revision"] = 1
+    changed_executor["state_sigil"] = content_sigil(
+        {key: member for key, member in changed_executor.items() if key != "state_sigil"}
+    )
+    with pytest.raises(Exception, match="executor projection"):
+        validate_execution_initial_state_supplied_facts_v1(event, changed_executor, head)
+
+    changed_head = deepcopy(head)
+    changed_head["updated_at"] = "2026-08-06T00:00:01Z"
+    changed_head["head_sigil"] = content_sigil(
+        {key: member for key, member in changed_head.items() if key != "head_sigil"}
+    )
+    validate_execution_initial_state_supplied_facts_v1(event, state, changed_head)
 
     invalid_head = deepcopy(head)
     invalid_head["last_sequence"] = 2
