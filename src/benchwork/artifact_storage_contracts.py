@@ -818,9 +818,21 @@ def validate_artifact_storage_state_v1(state: dict[str, Any]) -> None:
             _fail("Artifact Storage Materialization lacks its source Replica")
         if source["blob_sigil"] != materialization["source_blob_sigil"]:
             _fail("Artifact Storage Materialization source Replica disagrees with Blob")
+    request_ids = {request["transfer_id"] for request in state["transfer_requests"]}
+    attempt_ids_by_transfer: dict[str, set[str]] = {}
+    for wrapper in state["transfer_attempts"]:
+        attempt = wrapper["record"]
+        if attempt["transfer_id"] not in request_ids:
+            _fail("Artifact Storage State Transfer Attempt lacks its request projection")
+        attempt_ids_by_transfer.setdefault(attempt["transfer_id"], set()).add(
+            attempt["transfer_attempt_id"]
+        )
     for request in state["transfer_requests"]:
+        attempt_ids = set(request["attempt_ids"])
+        if attempt_ids != attempt_ids_by_transfer.get(request["transfer_id"], set()):
+            _fail("Artifact Storage State Transfer Request Attempts disagree with projections")
         selected = request["selected_attempt_id"]
-        if selected is not None and selected not in request["attempt_ids"]:
+        if selected is not None and selected not in attempt_ids:
             _fail("Artifact Storage State Transfer Request selects an unknown Attempt")
     for intent in state["open_intents"]:
         source_sigil = intent["source_event"]["event_sigil"]

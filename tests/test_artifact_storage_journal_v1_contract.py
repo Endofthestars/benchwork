@@ -890,8 +890,22 @@ def test_transfer_attempt_state_record_matches_its_supplied_request() -> None:
     unlisted["state_sigil"] = content_sigil({
         key: member for key, member in unlisted.items() if key != "state_sigil"
     })
-    with pytest.raises(AthanorError, match="absent from its State request"):
+    with pytest.raises(AthanorError, match="Request Attempts disagree"):
+        validate_artifact_storage_state_v1(unlisted)
+    with pytest.raises(AthanorError, match="Request Attempts disagree"):
         validate_artifact_storage_state_supplied_transfer_attempts_v1(unlisted, transfers=[transfer])
+
+    wrong_request = deepcopy(state)
+    wrong_request["transfer_attempts"][0]["record"]["transfer_id"] = "ST-OTHER"  # type: ignore[index]
+    wrong_request["transfer_attempts"][0]["record"]["record_sigil"] = content_sigil({  # type: ignore[index]
+        key: member for key, member in wrong_request["transfer_attempts"][0]["record"].items()  # type: ignore[index]
+        if key != "record_sigil"
+    })
+    wrong_request["state_sigil"] = content_sigil({
+        key: member for key, member in wrong_request.items() if key != "state_sigil"
+    })
+    with pytest.raises(AthanorError, match="lacks its request projection"):
+        validate_artifact_storage_state_v1(wrong_request)
 
 
 def test_storage_journal_head_matrix_and_supplied_final_event() -> None:
@@ -1150,6 +1164,11 @@ def test_storage_state_checks_self_identity_order_and_head_binding() -> None:
     committed_state["availability_counters"]["available_blobs"] = 1
     committed_state["transfer_attempts"] = [{
         "record": committed_attempt, "last_event_sigil": SIGIL,
+    }]
+    committed_state["transfer_requests"] = [{
+        "transfer_id": committed_attempt["transfer_id"], "request_record_sigil": SIGIL,
+        "state": "ACTIVE", "attempt_ids": [committed_attempt["transfer_attempt_id"]],
+        "selected_attempt_id": None, "revision": 1, "last_event_sigil": SIGIL,
     }]
     committed_state["state_sigil"] = content_sigil({
         key: member for key, member in committed_state.items() if key != "state_sigil"
