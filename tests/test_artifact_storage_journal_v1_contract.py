@@ -54,6 +54,7 @@ from benchwork.artifact_storage_contracts import (
     validate_artifact_storage_state_supplied_control_records_v1,
     validate_artifact_storage_tail_evidence_v1,
     validate_canonical_reference_commit_supplied_facts_v1,
+    validate_canonical_reference_release_supplied_facts_v1,
 )
 
 
@@ -1065,6 +1066,58 @@ def test_reference_set_and_intent_close_ids_sigils_and_order() -> None:
     with pytest.raises(AthanorError, match="exceeds the U63"):
         validate_canonical_reference_commit_supplied_facts_v1(
             terminal_head, chronicle_event, chronicle_commit
+        )
+
+    abort_authority = {
+        "kind": "HEAD_SUPERSEDED_WITHOUT_BOUND_EVENT",
+        "reference_intent_id": intent["reference_intent_id"],
+        "reference_intent_record_sigil": intent["record_sigil"],
+        "transition_request_id": intent["transition_request_id"],
+        "transition_request_sigil": intent["transition_request_sigil"],
+        "expected_chronicle_head": intent["expected_chronicle_head"],
+        "verified_chronicle_head": {"schema_version": "chronicle-head/1.1",
+                                    "event_count": 1, "terminal_receipt_sigil": SIGIL},
+        "absence_evidence_sigil": "", "authority_sigil": "",
+    }
+    abort_authority["absence_evidence_sigil"] = content_sigil([
+        "artifact-storage-canonical-precommit-absence/1.0",
+        intent["reference_intent_id"], intent["record_sigil"],
+        intent["transition_request_id"], intent["transition_request_sigil"],
+        intent["expected_chronicle_head"], abort_authority["verified_chronicle_head"],
+    ])
+    abort_authority["authority_sigil"] = content_sigil({
+        key: value for key, value in abort_authority.items() if key != "authority_sigil"
+    })
+    release_reason = {
+        "code": "CHRONICLE_REFERENCE_CHANGED",
+        "evidence_sigils": sorted([
+            abort_authority["authority_sigil"], abort_authority["absence_evidence_sigil"],
+            intent["record_sigil"], intent["transition_request_sigil"],
+        ]),
+    }
+    validate_canonical_reference_release_supplied_facts_v1(
+        intent, abort_authority, release_reason
+    )
+    malformed_release = deepcopy(release_reason)
+    malformed_release["evidence_sigils"] = []
+    with pytest.raises(AthanorError, match="release facts"):
+        validate_canonical_reference_release_supplied_facts_v1(
+            intent, abort_authority, malformed_release
+        )
+    malformed_authority = deepcopy(abort_authority)
+    malformed_authority["verified_chronicle_head"]["extra"] = True
+    malformed_authority["authority_sigil"] = content_sigil({
+        key: value for key, value in malformed_authority.items() if key != "authority_sigil"
+    })
+    with pytest.raises(AthanorError, match="invalid verified Chronicle Head"):
+        validate_canonical_reference_release_supplied_facts_v1(
+            intent, malformed_authority, release_reason
+        )
+    malformed_reason = deepcopy(release_reason)
+    malformed_reason["extra"] = True
+    with pytest.raises(AthanorError, match="Reason has an invalid closed shape"):
+        validate_canonical_reference_release_supplied_facts_v1(
+            intent, abort_authority, malformed_reason
         )
 
 

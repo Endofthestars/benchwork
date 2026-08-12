@@ -226,6 +226,78 @@ def validate_canonical_reference_commit_supplied_facts_v1(
         _fail("Canonical Reference supplied Chronicle commit disagrees with immutable intent")
 
 
+def validate_canonical_reference_release_supplied_facts_v1(
+    intent: dict[str, Any], abort_authority: dict[str, Any], reason: dict[str, Any],
+) -> None:
+    """Close the local portion of an aborted canonical-reference pin.
+
+    The caller must separately prove by complete authoritative Chronicle replay
+    that no bound event exists after the expected Head.  This helper verifies
+    the immutable bindings and deterministic absence/authority Sigils only.
+    """
+    validate_artifact_storage_reference_intent_v1(intent)
+    required = {
+        "kind", "reference_intent_id", "reference_intent_record_sigil",
+        "transition_request_id", "transition_request_sigil", "expected_chronicle_head",
+        "verified_chronicle_head", "absence_evidence_sigil", "authority_sigil",
+    }
+    if set(abort_authority) != required:
+        _fail("Canonical Reference abort authority has an invalid closed shape")
+    _check_nfc_and_numbers(abort_authority)
+    verified_head = abort_authority["verified_chronicle_head"]
+    if (
+        set(verified_head) != {"schema_version", "event_count", "terminal_receipt_sigil"}
+        or verified_head["schema_version"] != "chronicle-head/1.1"
+        or not isinstance(verified_head["event_count"], int)
+        or isinstance(verified_head["event_count"], bool)
+        or not 0 <= verified_head["event_count"] <= 9223372036854775807
+        or (
+            verified_head["terminal_receipt_sigil"] is not None
+            and (
+                not isinstance(verified_head["terminal_receipt_sigil"], str)
+                or len(verified_head["terminal_receipt_sigil"]) != 71
+                or not verified_head["terminal_receipt_sigil"].startswith("sha256:")
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in verified_head["terminal_receipt_sigil"][7:]
+                )
+            )
+        )
+    ):
+        _fail("Canonical Reference abort authority has an invalid verified Chronicle Head")
+    if set(reason) != {"code", "evidence_sigils"}:
+        _fail("Canonical Reference release Reason has an invalid closed shape")
+    _check_nfc_and_numbers(reason)
+    absence_preimage = [
+        "artifact-storage-canonical-precommit-absence/1.0",
+        intent["reference_intent_id"], intent["record_sigil"],
+        intent["transition_request_id"], intent["transition_request_sigil"],
+        intent["expected_chronicle_head"], abort_authority["verified_chronicle_head"],
+    ]
+    expected_evidence = sorted([
+        abort_authority["authority_sigil"], abort_authority["absence_evidence_sigil"],
+        intent["record_sigil"], intent["transition_request_sigil"],
+    ])
+    if (
+        abort_authority["kind"] != "HEAD_SUPERSEDED_WITHOUT_BOUND_EVENT"
+        or abort_authority["reference_intent_id"] != intent["reference_intent_id"]
+        or abort_authority["reference_intent_record_sigil"] != intent["record_sigil"]
+        or abort_authority["transition_request_id"] != intent["transition_request_id"]
+        or abort_authority["transition_request_sigil"] != intent["transition_request_sigil"]
+        or abort_authority["expected_chronicle_head"] != intent["expected_chronicle_head"]
+        or abort_authority["verified_chronicle_head"]["schema_version"] != "chronicle-head/1.1"
+        or abort_authority["verified_chronicle_head"]["event_count"]
+        <= intent["expected_chronicle_head"]["event_count"]
+        or abort_authority["absence_evidence_sigil"] != content_sigil(absence_preimage)
+        or abort_authority["authority_sigil"] != content_sigil({
+            key: value for key, value in abort_authority.items() if key != "authority_sigil"
+        })
+        or reason["code"] != "CHRONICLE_REFERENCE_CHANGED"
+        or reason["evidence_sigils"] != expected_evidence
+    ):
+        _fail("Canonical Reference release facts disagree with immutable intent")
+
+
 def validate_artifact_storage_legacy_protection_v1(protection: dict[str, Any]) -> None:
     """Validate a Legacy Protection record without resolving its evidence."""
     validate_instance("artifact-storage-legacy-protection-1.0.json", protection)
