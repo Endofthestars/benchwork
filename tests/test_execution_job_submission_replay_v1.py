@@ -17,6 +17,8 @@ from benchwork.execution_contracts import (
     replay_execution_journal_prefix_v1,
     replay_execution_journal_supplied_facts_v1,
     replay_execution_supplied_state_suffix_v1,
+    load_sanctum_assurance_claim_v1,
+    validate_sanctum_assurance_claim_v1,
     validate_execution_job_v1,
 )
 
@@ -206,6 +208,83 @@ def _attempt() -> dict[str, Any]:
         {key: value for key, value in attempt.items() if key != "attempt_binding_sigil"}
     )
     return attempt
+
+
+def _assurance_claim() -> dict[str, Any]:
+    claim: dict[str, Any] = {
+        "schema_version": "sanctum-assurance-claim/1.0",
+        "assurance_claim_id": "AC-0" + "0" * 25,
+        "job_id": JOB_ID, "attempt_id": "AT-ONE", "attempt_binding_sigil": SIGIL,
+        "attempt_terminal_event": {"journal_id": INITIAL["journal_id"], "sequence": 1,
+                                   "event_id": "JE-ONE", "event_sigil": SIGIL},
+        "requested_assurance": "SANCTUM-A0", "realized_level": "SANCTUM-A0",
+        "satisfies_request": True,
+        "assurance_profile_binding": {"profile_version": "1.0", "profile_sigil": SIGIL,
+                                      "conformance_suite_id": "CS-ONE", "conformance_suite_sigil": SIGIL},
+        "backend_identity": "LOCAL", "backend_configuration_sigil": SIGIL,
+        "host_binding": {"kind": "NONE"}, "policy_set_sigil": SIGIL,
+        "result_binding": {"kind": "NONE"},
+        "control_evidence_set_binding": {"kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64,
+                                        "control_evidence_set_sigil": SIGIL},
+        "terminal_status": {"attempt_state": "FAILED", "process_termination_status": "EXITED",
+                            "handle_revocation_status": "REVOKED", "cleanup_status": "VERIFIED",
+                            "quarantine_status": "NOT_REQUIRED"},
+        "evidence_cut": {
+            "journal_prefix": {"journal_id": INITIAL["journal_id"], "ending_sequence": 1,
+                               "ending_event_id": "JE-ONE", "ending_event_sigil": SIGIL},
+            "state_sigil": SIGIL,
+            "accounting_capture_event": {"journal_id": INITIAL["journal_id"], "sequence": 1,
+                                         "event_id": "JE-ONE", "event_sigil": SIGIL},
+            "budget_settlement_event": {"journal_id": INITIAL["journal_id"], "sequence": 1,
+                                        "event_id": "JE-ONE", "event_sigil": SIGIL},
+            "control_evidence_allocation_commit_sigil": SIGIL,
+            "control_evidence_inventory_sigil": SIGIL,
+            "control_evidence_set_binding": {"kind": "FROZEN", "control_evidence_set_id": "CES-" + "A" * 64,
+                                             "control_evidence_set_sigil": SIGIL},
+            "predicate_result_set_binding": {"schema_version": "sanctum-assurance-predicate-result-set/1.0",
+                                             "predicate_result_set_id": "PRS-" + "A" * 64, "predicate_result_set_sigil": SIGIL},
+            "verification_bundle_binding": {"schema_version": "sanctum-assurance-verification-bundle/1.0",
+                                            "verification_bundle_id": "AVB-" + "A" * 64, "verification_bundle_sigil": SIGIL},
+            "verification_started_at": "2026-08-06T00:00:00Z",
+            "verification_completed_at": "2026-08-06T00:00:01Z",
+        },
+        "verifier_binding": {
+            "verifier_identity": {"verifier_id": "VERIFIER", "verifier_build_sigil": SIGIL,
+                                  "verifier_profile_id": "PROFILE", "verifier_profile_sigil": SIGIL},
+            "registry_authority_binding": {"schema_version": "sanctum-verifier-registry-authority-binding/1.0",
+                                            "authority_policy_id": "VAP-" + "A" * 64, "authority_policy_sigil": SIGIL,
+                                            "installed_head_id": "VRH-" + "A" * 64, "installed_head_sigil": SIGIL,
+                                            "active_transition_id": "VAT-" + "A" * 64, "active_transition_sigil": SIGIL},
+            "registry_snapshot_binding": {"schema_version": "sanctum-trusted-verifier-registry-snapshot/1.0",
+                                          "registry_snapshot_id": "VRS-0" + "0" * 25, "registry_snapshot_sigil": SIGIL},
+            "authorization_binding": {"schema_version": "sanctum-verifier-authorization/1.0",
+                                      "authorization_record_id": "VAU-" + "A" * 64, "authorization_record_sigil": SIGIL},
+            "authentication_binding": {"schema_version": "sanctum-verifier-authentication-evidence/1.0",
+                                        "authentication_evidence_id": "VAE-" + "A" * 64, "authentication_evidence_sigil": SIGIL},
+        },
+        "issued_at": "2026-08-06T00:00:02Z", "assurance_claim_sigil": "",
+    }
+    claim["assurance_claim_sigil"] = content_sigil(
+        {key: value for key, value in claim.items() if key != "assurance_claim_sigil"}
+    )
+    return claim
+
+
+def test_assurance_claim_loader_checks_local_integrity_only() -> None:
+    claim = _assurance_claim()
+    validate_sanctum_assurance_claim_v1(claim)
+    assert load_sanctum_assurance_claim_v1(json.dumps(claim)) == claim
+    stale = deepcopy(claim)
+    stale["issued_at"] = "2026-08-06T00:00:03Z"
+    with pytest.raises(AthanorError, match="self-Sigil"):
+        validate_sanctum_assurance_claim_v1(stale)
+    impossible = deepcopy(claim)
+    impossible["requested_assurance"] = "SANCTUM-A2"
+    impossible["assurance_claim_sigil"] = content_sigil({
+        key: value for key, value in impossible.items() if key != "assurance_claim_sigil"
+    })
+    with pytest.raises(AthanorError, match="below its request"):
+        validate_sanctum_assurance_claim_v1(impossible)
 
 
 def _allocated_event(queued: dict[str, Any], attempt: dict[str, Any]) -> dict[str, Any]:

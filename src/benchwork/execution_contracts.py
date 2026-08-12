@@ -925,6 +925,53 @@ def validate_execution_attempt_v1(attempt: dict[str, Any]) -> None:
         _fail("Execution Attempt self-Sigil mismatch")
 
 
+_ASSURANCE_LEVEL_RANK_V1 = {
+    "SANCTUM-A0": 0,
+    "SANCTUM-A1": 1,
+    "SANCTUM-A2": 2,
+}
+
+
+def validate_sanctum_assurance_claim_v1(claim: dict[str, Any]) -> None:
+    """Validate the local closed bytes of an Assurance Claim.
+
+    This does not resolve the verifier registry, evidence records, signatures,
+    or durable installation.  Those facts must be supplied to a separate
+    authority-bearing verifier.
+    """
+    validate_instance("sanctum-assurance-claim-1.0.json", claim)
+    _check_nfc(claim)
+    if claim["assurance_claim_sigil"] != content_sigil(
+        _without(claim, "assurance_claim_sigil")
+    ):
+        _fail("Sanctum Assurance Claim self-Sigil mismatch")
+    if claim["satisfies_request"] and (
+        _ASSURANCE_LEVEL_RANK_V1[claim["realized_level"]]
+        < _ASSURANCE_LEVEL_RANK_V1[claim["requested_assurance"]]
+    ):
+        _fail("Sanctum Assurance Claim satisfying level is below its request")
+    evidence_cut = claim["evidence_cut"]
+    if (
+        _parse_time(evidence_cut["verification_started_at"])
+        > _parse_time(evidence_cut["verification_completed_at"])
+        or _parse_time(evidence_cut["verification_completed_at"])
+        > _parse_time(claim["issued_at"])
+    ):
+        _fail("Sanctum Assurance Claim verification time order is invalid")
+    result = claim["result_binding"]
+    if result["kind"] == "REJECTED" and result["reason_codes"] != sorted(
+        set(result["reason_codes"])
+    ):
+        _fail("Sanctum Assurance Claim rejected Result reasons are not uniquely sorted")
+
+
+def load_sanctum_assurance_claim_v1(raw: str | bytes | bytearray) -> dict[str, Any]:
+    """Strictly load a locally valid Claim without granting claim authority."""
+    claim = _load_strict_object(raw, "Sanctum Assurance Claim")
+    validate_sanctum_assurance_claim_v1(claim)
+    return claim
+
+
 def _validate_attempt_authorization_subject_v1(subject: dict[str, Any]) -> None:
     """Validate the local, immutable portion of one authorization Subject."""
     validate_instance("attempt-authorization-subject-1.0.json", subject)
