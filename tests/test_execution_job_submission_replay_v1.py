@@ -14,6 +14,7 @@ from benchwork.execution_contracts import (
     derive_observation_evidence_subject_sigil_v1,
     derive_result_ingress_receipt_id_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_journal_supplied_facts_v1,
     replay_execution_supplied_state_suffix_v1,
     validate_execution_job_v1,
 )
@@ -339,6 +340,18 @@ def test_job_submission_replay_requires_exact_supplied_job() -> None:
         supplied_jobs=[job], supplied_attempts=[attempt],
     )
     assert ready_state["attempts"][0]["state"] == "READY"
+    assert replay_execution_journal_supplied_facts_v1(
+        [INITIAL, event, queued, allocated, preflight, preflight_passed],
+        supplied_jobs=[job], supplied_attempts=[attempt],
+    ) == ready_state
+
+    wrong_supplied = deepcopy(attempt)
+    wrong_supplied["attempt_binding_sigil"] = SIGIL
+    with pytest.raises(AthanorError, match="requires exactly one"):
+        replay_execution_journal_supplied_facts_v1(
+            [INITIAL, event, queued, allocated, preflight, preflight_passed],
+            supplied_jobs=[job], supplied_attempts=[wrong_supplied],
+        )
 
     rejected_cancel = build_execution_journal_event_v1({"schema_version": "execution-journal-event/1.0", "journal_id": INITIAL["journal_id"], "event_id": "JE-JOBREJECT", "sequence": 7, "event_type": "job.message_rejected", "executor_instance_id": INITIAL["executor_instance_id"], "executor_epoch": 1, "executor_build_sigil": INITIAL["executor_build_sigil"], "recorded_at": "2026-08-06T00:00:05Z", "observed_at": None, "entity_revisions": [{"entity_kind": "JOB", "entity_id": JOB_ID, "preceding_revision": 2, "next_revision": 3}], "causation_event_id": allocated["event_id"], "idempotency_key_sigil": None, "recovery_action_binding": None, "payload": {"message_kind": "CANCEL_REQUEST", "message_sigil": SIGIL, "reason_codes": ["CONTROL_CHANNEL_LOST"], "historical_disposition_event_id": None}, "previous_event_sigil": preflight_passed["event_sigil"]})
     rejected_cancel_state = replay_execution_supplied_state_suffix_v1(ready_state, [rejected_cancel])

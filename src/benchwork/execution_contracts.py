@@ -3210,6 +3210,93 @@ def replay_execution_journal_prefix_v1(
     _fail("Execution Journal replay reducer is unavailable for later Events")
 
 
+def replay_execution_journal_supplied_facts_v1(
+    events: list[dict[str, Any]],
+    *,
+    head: dict[str, Any] | None = None,
+    supplied_jobs: list[dict[str, Any]] | None = None,
+    supplied_attempts: list[dict[str, Any]] | None = None,
+    supplied_workers: list[dict[str, Any]] | None = None,
+    supplied_worker_sessions: list[dict[str, Any]] | None = None,
+    supplied_leases: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_receipts: list[dict[str, Any]] | None = None,
+    supplied_result_ingress_intents: list[dict[str, Any]] | None = None,
+    supplied_observation_evidence: list[dict[str, Any]] | None = None,
+    supplied_log_chunks: list[dict[str, Any]] | None = None,
+    supplied_recovery_action_sets: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Replay the installed v1 reducer set from caller-supplied immutable facts.
+
+    This is deliberately a *supplied-facts* comparator: all dependent records
+    are supplied by the caller, and the helper proves neither journal
+    completeness nor durability/currentness of those records.  It exists so a
+    contiguous Journal can use the installed reducers without splitting at
+    their bootstrap boundaries.  Unknown or not-yet-installed Event types
+    still fail closed.
+    """
+    validate_execution_journal_prefix_wire_v1(events, head=head)
+    state = replay_execution_initial_prefix_v1([events[0]])
+    for event in events[1:]:
+        if event["event_type"] == "worker.definition_registered":
+            worker = _find_supplied_v1(
+                supplied_workers,
+                event["payload"]["worker_binding_sigil"],
+                "worker_binding_sigil",
+                "Worker registration",
+            )
+            state = _reduce_worker_registered_v1(state, event, worker)
+        elif event["event_type"] == "worker.enabled":
+            state = _reduce_worker_enabled_v1(state, event)
+        elif event["event_type"] == "worker_session.registered":
+            session = _find_supplied_v1(
+                supplied_worker_sessions,
+                event["payload"]["worker_session_binding_sigil"],
+                "worker_session_binding_sigil",
+                "Worker Session registration",
+            )
+            worker = _find_supplied_v1(
+                supplied_workers, session["worker_id"], "worker_id", "Worker Session registration"
+            )
+            validate_execution_worker_session_supplied_worker_v1(session, worker)
+            state = _reduce_worker_session_registered_v1(state, event, session)
+        elif event["event_type"] == "worker_session.ready":
+            state = _reduce_worker_session_ready_v1(state, event)
+        elif event["event_type"] == "job.submitted":
+            job = _find_supplied_v1(
+                supplied_jobs,
+                event["payload"]["job_binding_sigil"],
+                "job_binding_sigil",
+                "Job submission",
+            )
+            state = _reduce_job_submitted_v1(state, event, job)
+        elif event["event_type"] == "job.queued":
+            state = _reduce_job_queued_v1(state, event)
+        elif event["event_type"] == "job.attempt_allocated":
+            attempt = _find_supplied_v1(
+                supplied_attempts,
+                event["payload"]["attempt_binding_sigil"],
+                "attempt_binding_sigil",
+                "Attempt allocation",
+            )
+            state = _reduce_job_attempt_allocated_v1(state, event, attempt)
+        elif event["event_type"] == "attempt.preflight_started":
+            state = _reduce_attempt_preflight_started_v1(state, event)
+        elif event["event_type"] == "attempt.preflight_passed":
+            state = _reduce_attempt_preflight_passed_v1(state, event)
+        else:
+            state = replay_execution_supplied_state_suffix_v1(
+                state,
+                [event],
+                supplied_leases=supplied_leases,
+                supplied_result_ingress_receipts=supplied_result_ingress_receipts,
+                supplied_result_ingress_intents=supplied_result_ingress_intents,
+                supplied_observation_evidence=supplied_observation_evidence,
+                supplied_log_chunks=supplied_log_chunks,
+                supplied_recovery_action_sets=supplied_recovery_action_sets,
+            )
+    return state
+
+
 def _reduce_empty_recovery_phase_advance_v1(
     state: dict[str, Any],
     event: dict[str, Any],

@@ -8,6 +8,7 @@ from benchwork.athanor import content_sigil
 from benchwork.execution_contracts import (
     build_execution_journal_event_v1,
     replay_execution_journal_prefix_v1,
+    replay_execution_journal_supplied_facts_v1,
 )
 
 
@@ -198,6 +199,12 @@ def test_worker_session_registration_prefix_replays_to_ready() -> None:
         supplied_workers=[worker],
         supplied_worker_sessions=[session],
     )
+    supplied_state = replay_execution_journal_supplied_facts_v1(
+        [INITIAL, registered, enabled, session_registered, ready],
+        supplied_workers=[worker],
+        supplied_worker_sessions=[session],
+    )
+    assert supplied_state == state
     assert state["workers"][0]["state"] == "ENABLED"
     assert state["worker_sessions"][0]["state"] == "READY"
     assert state["worker_sessions"][0]["capacity"] == 1
