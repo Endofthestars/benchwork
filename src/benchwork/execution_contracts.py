@@ -5226,6 +5226,103 @@ def load_agent_result_acceptance_authorization_v1(
     return authorization
 
 
+def validate_agent_result_v2(result: dict[str, Any]) -> None:
+    """Validate an RFC-0015 Agent Result v2's local deterministic closure.
+
+    This does not rederive its Job Outcome, resolve frozen Storage facts, or
+    grant canonical acceptance authority.
+    """
+    validate_instance("agent-result-2.0.json", result)
+    _check_nfc(result)
+    if result["result_sigil"] != content_sigil(_without(result, "result_sigil")):
+        _fail("Agent Result v2 self-Sigil mismatch")
+    outputs = result["outputs"]
+    keys = [(item["task_output_id"], item["blob_sigil"]) for item in outputs]
+    if keys != sorted(keys, key=lambda pair: (pair[0].encode("utf-8"), pair[1].encode("ascii"))):
+        _fail("Agent Result v2 outputs must be ordered by task output and Blob Sigil")
+    if len(keys) != len(set(keys)):
+        _fail("Agent Result v2 outputs must be unique by task output and Blob Sigil")
+    provenance = result["provenance"]
+    authorization = provenance["attempt_authorization_state"]
+    if authorization["kind"] not in {"NONE", "BOUND"}:
+        _fail("Agent Result v2 cannot contain a pending attempt authorization")
+    if provenance["storage_observation_binding"]["kind"] != "FROZEN":
+        _fail("Agent Result v2 requires a frozen Storage observation")
+    if provenance["control_evidence_set_binding"]["kind"] != "FROZEN":
+        _fail("Agent Result v2 requires a frozen control-evidence set")
+    if provenance["quarantine_binding_set_binding"]["kind"] != "FROZEN":
+        _fail("Agent Result v2 requires a frozen quarantine-binding set")
+    if provenance["terminalization_storage_manifest_binding"]["kind"] != "FROZEN":
+        _fail("Agent Result v2 requires a frozen terminalization manifest")
+    if provenance["output_root_protection"]["kind"] not in {"NO_HOLD", "HELD"}:
+        _fail("Agent Result v2 requires a terminal output-root protection branch")
+
+
+def validate_agent_result_acceptance_transition_request_v1(
+    request: dict[str, Any],
+) -> None:
+    """Validate an immutable acceptance candidate's local exact equalities.
+
+    It deliberately does not authenticate its Actor, resolve the Outcome,
+    approval, Storage, Reference Set, or Chronicle prefix, or append a
+    canonical Event.  Those actions require supplied authoritative facts.
+    """
+    validate_instance("agent-result-acceptance-transition-request-1.0.json", request)
+    _check_nfc(request)
+    result = request["agent_result"]
+    validate_agent_result_v2(result)
+    authorization = request["acceptance_authorization"]
+    validate_agent_result_acceptance_authorization_v1(authorization)
+    if request["transition_request_sigil"] != content_sigil(
+        _without(request, "transition_request_sigil")
+    ):
+        _fail("Agent Result acceptance transition request self-Sigil mismatch")
+    expected_id = "ATR-" + content_sigil(
+        [
+            "agent-result-acceptance-transition-id/1.0",
+            result["task_id"],
+            request["idempotency_key_sigil"],
+        ]
+    ).removeprefix("sha256:").upper()
+    if request["transition_request_id"] != expected_id:
+        _fail("Agent Result acceptance transition request ID mismatch")
+    if request["authorization_sigil"] != authorization["authorization_sigil"]:
+        _fail("Agent Result acceptance transition request authorization Sigil mismatch")
+    exact_authorization_fields = (
+        "transition_request_id", "event_type", "expected_chronicle_head",
+        "acceptance_request_sigil", "idempotency_key_sigil", "reference_sets",
+        "managed_blob_sigils", "acceptance_storage_binding", "actor",
+        "host_invocation", "chronicle_actor", "requested_at",
+    )
+    for field in exact_authorization_fields:
+        if request[field] != authorization[field]:
+            _fail(f"Agent Result acceptance transition request {field} disagrees with authorization")
+    if request["job_outcome_binding"] != result["job_outcome_binding"]:
+        _fail("Agent Result acceptance transition request Outcome binding disagrees with Agent Result")
+    subject = authorization["authority_subject"]
+    expected_subject = {
+        "task_binding": {"task_id": result["task_id"], "task_capsule_sigil": result["task_capsule_sigil"]},
+        "program_id": result["program_id"],
+        "capability_binding": result["capability_binding"],
+        "snapshot_binding": result["snapshot_binding"],
+        "execution_specification_binding": result["execution_specification_binding"],
+        "job_binding": result["job_binding"],
+        "job_outcome_binding": result["job_outcome_binding"],
+        "agent_result_sigil": result["result_sigil"],
+    }
+    for field, expected in expected_subject.items():
+        if subject[field] != expected:
+            _fail(f"Agent Result acceptance authority subject {field} disagrees with Agent Result")
+
+
+def load_agent_result_acceptance_transition_request_v1(
+    raw: str | bytes | bytearray,
+) -> dict[str, Any]:
+    request = _load_strict_object(raw, "Agent Result acceptance transition request")
+    validate_agent_result_acceptance_transition_request_v1(request)
+    return request
+
+
 def derive_execution_storage_root_manifest_id_v1(manifest: dict[str, Any]) -> str:
     """Derive an ESM-ID from its immutable owner tuple."""
     digest = (

@@ -18,6 +18,7 @@ TESTS = (
     "tests/test_execution.py",
     "tests/test_execution_state_journal_event_v1_contract.py",
     "tests/test_execution_job_submission_replay_v1.py",
+    "tests/test_agent_result_v2_contract.py",
     "tests/test_execution_worker_session_v1_contract.py",
     "tests/test_execution_worker_session_replay_v1.py",
     "tests/test_execution_job_outcome_v1_contract.py",
