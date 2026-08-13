@@ -1,0 +1,63 @@
+{
+  "assets": {
+    "provenance": {
+      "sha256": "849bad4e4d10e0685d0d9a18690db449134c3cd59f3dfa57aff413f59c406dbc",
+      "size": 1413,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/benchwork-provenance.intoto.json"
+    },
+    "sbom": {
+      "sha256": "a26c1aec8d59dc6dcb5da8864db187951190e106fc37bad19d80a236a763cc50",
+      "size": 107623,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/benchwork-sbom.cdx.json"
+    },
+    "sha256sums": {
+      "sha256": "e02dec769c5bd6726b1df0aab38cf89ae11280fa8b5810d05833cf7d2cb90743",
+      "size": 659,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/SHA256SUMS"
+    }
+  },
+  "bootstrap": {
+    "uv": {
+      "installer": {
+        "sha256": "b67e385074fddc9b99cd152b838fd91046d9fbc261b2c45f448a983ad23b8764",
+        "size": 71225,
+        "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/uv-install.sh"
+      },
+      "version": "0.12.0"
+    }
+  },
+  "channel": "rc",
+  "installer": {
+    "sha256": "5f52b7668d01c198902b676959ad466fd035247b1760ee988e02b8c4ec617305",
+    "size": 48643,
+    "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/install.sh"
+  },
+  "package": {
+    "name": "benchwork-arcana",
+    "requirement": "benchwork-arcana==0.3.0rc3",
+    "sdist": {
+      "sha256": "99d741ddda7c0e8e0f79b7453c95677610226ff4e352671bdad062794e762db3",
+      "size": 450493,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/benchwork_arcana-0.3.0rc3.tar.gz"
+    },
+    "wheel": {
+      "sha256": "7d4336fd28f94db4f2d2497ce6c12ae5d6ae73ec3c8f25a276b07298e114f7bc",
+      "size": 498167,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/benchwork_arcana-0.3.0rc3-py3-none-any.whl"
+    }
+  },
+  "plugin": {
+    "archive": {
+      "sha256": "48126b0d6d35eb3ff2e4835b6124ac8141061266fc7b7592e59a3e684f21d496",
+      "size": 13156,
+      "url": "https://github.com/Endofthestars/benchwork/releases/download/v0.3.0rc3/benchwork-codex-plugin-0.3.0rc3.tar.gz"
+    },
+    "name": "benchwork",
+    "runtime_requirement": "benchwork-arcana==0.3.0rc3",
+    "version": "0.3.0-rc.3"
+  },
+  "python_requirement": ">=3.11",
+  "schema_version": "benchwork-release-manifest/1.0",
+  "tag": "v0.3.0rc3",
+  "version": "0.3.0rc3"
+}
