@@ -29,8 +29,9 @@ from benchwork.install.state import (
 
 
 ROOT = Path(__file__).parents[2]
-VERSION = "0.3.0rc2"
-PLUGIN_VERSION = "0.3.0-rc.2"
+VERSION = "0.3.0rc3"
+WHEEL_NAME = f"benchwork_arcana-{VERSION}-py3-none-any.whl"
+PLUGIN_VERSION = "0.3.0-rc.3"
 
 
 def artifact(name: str, *, size: int = 1) -> dict:
@@ -51,7 +52,7 @@ def manifest() -> dict:
         "package": {
             "name": "benchwork-arcana",
             "requirement": f"benchwork-arcana=={VERSION}",
-            "wheel": artifact("benchwork.whl"),
+            "wheel": artifact(WHEEL_NAME),
             "sdist": artifact("benchwork.tar.gz"),
         },
         "plugin": {

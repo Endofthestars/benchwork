@@ -11,6 +11,7 @@ from tests.installer.test_installation import manifest
 
 
 ROOT = Path(__file__).parents[2]
+VERSION = "0.3.0rc3"
 
 
 def run_exact_dry(document: str) -> subprocess.CompletedProcess[str]:
@@ -49,7 +50,7 @@ shutil.copyfile(os.environ["FAKE_MANIFEST"], output)
                 "--dry-run",
                 "--json",
                 "--version",
-                "0.3.0rc2",
+                VERSION,
             ],
             cwd=work,
             env=environment,
@@ -119,7 +120,7 @@ shutil.copyfile(os.environ["FAKE_MANIFEST"], output)
                     "--dry-run",
                     "--json",
                     "--version",
-                    "0.3.0rc2",
+                    VERSION,
                 ],
                 cwd=work,
                 env=environment,
@@ -145,6 +146,12 @@ shutil.copyfile(os.environ["FAKE_MANIFEST"], output)
         self.assertEqual(result.returncode, 4)
         self.assertIn("plugin version does not match", result.stderr)
 
+        invalid = manifest()
+        invalid["package"]["wheel"]["url"] = "https://example.test/benchwork.whl"
+        result = run_exact_dry(json.dumps(invalid))
+        self.assertEqual(result.returncode, 4)
+        self.assertIn("wheel URL has an unsupported filename", result.stderr)
+
         result = run_exact_dry(
             json.dumps(manifest()).replace(
                 '"schema_version": "benchwork-release-manifest/1.0"',
@@ -169,8 +176,8 @@ shutil.copyfile(os.environ["FAKE_MANIFEST"], output)
             channel = {
                 "schema_version": "benchwork-release-channel/1.0",
                 "channel": "rc",
-                "version": "0.3.0rc2",
-                "manifest_url": "https://example.test/releases/0.3.0rc2/release-manifest.json",
+                "version": VERSION,
+                "manifest_url": f"https://example.test/releases/{VERSION}/release-manifest.json",
                 "manifest_sha256": hashlib.sha256(manifest_blob).hexdigest(),
                 "manifest_size": len(manifest_blob),
             }
@@ -210,7 +217,7 @@ shutil.copyfile(pathlib.Path(os.environ["FAKE_ARTIFACTS"]) / name, output)
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             plan = json.loads(result.stdout)
-            self.assertEqual(plan["version"], "0.3.0rc2")
+            self.assertEqual(plan["version"], VERSION)
             self.assertEqual(plan["channel"], "rc")
 
     def test_full_uv_lifecycle_is_idempotent_and_preserves_research_state(self) -> None:
@@ -240,7 +247,8 @@ shutil.copyfile(pathlib.Path(os.environ["FAKE_ARTIFACTS"]) / name, output)
             sentinel = research / "existing.txt"
             sentinel.write_text("preserve me\n", encoding="utf-8")
 
-            wheel = artifacts / "benchwork.whl"
+            wheel_name = "benchwork_arcana-0.3.0rc3-py3-none-any.whl"
+            wheel = artifacts / wheel_name
             wheel.write_bytes(b"fake exact wheel")
             plugin = artifacts / "plugin.tar.gz"
             subprocess.run(
@@ -263,13 +271,13 @@ shutil.copyfile(pathlib.Path(os.environ["FAKE_ARTIFACTS"]) / name, output)
 
             fake_curl = fake_bin / "curl"
             fake_curl.write_text(
-                """#!/usr/bin/python3
+                f"""#!/usr/bin/python3
 import os, pathlib, shutil, sys
 args = sys.argv[1:]
 output = pathlib.Path(args[args.index("--output") + 1])
 url = args[-1]
 name = "release-manifest.json" if url.endswith("release-manifest.json") else pathlib.Path(url).name
-mapping = {"benchwork.whl": "benchwork.whl", "plugin.tar.gz": "plugin.tar.gz"}
+mapping = {{{wheel_name!r}: {wheel_name!r}, "plugin.tar.gz": "plugin.tar.gz"}}
 source = pathlib.Path(os.environ["FAKE_ARTIFACTS"]) / mapping.get(name, name)
 shutil.copyfile(source, output)
 """,
@@ -322,7 +330,7 @@ raise SystemExit(2)
                 "sh",
                 str(ROOT / "install.sh"),
                 "--version",
-                "0.3.0rc2",
+                VERSION,
                 "--backend",
                 "uv",
                 "--install-dir",
