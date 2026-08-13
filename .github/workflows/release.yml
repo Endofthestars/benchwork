@@ -4,6 +4,20 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build and verify
+        required: true
+        type: string
+      publish_to_pypi:
+        description: Publish Python distributions to PyPI
+        required: false
+        default: false
+        type: boolean
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
 
 permissions:
   contents: read
@@ -18,7 +32,7 @@ jobs:
       - name: Check out the released tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -28,8 +42,6 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Verify release tag matches package version
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           package_version="$(
             python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])'
@@ -75,8 +87,6 @@ jobs:
         run: cyclonedx-py environment --output-format JSON --output-file dist/benchwork-sbom.cdx.json
 
       - name: Generate manifest, checksums, channel, and provenance
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           asset_base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
@@ -84,7 +94,7 @@ jobs:
           python scripts/installer/generate-release-assets.py dist \
             --asset-base-url "${asset_base}" \
             --manifest-url "${manifest_url}" \
-            --commit "${GITHUB_SHA}" \
+            --commit "$(git rev-parse HEAD)" \
             --uv-version 0.12.0
           python -c 'import json; from benchwork.schema_validation import validate_instance; validate_instance("benchwork-release-manifest-1.0.json", json.load(open("dist/release-manifest.json")))'
           python -c 'import json, pathlib; from benchwork.schema_validation import validate_instance; paths=[p for p in pathlib.Path("dist").glob("*.json") if p.name in {"stable.json","rc.json","nightly.json"}]; assert len(paths)==1; validate_instance("benchwork-release-channel-1.0.json", json.load(paths[0].open()))'
@@ -110,6 +120,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi }}
     needs:
       - build
     runs-on: ubuntu-latest
@@ -132,6 +143,7 @@ jobs:
 
   assets:
     name: Attach immutable GitHub Release assets
+    if: ${{ github.event_name == 'release' }}
     needs:
       - build
     runs-on: ubuntu-latest
@@ -155,8 +167,7 @@ jobs:
   pages:
     name: Publish byte-identical installer site
     needs:
-      - assets
-      - publish
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -175,8 +186,6 @@ jobs:
           path: /tmp/benchwork-release-assets
 
       - name: Update versioned Pages tree
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           assets=/tmp/benchwork-release-assets
@@ -200,8 +209,10 @@ jobs:
           git add install.sh releases channels CNAME
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git commit -m "release(installer): publish ${version}"
-          git push origin gh-pages
+          if ! git diff --cached --quiet; then
+            git commit -m "release(installer): publish ${version}"
+            git push origin gh-pages
+          fi
 
   smoke:
     name: Smoke test immutable published installer
@@ -212,8 +223,6 @@ jobs:
 
     steps:
       - name: Install, verify, and uninstall exact release
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           smoke_root="${RUNNER_TEMP}/benchwork-installer-smoke"
