@@ -9,7 +9,7 @@ tools may propose work, but only the deterministic Athanor kernel can accept a
 canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
-> Project status: `0.3.0rc2` release candidate. Phase 2 freezes the Codex
+> Project status: `0.3.0rc3` release candidate. Phase 2 freezes the Codex
 > Plugin-first Instrumentarium while Phase 3 adds a bounded contract-only,
 > fail-closed local slice; canonical authority and RFC acceptance remain
 > external prerequisites.

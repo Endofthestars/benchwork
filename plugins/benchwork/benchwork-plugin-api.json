@@ -1,7 +1,7 @@
 {
   "schema_version": "benchwork-plugin-api/1.0",
   "plugin": "benchwork",
-  "plugin_version": "0.3.0-rc.2",
+  "plugin_version": "0.3.0-rc.3",
   "benchwork_api": "0.3",
   "minimum_runtime": "0.3.0rc2",
   "skills_api": "1",

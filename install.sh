@@ -485,6 +485,16 @@ download() {
         fail 4 "download exceeded ${limit} bytes: ${url}"
 }
 
+wheel_filename() {
+    wheel_url_value=$1
+    wheel_filename_value=${wheel_url_value%%\?*}
+    wheel_filename_value=${wheel_filename_value##*/}
+    case "${wheel_filename_value}" in
+        benchwork_arcana-*.whl) printf '%s\n' "${wheel_filename_value}" ;;
+        *) fail 4 "release manifest wheel URL has an unsupported filename" ;;
+    esac
+}
+
 sha256() {
     if [ "${sha_command}" = sha256sum ]; then
         sha256sum "$1" | awk '{print $1}'
@@ -596,7 +606,7 @@ if [ "${uninstall}" -eq 1 ] || { [ "${repair}" -eq 1 ] && [ "${version_set}" -eq
         recovery_wheel_url=$(json_get "${recovery_manifest}" package.wheel.url)
         recovery_wheel_sha=$(json_get "${recovery_manifest}" package.wheel.sha256)
         recovery_wheel_size=$(json_get "${recovery_manifest}" package.wheel.size)
-        recovery_wheel=${tmp_root}/recovery.whl
+        recovery_wheel=${tmp_root}/$(wheel_filename "${recovery_wheel_url}")
         download "${recovery_wheel_url}" "${recovery_wheel}" "${recovery_wheel_size}"
         verify_sha "${recovery_wheel}" "${recovery_wheel_sha}"
         PATH="${recovery_bin_dir}:${PATH}"
@@ -725,6 +735,7 @@ expected_plugin_version=$(printf '%s' "${version}" |
     fail 4 "plugin version does not match the package version"
 [ "${python_requirement}" = ">=3.11" ] || fail 4 "unsupported Python requirement"
 [ "${wheel_size}" -le "${MAX_WHEEL_SIZE}" ] || fail 4 "wheel exceeds size limit"
+wheel_filename "${wheel_url}" >/dev/null
 case "${manifest_channel}" in
     rc) case "${version}" in *rc*) ;; *) fail 4 "RC manifest has a non-RC version" ;; esac ;;
     nightly) case "${version}" in *dev*) ;; *) fail 4 "nightly manifest has a non-nightly version" ;; esac ;;
@@ -986,7 +997,7 @@ fi
 printf '%s\n' "$$" >"${lock_dir}/pid"
 
 backend_bootstrapped=0
-wheel_path=${tmp_root}/benchwork.whl
+wheel_path=${tmp_root}/$(wheel_filename "${wheel_url}")
 if [ "${reuse_cli}" -eq 0 ]; then
     download "${wheel_url}" "${wheel_path}" "${wheel_size}"
     verify_sha "${wheel_path}" "${wheel_sha}"
@@ -1021,7 +1032,7 @@ rollback_previous_installation() {
     old_wheel_url=$(json_get "${old_manifest}" package.wheel.url)
     old_wheel_sha=$(json_get "${old_manifest}" package.wheel.sha256)
     old_wheel_size=$(json_get "${old_manifest}" package.wheel.size)
-    old_wheel=${tmp_root}/rollback.whl
+    old_wheel=${tmp_root}/$(wheel_filename "${old_wheel_url}")
     download "${old_wheel_url}" "${old_wheel}" "${old_wheel_size}"
     verify_sha "${old_wheel}" "${old_wheel_sha}"
     if [ "${previous_backend}" = uv ] && command -v uv >/dev/null 2>&1; then
