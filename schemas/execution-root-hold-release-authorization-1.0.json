@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-root-hold-release-authorization/1.0",
+  "title": "Execution Root Hold Release Authorization v1",
+  "description": "Closed RFC-0012 execution-root hold-release authorization. Contract validation does not prove replay/current-Head/sole-Event/absence/due/CAS facts, release Storage state, delete bytes, or affect canonical or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_authorization_id", "execution_journal_id", "storage_root", "policy", "hold_set_authorization_sigil", "basis", "release_authorization_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-root-hold-release-authorization/1.0"},
+    "release_authorization_id": {"$ref": "#/$defs/release_authorization_id"},
+    "execution_journal_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/journal_id"},
+    "storage_root": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/storage_root_binding"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "hold_set_authorization_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"},
+    "basis": {"oneOf": [{"$ref": "#/$defs/owner_terminal"}, {"$ref": "#/$defs/orphan_abort"}, {"$ref": "#/$defs/output_deadline"}]},
+    "release_authorization_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}
+  },
+  "allOf": [
+    {"if": {"properties": {"basis": {"properties": {"kind": {"const": "OWNER_TERMINAL"}}}}}, "then": {"properties": {"storage_root": {"properties": {"root_kind": {"enum": ["JOB_INPUT", "ATTEMPT_INPUT"]}}}}}},
+    {"if": {"properties": {"basis": {"properties": {"kind": {"const": "OUTPUT_DEADLINE"}}}}}, "then": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "ATTEMPT_OUTPUT"}}}}}},
+    {"if": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "JOB_INPUT"}}}, "basis": {"properties": {"kind": {"const": "OWNER_TERMINAL"}}}}}, "then": {"properties": {"basis": {"properties": {"terminal_event_type": {"enum": ["job.succeeded", "job.failed", "job.cancelled", "job.timed_out", "job.policy_violated"]}}}}}},
+    {"if": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "ATTEMPT_INPUT"}}}, "basis": {"properties": {"kind": {"const": "OWNER_TERMINAL"}}}}}, "then": {"properties": {"basis": {"properties": {"terminal_event_type": {"enum": ["attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out", "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced", "attempt.rejected"]}}}}}},
+    {"if": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "JOB_INPUT"}}}, "basis": {"properties": {"kind": {"const": "ORPHAN_ABORT"}}}}}, "then": {"properties": {"basis": {"properties": {"intended_activation_event_type": {"const": "job.submitted"}}}}}},
+    {"if": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "ATTEMPT_INPUT"}}}, "basis": {"properties": {"kind": {"const": "ORPHAN_ABORT"}}}}}, "then": {"properties": {"basis": {"properties": {"intended_activation_event_type": {"const": "attempt.preflight_passed"}}}}}},
+    {"if": {"properties": {"storage_root": {"properties": {"root_kind": {"const": "ATTEMPT_OUTPUT"}}}, "basis": {"properties": {"kind": {"const": "ORPHAN_ABORT"}}}}}, "then": {"properties": {"basis": {"properties": {"intended_activation_event_type": {"enum": ["attempt.succeeded", "attempt.failed", "attempt.cancelled", "attempt.timed_out", "attempt.policy_violated", "attempt.lease_expired", "attempt.lost", "attempt.fenced", "attempt.rejected"]}}}}}}
+  ],
+  "$defs": {
+    "release_authorization_id": {"type": "string", "pattern": "^EHR-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "policy": {"type": "object", "additionalProperties": false, "required": ["policy_id", "policy_sigil"], "properties": {"policy_id": {"const": "SP-EXECUTION-ROOT-HOLD-V1"}, "policy_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}}},
+    "owner_terminal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "activation_event_id", "activation_event_sequence", "activation_event_sigil", "terminal_event_id", "terminal_event_sequence", "terminal_event_sigil", "terminal_event_type", "verification_head", "verification_state_sigil"],
+      "properties": {"kind": {"const": "OWNER_TERMINAL"}, "activation_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"}, "activation_event_sequence": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/positive_u63"}, "activation_event_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}, "terminal_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"}, "terminal_event_sequence": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/positive_u63"}, "terminal_event_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}, "terminal_event_type": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_type"}, "verification_head": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0"}, "verification_state_sigil": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/sigil"}}
+    },
+    "orphan_abort": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "intended_activation_event_type", "absence_head", "absence_state_sigil"],
+      "properties": {"kind": {"const": "ORPHAN_ABORT"}, "intended_activation_event_type": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_type"}, "absence_head": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0"}, "absence_state_sigil": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/sigil"}}
+    },
+    "output_deadline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "activation_event_id", "activation_event_sequence", "activation_event_sigil", "release_schedule", "terminal_event_sequence", "terminal_event_sigil", "verification_head", "verification_state_sigil"],
+      "properties": {"kind": {"const": "OUTPUT_DEADLINE"}, "activation_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"}, "activation_event_sequence": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/positive_u63"}, "activation_event_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}, "release_schedule": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/output_hold_release_schedule"}, "terminal_event_sequence": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/positive_u63"}, "terminal_event_sigil": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/sigil"}, "verification_head": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0"}, "verification_state_sigil": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/sigil"}}
+    }
+  }
+}

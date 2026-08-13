@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-approval-transition-request/1.0",
+  "title": "Execution Approval Transition Request v1",
+  "description": "Closed RFC-0011 Athanor request for one exact Execution approval subject. Authenticated invocation resolution, durable single assignment, canonical Event, Receipt, and final Specification binding remain external conformance checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "transition_request_id",
+    "event_type",
+    "purpose",
+    "expected_chronicle_head",
+    "approval_subject",
+    "actor",
+    "host_invocation",
+    "chronicle_actor",
+    "idempotency_key_sigil",
+    "requested_at",
+    "transition_request_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-approval-transition-request/1.0"},
+    "transition_request_id": {"$ref": "#/$defs/transitionRequestId"},
+    "event_type": {"const": "execution.approval.granted"},
+    "purpose": {"const": "EXECUTION_APPROVAL"},
+    "expected_chronicle_head": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/chronicleHeadRef"},
+    "approval_subject": {"$ref": "https://benchwork.dev/schemas/execution-approval-subject/1.0"},
+    "actor": {"$ref": "https://benchwork.dev/schemas/execution-cancel-request/1.0#/$defs/actor_binding"},
+    "host_invocation": {"$ref": "https://benchwork.dev/schemas/execution-cancel-request/1.0#/$defs/host_invocation_binding"},
+    "chronicle_actor": {"$ref": "https://benchwork.dev/schemas/actor/1.0"},
+    "idempotency_key_sigil": {"$ref": "#/$defs/sigil"},
+    "requested_at": {"$ref": "#/$defs/timestamp"},
+    "transition_request_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "transitionRequestId": {
+      "type": "string",
+      "pattern": "^EAT-[A-F0-9]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    }
+  }
+}
+

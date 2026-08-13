@@ -10,8 +10,9 @@ canonical transition. Accepted events are written to a local, append-only
 Chronicle with chained SHA-256 Sigils and receipts.
 
 > Project status: `0.3.0rc2` release candidate. Phase 2 freezes the Codex
-> Plugin-first Instrumentarium while preserving host-neutral scientific
-> contracts.
+> Plugin-first Instrumentarium while Phase 3 adds a bounded contract-only,
+> fail-closed local slice; canonical authority and RFC acceptance remain
+> external prerequisites.
 
 ## Why Benchwork
 
@@ -408,7 +409,7 @@ examples/          Minimal research artifacts
 Run the test suite:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m pytest -q
 ```
 
 Changes to canonical transitions should include tests for replay, schema
@@ -424,6 +425,7 @@ changes should preserve locale paths and follow
 - [Compatibility policy](docs/en/COMPATIBILITY.md)
 - [Release process](docs/en/RELEASE_PROCESS.md)
 - [M10 acceptance matrix](docs/en/M10_ACCEPTANCE.md)
+- [Phase 3 contract gate](docs/en/PHASE3_ACCEPTANCE.md)
 
 ## License
 

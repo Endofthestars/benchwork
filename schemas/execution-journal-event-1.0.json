@@ -1,0 +1,3864 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-journal-event/1.0",
+  "title": "Execution Journal Event v1",
+  "description": "Closed RFC-0012 contract-only Event wire. Validation grants no append, replay, recovery, mutation, storage, or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "journal_id",
+    "event_id",
+    "sequence",
+    "event_type",
+    "executor_instance_id",
+    "executor_epoch",
+    "executor_build_sigil",
+    "recorded_at",
+    "observed_at",
+    "entity_revisions",
+    "causation_event_id",
+    "idempotency_key_sigil",
+    "recovery_action_binding",
+    "payload",
+    "previous_event_sigil",
+    "event_sigil"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "execution-journal-event/1.0"
+    },
+    "journal_id": {
+      "$ref": "#/$defs/journal_id"
+    },
+    "event_id": {
+      "$ref": "#/$defs/event_id"
+    },
+    "sequence": {
+      "$ref": "#/$defs/positive_u63"
+    },
+    "event_type": {
+      "$ref": "#/$defs/event_type"
+    },
+    "executor_instance_id": {
+      "$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"
+    },
+    "executor_epoch": {
+      "$ref": "#/$defs/u64"
+    },
+    "executor_build_sigil": {
+      "$ref": "#/$defs/sigil"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "observed_at": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entity_revisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/entity_revision"
+      }
+    },
+    "causation_event_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/event_id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotency_key_sigil": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sigil"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recovery_action_binding": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/recovery_action_binding"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "previous_event_sigil": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sigil"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "event_sigil": {
+      "$ref": "#/$defs/sigil"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "executor.epoch_started"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "prior_epoch",
+              "new_epoch",
+              "startup_reason",
+              "host_identity_sigil",
+              "executor_build_binding"
+            ],
+            "properties": {
+              "prior_epoch": true,
+              "new_epoch": true,
+              "startup_reason": true,
+              "host_identity_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "executor_build_binding": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "executor.clock_uncertain"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "last_trusted_utc",
+              "detected_utc",
+              "monotonic_status",
+              "divergence_seconds",
+              "affected_lease_ids"
+            ],
+            "properties": {
+              "last_trusted_utc": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "detected_utc": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "monotonic_status": true,
+              "divergence_seconds": true,
+              "affected_lease_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "executor.clock_restored"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "trusted_time_source_sigil",
+              "restored_utc",
+              "fenced_lease_ids",
+              "new_anchor_evidence_sigil"
+            ],
+            "properties": {
+              "trusted_time_source_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "restored_utc": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "fenced_lease_ids": {
+                "type": "array"
+              },
+              "new_anchor_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "execution.heartbeat_collision_authority_closed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "collision_gate_marker_id",
+              "owner_kind",
+              "owner_id",
+              "message_kind",
+              "identity_kind",
+              "identity_sigil",
+              "candidate_inventory_bytes_sigil",
+              "authority_effect",
+              "transition_cause"
+            ],
+            "properties": {
+              "collision_gate_marker_id": true,
+              "owner_kind": true,
+              "owner_id": true,
+              "message_kind": true,
+              "identity_kind": true,
+              "identity_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "candidate_inventory_bytes_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "authority_effect": true,
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "recovery.started"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recovery_id",
+              "prior_recovery_id",
+              "replay_through_sequence",
+              "replay_through_event_sigil",
+              "old_epoch",
+              "new_epoch",
+              "nonterminal_job_ids",
+              "nonterminal_attempt_ids",
+              "nonterminal_lease_ids",
+              "nonterminal_worker_session_ids",
+              "initial_action_set_sigil"
+            ],
+            "properties": {
+              "recovery_id": true,
+              "prior_recovery_id": true,
+              "replay_through_sequence": true,
+              "replay_through_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "old_epoch": true,
+              "new_epoch": true,
+              "nonterminal_job_ids": {
+                "type": "array"
+              },
+              "nonterminal_attempt_ids": {
+                "type": "array"
+              },
+              "nonterminal_lease_ids": {
+                "type": "array"
+              },
+              "nonterminal_worker_session_ids": {
+                "type": "array"
+              },
+              "initial_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "recovery.action_set_rebased"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recovery_id",
+              "phase",
+              "prior_action_set_sigil",
+              "replacement_action_set_sigil",
+              "reason_event_id",
+              "new_epoch",
+              "carried_completion_event_ids"
+            ],
+            "properties": {
+              "recovery_id": true,
+              "phase": true,
+              "prior_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "replacement_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "reason_event_id": true,
+              "new_epoch": true,
+              "carried_completion_event_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "recovery.phase_advanced"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recovery_id",
+              "from_phase",
+              "to_phase",
+              "completed_action_set_sigil",
+              "next_action_set_sigil",
+              "completed_entity_ids",
+              "quarantined_entity_ids"
+            ],
+            "properties": {
+              "recovery_id": true,
+              "from_phase": true,
+              "to_phase": true,
+              "completed_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "next_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "completed_entity_ids": {
+                "type": "array"
+              },
+              "quarantined_entity_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "recovery.completed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recovery_id",
+              "completed_action_set_sigil",
+              "finalizing_state_sigil",
+              "fence_tombstone_event_ids",
+              "quarantined_entity_ids",
+              "resumable_job_ids"
+            ],
+            "properties": {
+              "recovery_id": true,
+              "completed_action_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "finalizing_state_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "fence_tombstone_event_ids": {
+                "type": "array"
+              },
+              "quarantined_entity_ids": {
+                "type": "array"
+              },
+              "resumable_job_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker.definition_registered"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "worker_binding_sigil",
+              "definition_revision",
+              "supersedes_worker_binding_sigil"
+            ],
+            "properties": {
+              "worker_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "definition_revision": true,
+              "supersedes_worker_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker.enabled"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "worker_binding_sigil",
+              "verification_evidence_set_sigil"
+            ],
+            "properties": {
+              "worker_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "verification_evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker.draining"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_code",
+              "affected_worker_session_ids"
+            ],
+            "properties": {
+              "reason_code": true,
+              "affected_worker_session_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker.quarantined"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_codes",
+              "evidence_set_sigil",
+              "affected_worker_session_ids"
+            ],
+            "properties": {
+              "reason_codes": {
+                "type": "array"
+              },
+              "evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "affected_worker_session_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker.retired"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_code",
+              "closed_worker_session_ids"
+            ],
+            "properties": {
+              "reason_code": true,
+              "closed_worker_session_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.registered"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "worker_session_binding_sigil",
+              "worker_binding_sigil",
+              "backend_session_identity",
+              "control_channel_identity_sigil"
+            ],
+            "properties": {
+              "worker_session_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "worker_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "backend_session_identity": true,
+              "control_channel_identity_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.ready"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "verification_evidence_set_sigil",
+              "capacity",
+              "worker_session_heartbeat_policy_id",
+              "worker_session_heartbeat_policy_sigil",
+              "initial_heartbeat_due_at"
+            ],
+            "properties": {
+              "verification_evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "capacity": true,
+              "worker_session_heartbeat_policy_id": {
+                "type": "string",
+                "pattern": "^WSHP-[0-9A-F]{64}$"
+              },
+              "worker_session_heartbeat_policy_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "initial_heartbeat_due_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.draining"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_code",
+              "active_lease_ids"
+            ],
+            "properties": {
+              "reason_code": true,
+              "active_lease_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.offline"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "last_heartbeat_sequence",
+              "active_lease_ids"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "last_heartbeat_sequence": true,
+              "active_lease_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.quarantined"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_codes",
+              "evidence_set_sigil",
+              "active_lease_ids"
+            ],
+            "properties": {
+              "reason_codes": {
+                "type": "array"
+              },
+              "evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "active_lease_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.closed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason_code",
+              "terminal_lease_ids",
+              "backend_close_evidence_sigil"
+            ],
+            "properties": {
+              "reason_code": true,
+              "terminal_lease_ids": {
+                "type": "array"
+              },
+              "backend_close_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.heartbeat_accepted"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "heartbeat_message_sigil",
+              "sequence",
+              "prior_accepted_sequence",
+              "received_at",
+              "next_heartbeat_due_at",
+              "worker_session_heartbeat_policy_id",
+              "worker_session_heartbeat_policy_sigil",
+              "resource_sample_sigil",
+              "resource_counter_floors_after"
+            ],
+            "properties": {
+              "heartbeat_message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "sequence": true,
+              "prior_accepted_sequence": true,
+              "received_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "next_heartbeat_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "worker_session_heartbeat_policy_id": {
+                "type": "string",
+                "pattern": "^WSHP-[0-9A-F]{64}$"
+              },
+              "worker_session_heartbeat_policy_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "resource_sample_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "resource_counter_floors_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "worker_session.message_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "message_kind",
+              "message_sigil",
+              "identity_binding",
+              "reason_codes",
+              "historical_disposition_event_id"
+            ],
+            "properties": {
+              "message_kind": true,
+              "message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "identity_binding": true,
+              "reason_codes": {
+                "type": "array"
+              },
+              "historical_disposition_event_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.submitted"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "job_binding_sigil",
+              "start_request_sigil",
+              "submission_idempotency_key_sigil",
+              "admission_chronicle_head",
+              "admission_chronicle_head_evidence",
+              "deadline_due_at",
+              "job_budget",
+              "job_storage_roots"
+            ],
+            "properties": {
+              "job_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "start_request_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "submission_idempotency_key_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "admission_chronicle_head": true,
+              "admission_chronicle_head_evidence": true,
+              "deadline_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "job_budget": true,
+              "job_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.queued"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "admission_evidence_sigil",
+              "queue_key"
+            ],
+            "properties": {
+              "admission_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "queue_key": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.attempt_allocated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_binding_sigil",
+              "retry_ordinal",
+              "fencing_generation",
+              "prior_fencing_counter",
+              "resulting_fence_floor",
+              "budget_reservation",
+              "resulting_budget_ledger_sigil"
+            ],
+            "properties": {
+              "attempt_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "retry_ordinal": true,
+              "fencing_generation": true,
+              "prior_fencing_counter": true,
+              "resulting_fence_floor": true,
+              "budget_reservation": true,
+              "resulting_budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.budget_settled"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_id",
+              "reservation",
+              "accounting_capture_event_id",
+              "accounting_capture_event_sigil",
+              "usage_status",
+              "measured",
+              "charged",
+              "accounting_started_at",
+              "accounting_ended_at",
+              "supervisor_identity",
+              "accounting_evidence_set_sigil",
+              "resulting_budget_ledger_sigil"
+            ],
+            "properties": {
+              "attempt_id": true,
+              "reservation": true,
+              "accounting_capture_event_id": true,
+              "accounting_capture_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "usage_status": true,
+              "measured": true,
+              "charged": true,
+              "accounting_started_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "accounting_ended_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "supervisor_identity": true,
+              "accounting_evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "resulting_budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.retry_scheduled"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "preceding_attempt_id",
+              "terminal_reason",
+              "eligible_due_at",
+              "backoff_ordinal",
+              "post_settlement_budget_ledger_sigil"
+            ],
+            "properties": {
+              "preceding_attempt_id": true,
+              "terminal_reason": true,
+              "eligible_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "backoff_ordinal": true,
+              "post_settlement_budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.retry_ready"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "eligible_due_at",
+              "deadline_check_sigil",
+              "freshness_evidence_sigil",
+              "queue_key"
+            ],
+            "properties": {
+              "eligible_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "deadline_check_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "freshness_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "queue_key": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.stop_latched"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "request_binding"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "request_binding": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.cancellation_observed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cancellation_request_id",
+              "idempotency_key_sigil",
+              "cancel_request_sigil",
+              "actor_sigil",
+              "host_provenance_sigil",
+              "reason",
+              "expected_job_revision",
+              "terminal_event_id",
+              "terminal_event_sigil"
+            ],
+            "properties": {
+              "cancellation_request_id": true,
+              "idempotency_key_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "cancel_request_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "actor_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "host_provenance_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "reason": true,
+              "expected_job_revision": true,
+              "terminal_event_id": true,
+              "terminal_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.assurance_evaluated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "evaluation",
+              "attempt_id",
+              "attempt_assurance_event_sigil",
+              "assurance_claim_sigil",
+              "reason_codes",
+              "evidence_set_sigil"
+            ],
+            "properties": {
+              "evaluation": true,
+              "attempt_id": true,
+              "attempt_assurance_event_sigil": {
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
+              },
+              "assurance_claim_sigil": {
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
+              },
+              "reason_codes": {
+                "type": "array"
+              },
+              "evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.succeeded"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "attempt_summaries",
+              "selected_attempt_binding",
+              "completion_anchor_binding",
+              "first_stop_or_fence_binding",
+              "job_assurance_event_sigil",
+              "budget_ledger_sigil",
+              "final_fence_binding",
+              "cleanup_summary_sigil",
+              "storage_observation_binding",
+              "terminal_source_binding",
+              "output_hold_release_schedules"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "attempt_summaries": {
+                "type": "array"
+              },
+              "selected_attempt_binding": true,
+              "completion_anchor_binding": true,
+              "first_stop_or_fence_binding": true,
+              "job_assurance_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "final_fence_binding": true,
+              "cleanup_summary_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "storage_observation_binding": true,
+              "terminal_source_binding": true,
+              "output_hold_release_schedules": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.failed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "attempt_summaries",
+              "selected_attempt_binding",
+              "completion_anchor_binding",
+              "first_stop_or_fence_binding",
+              "job_assurance_event_sigil",
+              "budget_ledger_sigil",
+              "final_fence_binding",
+              "cleanup_summary_sigil",
+              "storage_observation_binding",
+              "terminal_source_binding",
+              "output_hold_release_schedules"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "attempt_summaries": {
+                "type": "array"
+              },
+              "selected_attempt_binding": true,
+              "completion_anchor_binding": true,
+              "first_stop_or_fence_binding": true,
+              "job_assurance_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "final_fence_binding": true,
+              "cleanup_summary_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "storage_observation_binding": true,
+              "terminal_source_binding": true,
+              "output_hold_release_schedules": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.cancelled"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "attempt_summaries",
+              "selected_attempt_binding",
+              "completion_anchor_binding",
+              "first_stop_or_fence_binding",
+              "job_assurance_event_sigil",
+              "budget_ledger_sigil",
+              "final_fence_binding",
+              "cleanup_summary_sigil",
+              "storage_observation_binding",
+              "terminal_source_binding",
+              "output_hold_release_schedules"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "attempt_summaries": {
+                "type": "array"
+              },
+              "selected_attempt_binding": true,
+              "completion_anchor_binding": true,
+              "first_stop_or_fence_binding": true,
+              "job_assurance_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "final_fence_binding": true,
+              "cleanup_summary_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "storage_observation_binding": true,
+              "terminal_source_binding": true,
+              "output_hold_release_schedules": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.timed_out"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "attempt_summaries",
+              "selected_attempt_binding",
+              "completion_anchor_binding",
+              "first_stop_or_fence_binding",
+              "job_assurance_event_sigil",
+              "budget_ledger_sigil",
+              "final_fence_binding",
+              "cleanup_summary_sigil",
+              "storage_observation_binding",
+              "terminal_source_binding",
+              "output_hold_release_schedules"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "attempt_summaries": {
+                "type": "array"
+              },
+              "selected_attempt_binding": true,
+              "completion_anchor_binding": true,
+              "first_stop_or_fence_binding": true,
+              "job_assurance_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "final_fence_binding": true,
+              "cleanup_summary_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "storage_observation_binding": true,
+              "terminal_source_binding": true,
+              "output_hold_release_schedules": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.policy_violated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "attempt_summaries",
+              "selected_attempt_binding",
+              "completion_anchor_binding",
+              "first_stop_or_fence_binding",
+              "job_assurance_event_sigil",
+              "budget_ledger_sigil",
+              "final_fence_binding",
+              "cleanup_summary_sigil",
+              "storage_observation_binding",
+              "terminal_source_binding",
+              "output_hold_release_schedules"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "attempt_summaries": {
+                "type": "array"
+              },
+              "selected_attempt_binding": true,
+              "completion_anchor_binding": true,
+              "first_stop_or_fence_binding": true,
+              "job_assurance_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "budget_ledger_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "final_fence_binding": true,
+              "cleanup_summary_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "storage_observation_binding": true,
+              "terminal_source_binding": true,
+              "output_hold_release_schedules": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "storage_root.hold_release_observed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "job_id",
+              "release_binding",
+              "storage_release_event"
+            ],
+            "properties": {
+              "job_id": true,
+              "release_binding": true,
+              "storage_release_event": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "job.message_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "message_kind",
+              "message_sigil",
+              "reason_codes",
+              "historical_disposition_event_id"
+            ],
+            "properties": {
+              "message_kind": true,
+              "message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "reason_codes": {
+                "type": "array"
+              },
+              "historical_disposition_event_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.authorization_bound"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authorization_subject",
+              "attempt_authorization_binding"
+            ],
+            "properties": {
+              "authorization_subject": true,
+              "attempt_authorization_binding": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.preflight_started"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "preflight_plan_sigil",
+              "freshness_evidence_sigil"
+            ],
+            "properties": {
+              "preflight_plan_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "freshness_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.preflight_progressed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "step",
+              "progress_evidence_sigil"
+            ],
+            "properties": {
+              "step": true,
+              "progress_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.preflight_passed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "materialization_identity",
+              "materialization_sigil",
+              "preflight_evidence_set_sigil",
+              "input_storage_roots"
+            ],
+            "properties": {
+              "materialization_identity": true,
+              "materialization_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "preflight_evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "input_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.starting"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "backend_start_handle_sigil",
+              "start_request_sigil"
+            ],
+            "properties": {
+              "backend_start_handle_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "start_request_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.running"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "process_tree_identity",
+              "process_tree_evidence_sigil",
+              "side_effect_handle_set_sigil"
+            ],
+            "properties": {
+              "process_tree_identity": true,
+              "process_tree_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "side_effect_handle_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.output_staging_preallocated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "job_id",
+              "attempt_id",
+              "attempt_binding_sigil",
+              "lease_id",
+              "lease_binding_sigil",
+              "worker_id",
+              "worker_session_id",
+              "worker_session_binding_sigil",
+              "executor_epoch",
+              "fence_tuple",
+              "storage_subject_id",
+              "output_handle_id",
+              "transfer_id",
+              "transfer_attempt_id",
+              "authorized_maximum_bytes"
+            ],
+            "properties": {
+              "job_id": true,
+              "attempt_id": true,
+              "attempt_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "lease_id": true,
+              "lease_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "worker_id": true,
+              "worker_session_id": true,
+              "worker_session_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "executor_epoch": true,
+              "fence_tuple": {
+                "$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"
+              },
+              "storage_subject_id": true,
+              "output_handle_id": true,
+              "transfer_id": true,
+              "transfer_attempt_id": true,
+              "authorized_maximum_bytes": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.result_ingress_received"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ingress_receipt_id",
+              "ingress_receipt_sigil",
+              "result_sigil",
+              "observation_evidence_subject_sigil",
+              "received_at"
+            ],
+            "properties": {
+              "ingress_receipt_id": true,
+              "ingress_receipt_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "result_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "observation_evidence_subject_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "received_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.result_accepted"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "result_sigil",
+              "lease_revision",
+              "fence_tuple",
+              "received_at",
+              "validation_evidence_sigil",
+              "observation_evidence_disposition_binding"
+            ],
+            "properties": {
+              "result_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "lease_revision": true,
+              "fence_tuple": {
+                "$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"
+              },
+              "received_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "validation_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "observation_evidence_disposition_binding": {
+                "$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_evidence_disposition_binding"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.result_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "disposition_kind",
+                  "message_sigil",
+                  "claimed_result_sigil",
+                  "received_at",
+                  "reason_codes",
+                  "historical_disposition_event_id",
+                  "observation_evidence_disposition_binding"
+                ],
+                "properties": {
+                  "disposition_kind": {
+                    "const": "FIRST_DISPOSITION_REJECTION"
+                  },
+                  "message_sigil": {
+                    "$ref": "#/$defs/sigil"
+                  },
+                  "claimed_result_sigil": {
+                    "$ref": "#/$defs/sigil"
+                  },
+                  "received_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "reason_codes": {
+                    "type": "array"
+                  },
+                  "historical_disposition_event_id": {
+                    "type": "null"
+                  },
+                  "observation_evidence_disposition_binding": {
+                    "$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_evidence_disposition_binding"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "disposition_kind",
+                  "message_sigil",
+                  "claimed_result_sigil",
+                  "received_at",
+                  "reason_codes",
+                  "historical_disposition_event_id"
+                ],
+                "properties": {
+                  "disposition_kind": {
+                    "const": "LATE_OR_CONFLICTING_REJECTION"
+                  },
+                  "message_sigil": {
+                    "$ref": "#/$defs/sigil"
+                  },
+                  "claimed_result_sigil": {
+                    "$ref": "#/$defs/sigil"
+                  },
+                  "received_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "reason_codes": {
+                    "type": "array"
+                  },
+                  "historical_disposition_event_id": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/event_id"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.draining"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "result_binding",
+              "process_exit_observation_sigil"
+            ],
+            "properties": {
+              "result_binding": true,
+              "process_exit_observation_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.stop_latched"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "grace_due_at"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "grace_due_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.stop_progressed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "step",
+              "termination_evidence_sigil",
+              "remaining_handle_ids"
+            ],
+            "properties": {
+              "step": true,
+              "termination_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "remaining_handle_ids": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.cleaning"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "log_closure_sigil",
+              "output_closure_sigil",
+              "termination_evidence_sigil",
+              "quarantine_plan_sigil",
+              "terminal_source_binding"
+            ],
+            "properties": {
+              "log_closure_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "output_closure_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "termination_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "quarantine_plan_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "terminal_source_binding": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.cleanup_progressed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "step",
+              "cleanup_evidence_sigil",
+              "remaining_resource_ids",
+              "finalization_bindings"
+            ],
+            "properties": {
+              "step": true,
+              "cleanup_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "remaining_resource_ids": {
+                "type": "array"
+              },
+              "finalization_bindings": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.succeeded"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.failed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.cancelled"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.timed_out"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.policy_violated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.lease_expired"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.lost"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.fenced"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt_terminal_evidence",
+              "fencing_generation",
+              "final_fence_floor",
+              "output_storage_roots"
+            ],
+            "properties": {
+              "attempt_terminal_evidence": {"$ref": "#/$defs/attempt_terminal_evidence"},
+              "fencing_generation": true,
+              "final_fence_floor": true,
+              "output_storage_roots": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "attempt.assurance_evaluated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "evaluation",
+              "assurance_claim_sigil",
+              "reason_codes",
+              "evidence_set_sigil"
+            ],
+            "properties": {
+              "evaluation": true,
+              "assurance_claim_sigil": {
+                "anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]
+              },
+              "reason_codes": {
+                "type": "array"
+              },
+              "evidence_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.offered"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lease_binding_sigil",
+              "credential_digest",
+              "claim_due_at",
+              "initial_expiry_due_at",
+              "maximum_expiry_due_at"
+            ],
+            "properties": {
+              "lease_binding_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "credential_digest": true,
+              "claim_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "initial_expiry_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "maximum_expiry_due_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.claimed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "credential_proof_sigil",
+              "claimed_at",
+              "next_heartbeat_due_at",
+              "session_capacity_after"
+            ],
+            "properties": {
+              "credential_proof_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "claimed_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "next_heartbeat_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "session_capacity_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.heartbeat_accepted"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "heartbeat_message_sigil",
+              "sequence",
+              "prior_accepted_sequence",
+              "received_at",
+              "next_heartbeat_due_at",
+              "resource_sample_sigil",
+              "resource_counter_floors_after"
+            ],
+            "properties": {
+              "heartbeat_message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "sequence": true,
+              "prior_accepted_sequence": true,
+              "received_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "next_heartbeat_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "resource_sample_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "resource_counter_floors_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.renewed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "renewal_request_sigil",
+              "prior_expiry_due_at",
+              "new_expiry_due_at",
+              "renewal_counter"
+            ],
+            "properties": {
+              "renewal_request_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "prior_expiry_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "new_expiry_due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "renewal_counter": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.released"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "release_evidence_sigil",
+              "prior_fence_floor",
+              "tombstone_generation",
+              "tombstone_publication_sigil",
+              "session_capacity_after"
+            ],
+            "properties": {
+              "release_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "prior_fence_floor": true,
+              "tombstone_generation": true,
+              "tombstone_publication_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "session_capacity_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.revoked"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "prior_fence_floor",
+              "tombstone_generation",
+              "tombstone_publication_sigil",
+              "session_capacity_after"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "prior_fence_floor": true,
+              "tombstone_generation": true,
+              "tombstone_publication_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "session_capacity_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.expired"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "deadline_kind",
+              "due_at",
+              "prior_fence_floor",
+              "tombstone_generation",
+              "tombstone_publication_sigil",
+              "session_capacity_after"
+            ],
+            "properties": {
+              "deadline_kind": true,
+              "due_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "prior_fence_floor": true,
+              "tombstone_generation": true,
+              "tombstone_publication_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "session_capacity_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.fenced"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transition_cause",
+              "prior_fence_floor",
+              "tombstone_generation",
+              "tombstone_publication_sigil",
+              "session_capacity_after"
+            ],
+            "properties": {
+              "transition_cause": {
+                "$ref": "#/$defs/transition_cause"
+              },
+              "prior_fence_floor": true,
+              "tombstone_generation": true,
+              "tombstone_publication_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "session_capacity_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.tombstone_republished"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tombstone_generation",
+              "original_terminal_event_sigil",
+              "sink_ids",
+              "publication_evidence_sigil"
+            ],
+            "properties": {
+              "tombstone_generation": true,
+              "original_terminal_event_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "sink_ids": {
+                "type": "array"
+              },
+              "publication_evidence_sigil": {
+                "$ref": "#/$defs/sigil"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "lease.message_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "message_kind",
+              "message_sigil",
+              "identity_binding",
+              "reason_codes",
+              "historical_disposition_event_id"
+            ],
+            "properties": {
+              "message_kind": true,
+              "message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "identity_binding": true,
+              "reason_codes": {
+                "type": "array"
+              },
+              "historical_disposition_event_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.chunk_committed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intake_kind",
+              "intake_id",
+              "intake_record_sigil",
+              "disposition_intent_id",
+              "log_stream_id",
+              "chunk_record_sigil",
+              "stream",
+              "sequence",
+              "blob_sigil",
+              "captured_bytes_after"
+            ],
+            "properties": {
+              "intake_kind": true,
+              "intake_id": true,
+              "intake_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "disposition_intent_id": true,
+              "log_stream_id": true,
+              "chunk_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "stream": true,
+              "sequence": true,
+              "blob_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "captured_bytes_after": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.chunk_duplicate_observed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intake_kind",
+              "intake_id",
+              "intake_record_sigil",
+              "disposition_intent_id",
+              "log_stream_id",
+              "stream",
+              "sequence",
+              "original_chunk_id",
+              "original_chunk_record_sigil",
+              "original_disposition_event"
+            ],
+            "properties": {
+              "intake_kind": true,
+              "intake_id": true,
+              "intake_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "disposition_intent_id": true,
+              "log_stream_id": true,
+              "stream": true,
+              "sequence": true,
+              "original_chunk_id": true,
+              "original_chunk_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "original_disposition_event": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.chunk_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intake_kind",
+              "intake_id",
+              "intake_record_sigil",
+              "disposition_intent_id",
+              "log_stream_id",
+              "stream",
+              "sequence",
+              "message_sigil",
+              "reason_codes",
+              "historical_disposition_event_id"
+            ],
+            "properties": {
+              "intake_kind": true,
+              "intake_id": true,
+              "intake_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "disposition_intent_id": true,
+              "log_stream_id": true,
+              "stream": true,
+              "sequence": true,
+              "message_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "reason_codes": {
+                "type": "array"
+              },
+              "historical_disposition_event_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.truncated"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intake_kind",
+              "intake_id",
+              "intake_record_sigil",
+              "disposition_intent_id",
+              "log_stream_id",
+              "stream",
+              "limit_kind",
+              "limit_bytes",
+              "captured_bytes",
+              "dropped_bytes",
+              "overflow_behavior",
+              "structured_truncation_status",
+              "accepted_prefix_length",
+              "capture_cutoff_ordinal"
+            ],
+            "properties": {
+              "intake_kind": true,
+              "intake_id": true,
+              "intake_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "disposition_intent_id": true,
+              "log_stream_id": true,
+              "stream": true,
+              "limit_kind": true,
+              "limit_bytes": true,
+              "captured_bytes": true,
+              "dropped_bytes": true,
+              "overflow_behavior": true,
+              "structured_truncation_status": true,
+              "accepted_prefix_length": true,
+              "capture_cutoff_ordinal": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.eof_accepted"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "eof_id",
+              "eof_record_sigil",
+              "eof_intent_id",
+              "stream_validation_binding"
+            ],
+            "properties": {
+              "eof_id": true,
+              "eof_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "eof_intent_id": true,
+              "stream_validation_binding": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.eof_rejected"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "eof_id",
+              "eof_record_sigil",
+              "eof_intent_id",
+              "reason_codes"
+            ],
+            "properties": {
+              "eof_id": true,
+              "eof_record_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "eof_intent_id": true,
+              "reason_codes": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.closed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "log_stream_id",
+              "stream",
+              "final_sequence",
+              "captured_bytes",
+              "dropped_bytes",
+              "stream_set_sigil",
+              "freeze_binding",
+              "closure_intent_id"
+            ],
+            "properties": {
+              "log_stream_id": true,
+              "stream": true,
+              "final_sequence": true,
+              "captured_bytes": true,
+              "dropped_bytes": true,
+              "stream_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "freeze_binding": true,
+              "closure_intent_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.closure_recovery_closed"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "log_stream_id",
+              "stream",
+              "final_sequence",
+              "captured_bytes",
+              "dropped_bytes",
+              "stream_set_sigil",
+              "closure_recovery_id",
+              "old_closure_intent_id"
+            ],
+            "properties": {
+              "log_stream_id": true,
+              "stream": true,
+              "final_sequence": true,
+              "captured_bytes": true,
+              "dropped_bytes": true,
+              "stream_set_sigil": {
+                "$ref": "#/$defs/sigil"
+              },
+              "closure_recovery_id": true,
+              "old_closure_intent_id": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "log.intake_recovery_terminalized"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "selection_recovery_id",
+              "log_stream_id",
+              "operation_kind",
+              "original_intake_id",
+              "original_intent_id",
+              "surviving_event_prefix",
+              "terminal_delta"
+            ],
+            "properties": {
+              "selection_recovery_id": true,
+              "log_stream_id": true,
+              "operation_kind": true,
+              "original_intake_id": true,
+              "original_intent_id": true,
+              "surviving_event_prefix": {
+                "type": "array"
+              },
+              "terminal_delta": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {
+      "$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"
+    },
+    "positive_u63": {
+      "$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63"
+    },
+    "u63": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854776000
+    },
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709552000
+    },
+    "timestamp": {
+      "$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"
+    },
+    "journal_id": {
+      "type": "string",
+      "pattern": "^EJ-[A-Z0-9]+$",
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^JE-[A-Z0-9]+$",
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "event_type": {
+      "enum": [
+        "executor.epoch_started",
+        "executor.clock_uncertain",
+        "executor.clock_restored",
+        "execution.heartbeat_collision_authority_closed",
+        "recovery.started",
+        "recovery.action_set_rebased",
+        "recovery.phase_advanced",
+        "recovery.completed",
+        "worker.definition_registered",
+        "worker.enabled",
+        "worker.draining",
+        "worker.quarantined",
+        "worker.retired",
+        "worker_session.registered",
+        "worker_session.ready",
+        "worker_session.draining",
+        "worker_session.offline",
+        "worker_session.quarantined",
+        "worker_session.closed",
+        "worker_session.heartbeat_accepted",
+        "worker_session.message_rejected",
+        "job.submitted",
+        "job.queued",
+        "job.attempt_allocated",
+        "job.budget_settled",
+        "job.retry_scheduled",
+        "job.retry_ready",
+        "job.stop_latched",
+        "job.cancellation_observed",
+        "job.assurance_evaluated",
+        "job.succeeded",
+        "job.failed",
+        "job.cancelled",
+        "job.timed_out",
+        "job.policy_violated",
+        "storage_root.hold_release_observed",
+        "job.message_rejected",
+        "attempt.authorization_bound",
+        "attempt.preflight_started",
+        "attempt.preflight_progressed",
+        "attempt.preflight_passed",
+        "attempt.starting",
+        "attempt.running",
+        "attempt.output_staging_preallocated",
+        "attempt.result_ingress_received",
+        "attempt.result_accepted",
+        "attempt.result_rejected",
+        "attempt.draining",
+        "attempt.stop_latched",
+        "attempt.stop_progressed",
+        "attempt.cleaning",
+        "attempt.cleanup_progressed",
+        "attempt.succeeded",
+        "attempt.failed",
+        "attempt.cancelled",
+        "attempt.timed_out",
+        "attempt.policy_violated",
+        "attempt.lease_expired",
+        "attempt.lost",
+        "attempt.fenced",
+        "attempt.rejected",
+        "attempt.assurance_evaluated",
+        "lease.offered",
+        "lease.claimed",
+        "lease.heartbeat_accepted",
+        "lease.renewed",
+        "lease.released",
+        "lease.revoked",
+        "lease.expired",
+        "lease.fenced",
+        "lease.tombstone_republished",
+        "lease.message_rejected",
+        "log.chunk_committed",
+        "log.chunk_duplicate_observed",
+        "log.chunk_rejected",
+        "log.truncated",
+        "log.eof_accepted",
+        "log.eof_rejected",
+        "log.closed",
+        "log.closure_recovery_closed",
+        "log.intake_recovery_terminalized"
+      ]
+    },
+    "transition_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "trigger_kind",
+        "trigger_event_id",
+        "effective_sequence",
+        "evidence_sigil"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "COMPLETION_ESTABLISHED",
+            "CANCEL_REQUESTED",
+            "JOB_DEADLINE",
+            "ATTEMPT_DEADLINE",
+            "HEARTBEAT_TIMEOUT",
+            "HEARTBEAT_IDENTITY_COLLISION",
+            "LEASE_CLAIM_EXPIRED",
+            "LEASE_ACTIVE_EXPIRED",
+            "LEASE_REVOKED",
+            "RECOVERY_FENCE",
+            "CLOCK_UNCERTAIN",
+            "EXECUTOR_EPOCH_CHANGED",
+            "SESSION_CHANNEL_LOST",
+            "POLICY_VIOLATION",
+            "ADMISSION_INVALID",
+            "PREFLIGHT_REJECTED",
+            "START_FAILED",
+            "COMPUTATION_FAILED",
+            "VALIDATION_FAILED",
+            "RESULT_CONFLICT",
+            "RESULT_REQUIREMENT_FAILED",
+            "OUTPUT_VALIDATION_FAILED",
+            "TERMINAL_SOURCE_RETENTION_FAILED",
+            "TERMINATION_FAILED",
+            "CLEANUP_FAILED",
+            "LOST_OWNERSHIP",
+            "ASSURANCE_UNMET",
+            "ASSURANCE_UNVERIFIABLE",
+            "BUDGET_EXHAUSTED",
+            "RETRY_EXHAUSTED",
+            "ATTEMPT_NONRETRYABLE",
+            "ATTEMPT_REJECTED",
+            "FATAL_INFRASTRUCTURE",
+            "INTEGRITY_FAILURE"
+          ]
+        },
+        "trigger_kind": {
+          "enum": [
+            "PRIOR_EVENT",
+            "CURRENT_REQUEST",
+            "DUE_DEADLINE",
+            "RECOVERY_DERIVATION"
+          ]
+        },
+        "trigger_event_id": {
+          "$ref": "#/$defs/event_id"
+        },
+        "effective_sequence": {
+          "$ref": "#/$defs/positive_u63"
+        },
+        "evidence_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "entity_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_kind",
+        "entity_id",
+        "preceding_revision",
+        "next_revision"
+      ],
+      "properties": {
+        "entity_kind": {
+          "enum": [
+            "EXECUTOR",
+            "RECOVERY",
+            "WORKER",
+            "WORKER_SESSION",
+            "JOB",
+            "ATTEMPT",
+            "LEASE",
+            "LOG_STREAM"
+          ]
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "preceding_revision": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_revision": {
+          "$ref": "#/$defs/u64"
+        }
+      }
+    },
+    "recovery_action_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery_id",
+        "phase",
+        "action_set_sigil",
+        "action_ordinal"
+      ],
+      "properties": {
+        "recovery_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "phase": {
+          "enum": [
+            "STARTED",
+            "FENCING",
+            "RECONCILING",
+            "FINALIZING"
+          ]
+        },
+        "action_set_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "action_ordinal": {
+          "$ref": "#/$defs/u63"
+        }
+      }
+    },
+    "event_ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["journal_id", "event_id", "sequence", "event_sigil"],
+      "properties": {"journal_id": {"$ref": "#/$defs/journal_id"}, "event_id": {"$ref": "#/$defs/event_id"}, "sequence": {"$ref": "#/$defs/positive_u63"}, "event_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "budget_vector": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempts", "cpu_time_seconds", "storage_bytes_written", "output_bytes", "log_bytes", "process_starts", "network_egress_bytes", "network_requests"],
+      "properties": {"attempts": {"$ref": "#/$defs/u63"}, "cpu_time_seconds": {"$ref": "#/$defs/u63"}, "storage_bytes_written": {"$ref": "#/$defs/u63"}, "output_bytes": {"$ref": "#/$defs/u63"}, "log_bytes": {"$ref": "#/$defs/u63"}, "process_starts": {"$ref": "#/$defs/u63"}, "network_egress_bytes": {"$ref": "#/$defs/u63"}, "network_requests": {"$ref": "#/$defs/u63"}}
+    },
+    "storage_root_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root_kind", "job_id", "attempt_id", "storage_root_manifest_id", "storage_root_manifest_sigil", "reference_set_id", "reference_set_sigil", "hold_id", "hold_set_event"],
+      "properties": {
+        "root_kind": {"enum": ["JOB_INPUT", "ATTEMPT_INPUT", "ATTEMPT_OUTPUT"]},
+        "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+        "attempt_id": {"oneOf": [{"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, {"type": "null"}]},
+        "storage_root_manifest_id": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/manifestId"},
+        "storage_root_manifest_sigil": {"$ref": "#/$defs/sigil"},
+        "reference_set_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-set/1.0#/$defs/referenceSetId"},
+        "reference_set_sigil": {"$ref": "#/$defs/sigil"},
+        "hold_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-set/1.0#/$defs/holdId"},
+        "hold_set_event": {"$ref": "#/$defs/event_ref"}
+      },
+      "allOf": [
+        {"if": {"properties": {"root_kind": {"const": "JOB_INPUT"}}}, "then": {"properties": {"attempt_id": {"type": "null"}}}},
+        {"if": {"properties": {"root_kind": {"enum": ["ATTEMPT_INPUT", "ATTEMPT_OUTPUT"]}}}, "then": {"properties": {"attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}}}}
+      ]
+    },
+    "completion_anchor_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NOT_ESTABLISHED"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "event_id", "event_sigil", "sequence", "result_sigil"], "properties": {"kind": {"const": "RESULT_ACCEPTED"}, "event_id": {"$ref": "#/$defs/event_id"}, "event_sigil": {"$ref": "#/$defs/sigil"}, "sequence": {"$ref": "#/$defs/positive_u63"}, "result_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "event_id", "event_sigil", "sequence", "process_exit_observation_sigil"], "properties": {"kind": {"const": "NO_RESULT"}, "event_id": {"$ref": "#/$defs/event_id"}, "event_sigil": {"$ref": "#/$defs/sigil"}, "sequence": {"$ref": "#/$defs/positive_u63"}, "process_exit_observation_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "worker_session_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "worker_id", "worker_binding_sigil", "worker_session_id", "worker_session_binding_sigil"], "properties": {"kind": {"const": "BOUND"}, "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"}, "worker_binding_sigil": {"$ref": "#/$defs/sigil"}, "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"}, "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "first_stop_or_fence_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "event_id", "event_type", "event_sigil", "effective_sequence"], "properties": {"kind": {"const": "PRESENT"}, "event_id": {"$ref": "#/$defs/event_id"}, "event_type": {"$ref": "#/$defs/event_type"}, "event_sigil": {"$ref": "#/$defs/sigil"}, "effective_sequence": {"$ref": "#/$defs/positive_u63"}}}
+      ]
+    },
+    "storage_observation_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NOT_APPLICABLE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "storage_journal_id", "through_sequence", "through_event_sigil", "output_storage_observation_set_id", "output_storage_observation_set_sigil"], "properties": {"kind": {"const": "FROZEN"}, "storage_journal_id": {"type": "string", "pattern": "^SJ-[A-Z0-9]+$"}, "through_sequence": {"$ref": "#/$defs/positive_u63"}, "through_event_sigil": {"$ref": "#/$defs/sigil"}, "output_storage_observation_set_id": {"$ref": "#/$defs/opaque_id"}, "output_storage_observation_set_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"$ref": "#/$defs/capacity_failed_binding"}
+      ]
+    },
+    "selected_attempt_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "attempt_id", "attempt_binding_sigil", "attempt_terminal_event_id", "attempt_terminal_event_sigil", "attempt_authorization_state", "worker_session_binding", "result_binding", "completion_anchor_binding", "first_stop_or_fence_binding", "storage_observation_binding"], "properties": {"kind": {"const": "SELECTED"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, "attempt_binding_sigil": {"$ref": "#/$defs/sigil"}, "attempt_terminal_event_id": {"$ref": "#/$defs/event_id"}, "attempt_terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "attempt_authorization_state": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_authorization_state"}, "worker_session_binding": {"$ref": "#/$defs/worker_session_binding"}, "result_binding": {"$ref": "#/$defs/result_binding"}, "completion_anchor_binding": {"$ref": "#/$defs/completion_anchor_binding"}, "first_stop_or_fence_binding": {"$ref": "#/$defs/first_stop_or_fence_binding"}, "storage_observation_binding": {"$ref": "#/$defs/storage_observation_binding"}}}
+      ]
+    },
+    "attempt_terminal_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transition_cause", "computation_status", "worker_status", "process_termination_status", "handle_revocation_status", "cleanup_status", "mutable_resource_isolation_status", "output_publication_status", "quarantine_status", "termination_evidence_sigil", "handle_disposition_evidence_sigil", "cleanup_summary_sigil", "quarantine_evidence_sigil", "log_closure_sigil", "output_closure_sigil", "result_binding", "attempt_authorization_state", "completion_anchor_binding", "worker_session_binding", "lease_terminal_binding", "first_stop_or_fence_binding", "storage_observation_binding", "accounting_capture_event_id", "accounting_capture_event_sigil", "control_evidence_set_binding", "quarantine_binding_set_binding", "terminalization_storage_manifest_binding", "output_root_protection", "assurance_input_set_sigil", "terminal_source_binding"],
+      "properties": {
+        "transition_cause": {"$ref": "#/$defs/transition_cause"},
+        "computation_status": {"$ref": "#/$defs/computation_status"}, "worker_status": {"$ref": "#/$defs/worker_status"},
+        "process_termination_status": {"$ref": "#/$defs/process_termination_status"}, "handle_revocation_status": {"$ref": "#/$defs/handle_revocation_status"},
+        "cleanup_status": {"$ref": "#/$defs/cleanup_status"}, "mutable_resource_isolation_status": {"$ref": "#/$defs/mutable_resource_isolation_status"},
+        "output_publication_status": {"$ref": "#/$defs/output_publication_status"}, "quarantine_status": {"$ref": "#/$defs/quarantine_status"},
+        "termination_evidence_sigil": {"$ref": "#/$defs/sigil"}, "handle_disposition_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "cleanup_summary_sigil": {"$ref": "#/$defs/sigil"}, "quarantine_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "log_closure_sigil": {"$ref": "#/$defs/sigil"}, "output_closure_sigil": {"$ref": "#/$defs/sigil"},
+        "result_binding": {"$ref": "#/$defs/result_binding"}, "attempt_authorization_state": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_authorization_state"},
+        "completion_anchor_binding": {"$ref": "#/$defs/completion_anchor_binding"}, "worker_session_binding": {"$ref": "#/$defs/worker_session_binding"},
+        "lease_terminal_binding": {"$ref": "#/$defs/lease_terminal_binding"}, "first_stop_or_fence_binding": {"$ref": "#/$defs/first_stop_or_fence_binding"},
+        "storage_observation_binding": {"$ref": "#/$defs/storage_observation_binding"}, "accounting_capture_event_id": {"$ref": "#/$defs/event_id"},
+        "accounting_capture_event_sigil": {"$ref": "#/$defs/sigil"}, "control_evidence_set_binding": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0#/$defs/controlEvidenceSetBinding"},
+        "quarantine_binding_set_binding": {"$ref": "https://benchwork.dev/schemas/execution-quarantine-binding-set/1.0#/$defs/quarantineBindingSetBinding"},
+        "terminalization_storage_manifest_binding": {"$ref": "#/$defs/terminalization_storage_manifest_binding"}, "output_root_protection": {"$ref": "#/$defs/output_root_protection"},
+        "assurance_input_set_sigil": {"$ref": "#/$defs/sigil"}, "terminal_source_binding": {"$ref": "#/$defs/terminal_source_binding"}
+      }
+    },
+    "attempt_summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "attempt_binding_sigil", "retry_ordinal", "terminal_state", "terminal_event_id", "terminal_event_sigil", "worker_session_binding", "attempt_authorization_requirement", "attempt_authorization_state", "budget_settlement_event_sigil", "assurance_evaluation_event_sigil"],
+      "properties": {"attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, "attempt_binding_sigil": {"$ref": "#/$defs/sigil"}, "retry_ordinal": {"$ref": "#/$defs/u63"}, "terminal_state": {"enum": ["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "POLICY_VIOLATION", "LEASE_EXPIRED", "LOST", "FENCED", "REJECTED"]}, "terminal_event_id": {"$ref": "#/$defs/event_id"}, "terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "worker_session_binding": {"$ref": "#/$defs/worker_session_binding"}, "attempt_authorization_requirement": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptAuthorizationRequirement"}, "attempt_authorization_state": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_authorization_state"}, "budget_settlement_event_sigil": {"$ref": "#/$defs/sigil"}, "assurance_evaluation_event_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "lease_terminal_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "lease_id", "lease_state", "terminal_event_id", "terminal_event_sigil", "final_fence_floor", "tombstone_event_sigil"], "properties": {"kind": {"const": "TERMINAL"}, "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}, "lease_state": {"enum": ["RELEASED", "REVOKED", "EXPIRED", "FENCED"]}, "terminal_event_id": {"$ref": "#/$defs/event_id"}, "terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "final_fence_floor": {"$ref": "#/$defs/u64"}, "tombstone_event_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "final_fence_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "final_fence_floor"], "properties": {"kind": {"const": "NO_ATTEMPT"}, "final_fence_floor": {"const": 0}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "final_fence_floor", "attempt_id", "attempt_terminal_event_sigil"], "properties": {"kind": {"const": "ASSIGNED_NO_LEASE"}, "final_fence_floor": {"$ref": "#/$defs/u64"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, "attempt_terminal_event_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "final_fence_floor", "lease_id", "lease_terminal_event_sigil", "tombstone_event_sigil"], "properties": {"kind": {"const": "TOMBSTONE"}, "final_fence_floor": {"$ref": "#/$defs/u64"}, "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}, "lease_terminal_event_sigil": {"$ref": "#/$defs/sigil"}, "tombstone_event_sigil": {"$ref": "#/$defs/sigil"}}}
+      ]
+    },
+    "capacity_failed_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "capacity_failure_id", "capacity_failure_sigil"],
+      "properties": {"kind": {"const": "CAPACITY_FAILED"}, "capacity_failure_id": {"type": "string", "pattern": "^ECF-[0-9A-F]{64}$"}, "capacity_failure_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "terminalization_storage_manifest_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "storage_root_manifest_id", "storage_root_manifest_sigil"], "properties": {"kind": {"const": "FROZEN"}, "storage_root_manifest_id": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/manifestId"}, "storage_root_manifest_sigil": {"$ref": "#/$defs/sigil"}}},
+        {"$ref": "#/$defs/capacity_failed_binding"}
+      ]
+    },
+    "output_root_protection": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "terminalization_storage_manifest_binding"], "properties": {"kind": {"const": "NO_HOLD"}, "terminalization_storage_manifest_binding": {"$ref": "#/$defs/terminalization_storage_manifest_binding"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "terminalization_storage_manifest_binding", "storage_root_binding"], "properties": {"kind": {"const": "HELD"}, "terminalization_storage_manifest_binding": {"$ref": "#/$defs/terminalization_storage_manifest_binding"}, "storage_root_binding": {"$ref": "#/$defs/storage_root_binding"}}},
+        {"$ref": "#/$defs/capacity_failed_binding"}
+      ]
+    },
+    "output_hold_release_schedule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "storage_root_manifest_id", "storage_root_manifest_sigil", "reference_set_id", "reference_set_sigil", "hold_id", "hold_set_event", "retention_duration_seconds", "root_inactivation_event_id", "release_due_at", "deadline_status"],
+      "properties": {"attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"}, "storage_root_manifest_id": {"$ref": "https://benchwork.dev/schemas/execution-storage-root-manifest/1.0#/$defs/manifestId"}, "storage_root_manifest_sigil": {"$ref": "#/$defs/sigil"}, "reference_set_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-set/1.0#/$defs/referenceSetId"}, "reference_set_sigil": {"$ref": "#/$defs/sigil"}, "hold_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-set/1.0#/$defs/holdId"}, "hold_set_event": {"$ref": "#/$defs/event_ref"}, "retention_duration_seconds": {"$ref": "#/$defs/u63"}, "root_inactivation_event_id": {"$ref": "#/$defs/event_id"}, "release_due_at": {"$ref": "#/$defs/timestamp"}, "deadline_status": {"enum": ["EXACT", "OVERFLOW_FAIL_CLOSED"]}}
+    },
+    "storage_cut_binding": {"type": "object", "additionalProperties": false, "required": ["schema_version", "storage_cut_id", "storage_cut_sigil"], "properties": {"schema_version": {"const": "execution-terminalization-storage-cut/1.0"}, "storage_cut_id": {"type": "string", "pattern": "^ESC-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68}, "storage_cut_sigil": {"$ref": "#/$defs/sigil"}}},
+     "opaque_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$", "minLength": 1, "maxLength": 128},
+    "result_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "result_sigil", "disposition_event_id", "disposition_event_sigil", "disposition_sequence"], "properties": {"kind": {"const": "ACCEPTED"}, "result_sigil": {"$ref": "#/$defs/sigil"}, "disposition_event_id": {"$ref": "#/$defs/event_id"}, "disposition_event_sigil": {"$ref": "#/$defs/sigil"}, "disposition_sequence": {"$ref": "#/$defs/positive_u63"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "message_sigil", "disposition_event_id", "disposition_event_sigil", "disposition_sequence", "reason_codes"], "properties": {"kind": {"const": "REJECTED"}, "message_sigil": {"$ref": "#/$defs/sigil"}, "disposition_event_id": {"$ref": "#/$defs/event_id"}, "disposition_event_sigil": {"$ref": "#/$defs/sigil"}, "disposition_sequence": {"$ref": "#/$defs/positive_u63"}, "reason_codes": {"type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true, "items": {"type": "string"}}}}
+      ]
+    },
+    "terminal_source_binding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NOT_APPLICABLE"}}},
+        {"$ref": "#/$defs/verified_terminal_source_binding"},
+        {"$ref": "#/$defs/quarantined_terminal_source_binding"}
+      ]
+    },
+    "verified_terminal_source_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "crucible_base_identity", "crucible_base_sigil", "terminal_source_identity", "terminal_source_sigil", "storage_blob", "retention_policy_sigil", "file_count", "byte_count", "storage_status", "verifier_evidence_sigil"],
+      "properties": {"kind": {"const": "VERIFIED"}, "crucible_base_identity": {"type": "string", "minLength": 1, "maxLength": 128}, "crucible_base_sigil": {"$ref": "#/$defs/sigil"}, "terminal_source_identity": {"$ref": "https://benchwork.dev/schemas/benchwork-source-tree/1.0#/$defs/sourceTreeId"}, "terminal_source_sigil": {"$ref": "#/$defs/sigil"}, "storage_blob": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}, "retention_policy_sigil": {"$ref": "#/$defs/sigil"}, "file_count": {"$ref": "#/$defs/u63"}, "byte_count": {"$ref": "#/$defs/u63"}, "storage_status": {"const": "DURABLE_VERIFIED"}, "verifier_evidence_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "quarantined_terminal_source_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "crucible_base_identity", "crucible_base_sigil", "terminal_source_identity", "terminal_source_sigil", "storage_blob", "retention_policy_sigil", "file_count", "byte_count", "storage_status", "verifier_evidence_sigil", "reason_codes"],
+      "properties": {"kind": {"const": "QUARANTINED"}, "crucible_base_identity": {"type": "string", "minLength": 1, "maxLength": 128}, "crucible_base_sigil": {"$ref": "#/$defs/sigil"}, "terminal_source_identity": {"oneOf": [{"$ref": "https://benchwork.dev/schemas/benchwork-source-tree/1.0#/$defs/sourceTreeId"}, {"type": "null"}]}, "terminal_source_sigil": {"oneOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]}, "storage_blob": {"oneOf": [{"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"}, {"type": "null"}]}, "retention_policy_sigil": {"$ref": "#/$defs/sigil"}, "file_count": {"$ref": "#/$defs/u63"}, "byte_count": {"$ref": "#/$defs/u63"}, "storage_status": {"const": "QUARANTINED"}, "verifier_evidence_sigil": {"$ref": "#/$defs/sigil"}, "reason_codes": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"enum": ["BASE_BINDING_INVALID", "SOURCE_ABSENT", "SOURCE_PARTIAL", "SOURCE_MUTABLE", "SOURCE_IDENTITY_MISMATCH", "FILE_LIMIT_EXCEEDED", "BYTE_LIMIT_EXCEEDED", "STORAGE_UNVERIFIED", "RETENTION_POLICY_MISMATCH", "VERIFIER_UNAVAILABLE"]}}}
+    },
+    "computation_status": {"enum": ["NOT_STARTED", "COMPLETED", "FAILED", "UNKNOWN"]},
+    "worker_status": {"enum": ["NOT_REPORTED", "COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT", "LOST"]},
+    "process_termination_status": {"enum": ["NOT_STARTED", "EXITED", "TERMINATED", "QUARANTINED", "UNVERIFIABLE"]},
+    "handle_revocation_status": {"enum": ["NOT_APPLICABLE", "REVOKED", "FENCED", "QUARANTINED", "UNVERIFIABLE"]},
+    "cleanup_status": {"enum": ["NOT_APPLICABLE", "VERIFIED", "PARTIAL", "FAILED", "QUARANTINED"]},
+    "mutable_resource_isolation_status": {"enum": ["NOT_APPLICABLE", "VERIFIED_ISOLATED", "QUARANTINED", "UNVERIFIED"]},
+    "output_publication_status": {"enum": ["NOT_APPLICABLE", "VERIFIED", "QUARANTINED", "FAILED"]},
+    "quarantine_status": {"enum": ["NOT_REQUIRED", "COMPLETE", "PARTIAL", "FAILED"]}
+  }
+}

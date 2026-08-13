@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-observe-request/1.0",
+  "title": "Execution Observe Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "job_id", "limit"],
+  "properties": {
+    "schema_version": {"const": "execution-observe-request/1.0"},
+    "job_id": {"$ref": "#/$defs/job_id"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 256},
+    "cursor": {"$ref": "#/$defs/observation_cursor"}
+  },
+  "$defs": {
+    "job_id": {
+      "type": "string",
+      "pattern": "^JB-[A-F0-9]{64}$",
+      "minLength": 67,
+      "maxLength": 67
+    },
+    "sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "observation_cursor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "last_returned_sequence",
+        "through_journal_sequence",
+        "through_event_sigil",
+        "cursor_sigil"
+      ],
+      "properties": {
+        "job_id": {"$ref": "#/$defs/job_id"},
+        "last_returned_sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "through_journal_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "through_event_sigil": {"$ref": "#/$defs/sigil"},
+        "cursor_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}
+

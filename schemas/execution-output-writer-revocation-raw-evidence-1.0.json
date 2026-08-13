@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-output-writer-revocation-raw-evidence/1.0",
+  "title": "Execution Output Writer Revocation Raw Evidence v1",
+  "description": "Closed RFC-0012 R7 producer-or-verifier writer-revocation raw-evidence manifest. Contract-only validation does not authenticate the issuer, resolve raw bytes, execute or trust a decoder, install a profile, prove handle-inventory completeness or immutable generation, or grant seal/read/hash/Result authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "raw_evidence_id", "kind", "role_identity", "job_id",
+    "attempt_id", "attempt_binding_sigil", "lease_id", "lease_binding_sigil",
+    "worker_id", "worker_session_id", "worker_session_binding_sigil",
+    "executor_epoch", "fence_tuple", "preallocation_event_id",
+    "preallocation_event_sigil", "preallocation_binding_sigil",
+    "storage_subject_id", "output_handle_id", "transfer_id",
+    "transfer_attempt_id", "sealed_generation_binding", "writer_handles",
+    "raw_payload", "decoder", "evidence_profile_binding",
+    "issuer_authentication_binding", "decoded_observation", "created_at",
+    "record_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-output-writer-revocation-raw-evidence/1.0"},
+    "raw_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/outputWriterRawEvidenceId"},
+    "kind": {"enum": ["PRODUCER", "VERIFIER"]},
+    "role_identity": {
+      "oneOf": [
+        {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/producerIdentity"},
+        {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/verifierIdentity"}
+      ]
+    },
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "lease_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"},
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_epoch": {"$ref": "#/$defs/u64"},
+    "fence_tuple": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"},
+    "preallocation_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"},
+    "preallocation_event_sigil": {"$ref": "#/$defs/sigil"},
+    "preallocation_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "storage_subject_id": {"$ref": "#/$defs/sigil"},
+    "output_handle_id": {"$ref": "#/$defs/opaque"},
+    "transfer_id": {"$ref": "#/$defs/transferId"},
+    "transfer_attempt_id": {"$ref": "#/$defs/transferAttemptId"},
+    "sealed_generation_binding": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/sealedGenerationBinding"},
+    "writer_handles": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/writerHandleSet"},
+    "raw_payload": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/rawPayloadBinding"},
+    "decoder": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/decoderBinding"},
+    "evidence_profile_binding": {"$ref": "#/$defs/outputWriterEvidenceProfileBinding"},
+    "issuer_authentication_binding": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/issuerAuthenticationBinding"},
+    "decoded_observation": {
+      "oneOf": [
+        {"$ref": "#/$defs/producerRevocation"},
+        {"$ref": "#/$defs/verifierConfirmation"}
+      ]
+    },
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "kind": {"const": "PRODUCER"},
+        "role_identity": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/producerIdentity"},
+        "decoded_observation": {"$ref": "#/$defs/producerRevocation"}
+      }
+    },
+    {
+      "properties": {
+        "kind": {"const": "VERIFIER"},
+        "role_identity": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/verifierIdentity"},
+        "decoded_observation": {"$ref": "#/$defs/verifierConfirmation"}
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u64": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/u64"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "opaque": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"},
+    "transferId": {"$ref": "https://benchwork.dev/schemas/artifact-transfer-attempt/1.0#/$defs/transferId"},
+    "transferAttemptId": {"$ref": "https://benchwork.dev/schemas/artifact-transfer-attempt/1.0#/$defs/transferAttemptId"},
+    "outputWriterEvidenceProfileBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_profile_id", "evidence_profile_version", "evidence_profile_sigil"],
+      "properties": {
+        "evidence_profile_id": {"const": "EXECUTION_OUTPUT_WRITER_REVOCATION"},
+        "evidence_profile_version": {"const": "1.0"},
+        "evidence_profile_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "producerRevocation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "owner_binding", "producer_identity", "revocation_started_at", "revocation_completed_at", "sealed_generation_binding", "writer_handles"],
+      "properties": {
+        "kind": {"const": "PRODUCER_REVOCATION"},
+        "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/ownerBinding"},
+        "producer_identity": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/producerIdentity"},
+        "revocation_started_at": {"$ref": "#/$defs/timestamp"},
+        "revocation_completed_at": {"$ref": "#/$defs/timestamp"},
+        "sealed_generation_binding": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/sealedGenerationBinding"},
+        "writer_handles": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/writerHandleSet"}
+      }
+    },
+    "verifierConfirmation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "owner_binding", "verifier_identity", "observed_at", "sealed_generation_binding", "writer_handles", "all_writes_rejected", "unlisted_writer_scan", "exact_generation_reopen", "generation_immutable", "read_identity_sigil"],
+      "properties": {
+        "kind": {"const": "VERIFIER_CONFIRMATION"},
+        "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/ownerBinding"},
+        "verifier_identity": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/verifierIdentity"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "sealed_generation_binding": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/sealedGenerationBinding"},
+        "writer_handles": {"$ref": "https://benchwork.dev/schemas/execution-output-writer-revocation-evidence/1.0#/$defs/writerHandleSet"},
+        "all_writes_rejected": {"const": true},
+        "unlisted_writer_scan": {"const": "COMPLETE"},
+        "exact_generation_reopen": {"const": "VERIFIED"},
+        "generation_immutable": {"const": "VERIFIED"},
+        "read_identity_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}
+

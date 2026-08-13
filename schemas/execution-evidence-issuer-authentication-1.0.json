@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0",
+  "title": "Execution Evidence Issuer Authentication v1",
+  "description": "Closed RFC-0012 O4 issuer-authentication record. Contract-only validation checks the immutable wire and local derivations; it does not read proof or evidence Blobs, verify a signature or attestation, resolve a registry snapshot, receipt, trusted role, profile, or authority, establish independence, append an Event, or grant evidence authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authentication_id",
+    "subject",
+    "role_identity",
+    "authority_binding",
+    "raw_payload",
+    "decoder_binding",
+    "evidence_profile_binding",
+    "collection_context_sigil",
+    "collected_at",
+    "issuer_identity",
+    "key_binding",
+    "registry_snapshot_binding",
+    "proof",
+    "issued_at",
+    "expires_at",
+    "anti_replay_sigil",
+    "verified_at",
+    "authentication_record_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-evidence-issuer-authentication/1.0"},
+    "authentication_id": {"$ref": "#/$defs/authenticationId"},
+    "subject": {"$ref": "#/$defs/authenticationSubject"},
+    "role_identity": {"$ref": "#/$defs/evidenceRoleIdentity"},
+    "authority_binding": {"$ref": "#/$defs/authenticationAuthorityBinding"},
+    "raw_payload": {"$ref": "#/$defs/rawPayloadBinding"},
+    "decoder_binding": {"$ref": "#/$defs/decoderBinding"},
+    "evidence_profile_binding": {"$ref": "#/$defs/evidenceProfileBinding"},
+    "collection_context_sigil": {"$ref": "#/$defs/sigil"},
+    "collected_at": {"$ref": "#/$defs/timestamp"},
+    "issuer_identity": {"$ref": "#/$defs/issuerIdentity"},
+    "key_binding": {"$ref": "#/$defs/keyBinding"},
+    "registry_snapshot_binding": {"$ref": "#/$defs/registrySnapshotBinding"},
+    "proof": {"$ref": "#/$defs/proof"},
+    "issued_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+    "anti_replay_sigil": {"$ref": "#/$defs/sigil"},
+    "verified_at": {"$ref": "#/$defs/timestamp"},
+    "authentication_record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "subject": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationSubject"},
+            {
+              "properties": {
+                "subject_kind": {"const": "EXECUTION_OBSERVATION"},
+                "raw_evidence_id": {"$ref": "#/$defs/observationRawEvidenceId"},
+                "raw_evidence_kind": {"const": "PRODUCER"}
+              }
+            }
+          ]
+        },
+        "role_identity": {
+          "allOf": [
+            {"$ref": "#/$defs/evidenceRoleIdentity"},
+            {"properties": {"role_kind": {"const": "WORKER_SESSION"}}}
+          ]
+        },
+        "authority_binding": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationAuthorityBinding"},
+            {"properties": {"authority_kind": {"const": "RESULT_INGRESS_RECEIPT"}}}
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "subject": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationSubject"},
+            {
+              "properties": {
+                "subject_kind": {"const": "EXECUTION_OBSERVATION"},
+                "raw_evidence_id": {"$ref": "#/$defs/observationRawEvidenceId"},
+                "raw_evidence_kind": {"const": "VERIFIER"}
+              }
+            }
+          ]
+        },
+        "role_identity": {
+          "allOf": [
+            {"$ref": "#/$defs/evidenceRoleIdentity"},
+            {
+              "properties": {
+                "role_kind": {
+                  "enum": [
+                    "EXECUTOR_SUPERVISOR",
+                    "ENFORCEMENT_BACKEND",
+                    "HOST_VERIFIER",
+                    "INDEPENDENT_BACKEND_VERIFIER"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "authority_binding": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationAuthorityBinding"},
+            {"properties": {"authority_kind": {"const": "TRUSTED_VERIFIER_IDENTITY"}}}
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "subject": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationSubject"},
+            {
+              "properties": {
+                "subject_kind": {"const": "OUTPUT_WRITER_REVOCATION"},
+                "raw_evidence_id": {"$ref": "#/$defs/outputWriterRawEvidenceId"},
+                "raw_evidence_kind": {"const": "PRODUCER"}
+              }
+            }
+          ]
+        },
+        "role_identity": {
+          "allOf": [
+            {"$ref": "#/$defs/evidenceRoleIdentity"},
+            {"properties": {"role_kind": {"enum": ["EXECUTOR_SUPERVISOR", "ENFORCEMENT_BACKEND"]}}}
+          ]
+        },
+        "authority_binding": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationAuthorityBinding"},
+            {"properties": {"authority_kind": {"const": "OUTPUT_WRITER_REVOCATION_OWNER"}}}
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "subject": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationSubject"},
+            {
+              "properties": {
+                "subject_kind": {"const": "OUTPUT_WRITER_REVOCATION"},
+                "raw_evidence_id": {"$ref": "#/$defs/outputWriterRawEvidenceId"},
+                "raw_evidence_kind": {"const": "VERIFIER"}
+              }
+            }
+          ]
+        },
+        "role_identity": {
+          "allOf": [
+            {"$ref": "#/$defs/evidenceRoleIdentity"},
+            {"properties": {"role_kind": {"enum": ["HOST_VERIFIER", "INDEPENDENT_BACKEND_VERIFIER"]}}}
+          ]
+        },
+        "authority_binding": {
+          "allOf": [
+            {"$ref": "#/$defs/authenticationAuthorityBinding"},
+            {"properties": {"authority_kind": {"const": "OUTPUT_WRITER_REVOCATION_OWNER"}}}
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/u63"},
+    "positiveU63": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/positiveU63"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "protocolIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "evidenceMediaType": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$",
+      "minLength": 3,
+      "maxLength": 129
+    },
+    "authenticationId": {
+      "type": "string",
+      "pattern": "^EIA-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "observationRawEvidenceId": {
+      "type": "string",
+      "pattern": "^ORE-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "outputWriterRawEvidenceId": {
+      "type": "string",
+      "pattern": "^OWE-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "roleKind": {
+      "enum": [
+        "WORKER_SESSION",
+        "EXECUTOR_SUPERVISOR",
+        "ENFORCEMENT_BACKEND",
+        "HOST_VERIFIER",
+        "INDEPENDENT_BACKEND_VERIFIER"
+      ]
+    },
+    "authorityKind": {
+      "enum": [
+        "RESULT_INGRESS_RECEIPT",
+        "TRUSTED_VERIFIER_IDENTITY",
+        "OUTPUT_WRITER_REVOCATION_OWNER"
+      ]
+    },
+    "evidenceRoleIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_kind", "identity_id", "implementation_version", "implementation_sigil"],
+      "properties": {
+        "role_kind": {"$ref": "#/$defs/roleKind"},
+        "identity_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "implementation_version": {"$ref": "#/$defs/protocolIdentifier"},
+        "implementation_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "rawPayloadBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "size_bytes", "blob_sigil"],
+      "properties": {
+        "media_type": {"$ref": "#/$defs/evidenceMediaType"},
+        "size_bytes": {"$ref": "#/$defs/u63"},
+        "blob_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "decoderBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decoder_id", "decoder_version", "implementation_sigil"],
+      "properties": {
+        "decoder_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "decoder_version": {"$ref": "#/$defs/protocolIdentifier"},
+        "implementation_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "evidenceProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_profile_id", "evidence_profile_version", "evidence_profile_sigil"],
+      "properties": {
+        "evidence_profile_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "evidence_profile_version": {"$ref": "#/$defs/protocolIdentifier"},
+        "evidence_profile_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authenticationAuthorityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority_kind", "authority_id", "authority_sigil"],
+      "properties": {
+        "authority_kind": {"$ref": "#/$defs/authorityKind"},
+        "authority_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "authority_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "issuerAuthenticationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authentication_id", "authentication_record_sigil"],
+      "properties": {
+        "authentication_id": {"$ref": "#/$defs/authenticationId"},
+        "authentication_record_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authenticationSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_kind",
+        "raw_evidence_id",
+        "raw_evidence_kind",
+        "owner_binding_sigil",
+        "decoded_observation_sigil"
+      ],
+      "properties": {
+        "subject_kind": {"enum": ["EXECUTION_OBSERVATION", "OUTPUT_WRITER_REVOCATION"]},
+        "raw_evidence_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/observationRawEvidenceId"},
+            {"$ref": "#/$defs/outputWriterRawEvidenceId"}
+          ]
+        },
+        "raw_evidence_kind": {"enum": ["PRODUCER", "VERIFIER"]},
+        "owner_binding_sigil": {"$ref": "#/$defs/sigil"},
+        "decoded_observation_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "issuerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer_id", "issuer_kind", "issuer_implementation_sigil"],
+      "properties": {
+        "issuer_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "issuer_kind": {
+          "enum": ["EXECUTOR", "ENFORCEMENT_BACKEND", "HOST_ATTESTER", "INDEPENDENT_VERIFIER"]
+        },
+        "issuer_implementation_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "keyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "registry_version", "key_id", "key_generation", "verification_profile_sigil"],
+      "properties": {
+        "registry_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "registry_version": {"$ref": "#/$defs/protocolIdentifier"},
+        "key_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "key_generation": {"$ref": "#/$defs/positiveU63"},
+        "verification_profile_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "registrySnapshotBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "registry_version", "registry_snapshot_sigil"],
+      "properties": {
+        "registry_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "registry_version": {"$ref": "#/$defs/protocolIdentifier"},
+        "registry_snapshot_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "signatureProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "algorithm", "signature_payload"],
+      "properties": {
+        "kind": {"const": "SIGNATURE"},
+        "algorithm": {"const": "ED25519"},
+        "signature_payload": {
+          "allOf": [
+            {"$ref": "#/$defs/rawPayloadBinding"},
+            {
+              "properties": {
+                "media_type": {"const": "application/vnd.benchwork.ed25519-signature"},
+                "size_bytes": {"const": 64}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "attestationProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "attestation_profile_id", "attestation_payload"],
+      "properties": {
+        "kind": {"const": "ATTESTATION"},
+        "attestation_profile_id": {"$ref": "#/$defs/protocolIdentifier"},
+        "attestation_payload": {"$ref": "#/$defs/rawPayloadBinding"}
+      }
+    },
+    "proof": {
+      "oneOf": [
+        {"$ref": "#/$defs/signatureProof"},
+        {"$ref": "#/$defs/attestationProof"}
+      ]
+    }
+  }
+}
+

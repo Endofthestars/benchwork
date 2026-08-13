@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-start-request/1.0",
+  "title": "Execution Start Request v1",
+  "description": "Closed RFC-0015 contract-only Start request. The complete nested Execution Specification is validated at its canonical RFC-0012 contract ID; Job allocation, persistence, and request-Sigil derivation are outside this contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "execution_specification", "idempotency_key"],
+  "properties": {
+    "schema_version": {"const": "execution-start-request/1.0"},
+    "execution_specification": {
+      "$ref": "https://benchwork.dev/schemas/execution-specification/1.0"
+    },
+    "idempotency_key": {"$ref": "#/$defs/opaque"}
+  },
+  "$defs": {
+    "opaque": {
+      "type": "string",
+      "not": {"pattern": "[\\u0000-\\u001F\\u007F-\\u009F]"},
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}
+

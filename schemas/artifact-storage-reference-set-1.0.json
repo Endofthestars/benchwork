@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/artifact-storage-reference-set/1.0",
+  "title": "Artifact Storage Reference Set v1",
+  "description": "Closed RFC-0013 artifact-storage-reference-set/1.0 record. This contract-only increment validates self-contained structure, deterministic local identifiers, and edge consistency; it does not resolve sources, events, extractors, validators, or graph closure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reference_set_id", "source", "extractor", "edges", "validation", "registration_event_id", "created_at", "reference_set_sigil"],
+  "properties": {
+    "schema_version": {"const": "artifact-storage-reference-set/1.0"},
+    "reference_set_id": {"$ref": "#/$defs/referenceSetId"},
+    "source": {"$ref": "#/$defs/referenceSource"},
+    "extractor": {"$ref": "#/$defs/referenceExtractor"},
+    "edges": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/referenceEdge"}},
+    "validation": {"$ref": "#/$defs/referenceValidation"},
+    "registration_event_id": {"$ref": "#/$defs/storageEventId"},
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "reference_set_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$", "minLength": 20, "maxLength": 27},
+    "opaque": {"type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$", "minLength": 1, "maxLength": 256},
+    "referenceSetId": {"type": "string", "pattern": "^RS-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "holdId": {"type": "string", "pattern": "^SH-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "storageEventId": {"type": "string", "pattern": "^SE-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "replicaId": {"type": "string", "pattern": "^SR-[A-Za-z0-9][A-Za-z0-9._:-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "referenceSource": {"type": "object", "additionalProperties": false, "required": ["kind", "identity", "schema_version", "sigil"], "properties": {"kind": {"enum": ["CANONICAL_OBJECT", "OPERATIONAL_CONTROL_RECORD", "BLOB_MANIFEST"]}, "identity": {"$ref": "#/$defs/opaque"}, "schema_version": {"$ref": "#/$defs/opaque"}, "sigil": {"$ref": "#/$defs/sigil"}}},
+    "referenceExtractor": {"type": "object", "additionalProperties": false, "required": ["extractor_id", "extractor_version", "extractor_sigil"], "properties": {"extractor_id": {"$ref": "#/$defs/opaque"}, "extractor_version": {"$ref": "#/$defs/opaque"}, "extractor_sigil": {"$ref": "#/$defs/sigil"}}},
+    "referenceValidation": {"type": "object", "additionalProperties": false, "required": ["validator_id", "validator_version", "validator_sigil", "source_validation_sigil", "evidence_sigils"], "properties": {"validator_id": {"$ref": "#/$defs/opaque"}, "validator_version": {"$ref": "#/$defs/opaque"}, "validator_sigil": {"$ref": "#/$defs/sigil"}, "source_validation_sigil": {"$ref": "#/$defs/sigil"}, "evidence_sigils": {"type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/sigil"}}}},
+    "referenceEdge": {"type": "object", "additionalProperties": false, "required": ["relationship", "target_kind", "target_identity", "target_sigil"], "properties": {"relationship": {"enum": ["BUNDLE_RETAINS_MEMBER", "CANONICAL_BINDS_BLOB", "CANONICAL_RETAINS_OBJECT", "CONTROL_RETAINS_BLOB", "CONTROL_RETAINS_CONTROL", "HOLD_PROTECTS_BLOB", "JOB_REQUIRES_BLOB", "PATCH_RETAINS_BASE", "PATCH_RETAINS_POSTIMAGE", "REFERENCE_SET_RETAINS_SET", "TRANSFER_PINS_REPLICA"]}, "target_kind": {"enum": ["BLOB", "REPLICA", "REFERENCE_SET", "CANONICAL_OBJECT", "OPERATIONAL_CONTROL_RECORD"]}, "target_identity": {"$ref": "#/$defs/opaque"}, "target_sigil": {"$ref": "#/$defs/sigil"}}, "allOf": [{"if": {"properties": {"target_kind": {"const": "BLOB"}}}, "then": {"properties": {"target_identity": {"$ref": "#/$defs/sigil"}}}}, {"if": {"properties": {"target_kind": {"const": "REPLICA"}}}, "then": {"properties": {"target_identity": {"$ref": "#/$defs/replicaId"}}}}, {"if": {"properties": {"target_kind": {"const": "REFERENCE_SET"}}}, "then": {"properties": {"target_identity": {"$ref": "#/$defs/referenceSetId"}}}}]}
+  }
+}

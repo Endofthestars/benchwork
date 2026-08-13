@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-heartbeat-canonical-message/1.0",
+  "title": "Execution Heartbeat Canonical Message v1",
+  "description": "Closed RFC-0012 H8 immutable canonical Heartbeat-message record. This contract-only record binds routed identity and canonical-byte facts; it does not validate the referenced Heartbeat, prove protected transport, install a committed-visible package, append a Journal Event, update State, or grant authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "canonical_message_record_id",
+    "owner_kind",
+    "owner_id",
+    "message_kind",
+    "message_sigil",
+    "message_canonical_size_bytes",
+    "message_canonical_bytes_sigil",
+    "created_at",
+    "canonical_message_record_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-heartbeat-canonical-message/1.0"},
+    "canonical_message_record_id": {"$ref": "#/$defs/canonicalMessageRecordId"},
+    "owner_kind": {"enum": ["WORKER_SESSION", "LEASE"]},
+    "owner_id": {"type": "string"},
+    "message_kind": {"enum": ["WORKER_SESSION_HEARTBEAT", "LEASE_HEARTBEAT"]},
+    "message_sigil": {"$ref": "#/$defs/sigil"},
+    "message_canonical_size_bytes": {"$ref": "#/$defs/u63"},
+    "message_canonical_bytes_sigil": {"$ref": "#/$defs/sigil"},
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "canonical_message_record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"owner_kind": {"const": "WORKER_SESSION"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/workerSessionId"},
+          "message_kind": {"const": "WORKER_SESSION_HEARTBEAT"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"owner_kind": {"const": "LEASE"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/leaseId"},
+          "message_kind": {"const": "LEASE_HEARTBEAT"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "workerSessionId": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "leaseId": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "canonicalMessageRecordId": {
+      "type": "string",
+      "pattern": "^HCM-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    }
+  }
+}
+

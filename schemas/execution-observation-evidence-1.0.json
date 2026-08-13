@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-observation-evidence/1.0",
+  "title": "Execution Observation Evidence v1",
+  "description": "Closed immutable RFC-0012 O1-O10 Result-facing observation decision. This contract does not establish acceptance, accounting completeness, assurance, or scientific truth.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_evidence_id", "job_id", "job_binding_sigil", "attempt_id", "attempt_binding_sigil", "lease_id", "lease_binding_sigil", "worker_id", "worker_binding_sigil", "worker_session_id", "worker_session_binding_sigil", "executor_epoch", "fence_tuple", "result_observation_binding", "result_ingress_receipt_binding", "producer_evidence_binding", "verifier_evidence_binding", "evidence_profile_binding", "assessment", "created_at", "observation_evidence_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-observation-evidence/1.0"},
+    "observation_evidence_id": {"$ref": "#/$defs/observation_evidence_id"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "job_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "lease_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"},
+    "worker_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_epoch": {"$ref": "#/$defs/u64"},
+    "fence_tuple": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"},
+    "result_observation_binding": {"$ref": "#/$defs/result_observation_binding"},
+    "result_ingress_receipt_binding": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0#/$defs/result_ingress_receipt_binding"},
+    "producer_evidence_binding": {"$ref": "#/$defs/raw_evidence_binding"},
+    "verifier_evidence_binding": {"$ref": "#/$defs/raw_evidence_binding"},
+    "evidence_profile_binding": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/evidenceProfileBinding"},
+    "assessment": {"$ref": "#/$defs/assessment"},
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "observation_evidence_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "protocol_identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$", "minLength": 1, "maxLength": 128},
+    "observation_evidence_id": {"type": "string", "pattern": "^OVE-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "observation_owner_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["job_id", "job_binding_sigil", "attempt_id", "attempt_binding_sigil", "lease_id", "lease_binding_sigil", "worker_id", "worker_binding_sigil", "worker_session_id", "worker_session_binding_sigil", "executor_epoch", "fence_tuple"],
+      "properties": {"job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"}, "job_binding_sigil": {"$ref": "#/$defs/sigil"}, "attempt_id": {"$ref": "https://benchwork.dev/schemas/attempt-authorization-subject/1.0#/$defs/attemptId"}, "attempt_binding_sigil": {"$ref": "#/$defs/sigil"}, "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"}, "lease_binding_sigil": {"$ref": "#/$defs/sigil"}, "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"}, "worker_binding_sigil": {"$ref": "#/$defs/sigil"}, "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"}, "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"}, "executor_epoch": {"$ref": "#/$defs/u64"}, "fence_tuple": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"}}
+    },
+    "runtime_observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started_at", "ended_at", "cpu_time_seconds", "peak_memory_bytes", "process_count"],
+      "properties": {"started_at": {"$ref": "#/$defs/timestamp"}, "ended_at": {"$ref": "#/$defs/timestamp"}, "cpu_time_seconds": {"$ref": "#/$defs/u63"}, "peak_memory_bytes": {"$ref": "#/$defs/u63"}, "process_count": {"$ref": "#/$defs/u63"}}
+    },
+    "termination_observation": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "exit_code", "observed_at", "observation_source"], "properties": {"kind": {"const": "EXITED"}, "exit_code": {"$ref": "#/$defs/u63"}, "observed_at": {"$ref": "#/$defs/timestamp"}, "observation_source": {"$ref": "#/$defs/termination_observation_source"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "signal", "observed_at", "observation_source"], "properties": {"kind": {"const": "SIGNALED"}, "signal": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$", "minLength": 1, "maxLength": 64}, "observed_at": {"$ref": "#/$defs/timestamp"}, "observation_source": {"$ref": "#/$defs/termination_observation_source"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "observed_at", "observation_source"], "properties": {"kind": {"const": "UNKNOWN"}, "observed_at": {"$ref": "#/$defs/timestamp"}, "observation_source": {"$ref": "#/$defs/termination_observation_source"}}}
+      ]
+    },
+    "termination_observation_source": {"enum": ["WORKER", "EXECUTOR_SUPERVISOR", "ENFORCEMENT_BACKEND"]},
+    "result_observation_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtime_observation", "termination_observation", "observation_evidence_subject_sigil"],
+      "properties": {"runtime_observation": {"$ref": "#/$defs/runtime_observation"}, "termination_observation": {"$ref": "#/$defs/termination_observation"}, "observation_evidence_subject_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "raw_evidence_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_evidence_id", "raw_evidence_record_sigil"],
+      "properties": {"raw_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/observationRawEvidenceId"}, "raw_evidence_record_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "observation_evidence_disposition_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result_ingress_receipt_binding", "observation_evidence_subject_sigil", "observation_evidence_id", "observation_evidence_sigil"],
+      "properties": {"result_ingress_receipt_binding": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0#/$defs/result_ingress_receipt_binding"}, "observation_evidence_subject_sigil": {"$ref": "#/$defs/sigil"}, "observation_evidence_id": {"$ref": "#/$defs/observation_evidence_id"}, "observation_evidence_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "authenticated_observation_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_kind", "source_identity_id", "source_identity_sigil", "source_identity_profile_sigil", "source_channel_sigil", "source_channel_profile_sigil", "source_registry_id", "source_registry_version", "source_registry_snapshot_sigil"],
+      "properties": {"source_kind": {"$ref": "#/$defs/termination_observation_source"}, "source_identity_id": {"$ref": "#/$defs/protocol_identifier"}, "source_identity_sigil": {"$ref": "#/$defs/sigil"}, "source_identity_profile_sigil": {"$ref": "#/$defs/sigil"}, "source_channel_sigil": {"$ref": "#/$defs/sigil"}, "source_channel_profile_sigil": {"$ref": "#/$defs/sigil"}, "source_registry_id": {"$ref": "#/$defs/protocol_identifier"}, "source_registry_version": {"$ref": "#/$defs/protocol_identifier"}, "source_registry_snapshot_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "observation_field": {"enum": ["RUNTIME_STARTED_AT", "RUNTIME_ENDED_AT", "CPU_TIME_SECONDS", "PEAK_MEMORY_BYTES", "PROCESS_COUNT", "TERMINATION_KIND", "TERMINATION_EXIT_CODE", "TERMINATION_SIGNAL", "TERMINATION_OBSERVED_AT", "TERMINATION_OBSERVATION_SOURCE"]},
+    "observation_reason": {
+      "type": "object", "additionalProperties": false, "required": ["field", "reason_code", "detail_sigil"],
+      "properties": {"field": {"$ref": "#/$defs/observation_field"}, "reason_code": {"enum": ["MISMATCH", "SOURCE_DATA_MISSING", "SOURCE_DATA_DECODE_FAILED", "SOURCE_AUTHENTICATION_UNAVAILABLE", "SOURCE_COUNTER_INVALID", "SOURCE_TIME_INVALID"]}, "detail_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "assessment": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "verified_runtime_observation", "verified_termination_observation", "verified_source_binding", "reason_bindings"], "properties": {"kind": {"const": "MATCHED"}, "verified_runtime_observation": {"$ref": "#/$defs/runtime_observation"}, "verified_termination_observation": {"$ref": "#/$defs/termination_observation"}, "verified_source_binding": {"$ref": "#/$defs/authenticated_observation_source"}, "reason_bindings": {"type": "array", "maxItems": 0}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "verified_runtime_observation", "verified_termination_observation", "verified_source_binding", "reason_bindings"], "properties": {"kind": {"const": "MISMATCHED"}, "verified_runtime_observation": {"$ref": "#/$defs/runtime_observation"}, "verified_termination_observation": {"$ref": "#/$defs/termination_observation"}, "verified_source_binding": {"$ref": "#/$defs/authenticated_observation_source"}, "reason_bindings": {"type": "array", "minItems": 1, "maxItems": 4096, "items": {"$ref": "#/$defs/observation_reason"}, "uniqueItems": true}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "unavailable_fields", "reason_bindings"], "properties": {"kind": {"const": "UNAVAILABLE"}, "unavailable_fields": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"$ref": "#/$defs/observation_field"}, "uniqueItems": true}, "reason_bindings": {"type": "array", "minItems": 1, "maxItems": 4096, "items": {"$ref": "#/$defs/observation_reason"}, "uniqueItems": true}}}
+      ]
+    }
+  }
+}
+

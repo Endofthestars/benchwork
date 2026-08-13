@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-worker-session-heartbeat-policy/1.0",
+  "title": "Execution Worker Session Heartbeat Policy v1",
+  "description": "Closed RFC-0012 immutable Worker-Session heartbeat timing policy. This contract-only record does not resolve an Executor build binding, install a Session policy slot, append worker_session.ready, compute a durable due key, or establish live authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "worker_session_heartbeat_policy_id",
+    "worker_session_id",
+    "worker_session_binding_sigil",
+    "executor_instance_id",
+    "executor_epoch",
+    "heartbeat_interval_seconds",
+    "heartbeat_timeout_seconds",
+    "gap_mode",
+    "source_sigil",
+    "created_at",
+    "worker_session_heartbeat_policy_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-worker-session-heartbeat-policy/1.0"},
+    "worker_session_heartbeat_policy_id": {"$ref": "#/$defs/workerSessionHeartbeatPolicyId"},
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"},
+    "executor_epoch": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/u64"},
+    "heartbeat_interval_seconds": {"$ref": "#/$defs/positiveU63"},
+    "heartbeat_timeout_seconds": {"$ref": "#/$defs/positiveU63"},
+    "gap_mode": {"const": "CONTIGUOUS_ONLY"},
+    "source_sigil": {"$ref": "#/$defs/sigil"},
+    "created_at": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/timestamp"},
+    "worker_session_heartbeat_policy_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "positiveU63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63"},
+    "workerSessionHeartbeatPolicyId": {
+      "type": "string",
+      "pattern": "^WSHP-[0-9A-F]{64}$",
+      "minLength": 69,
+      "maxLength": 69
+    }
+  }
+}
+

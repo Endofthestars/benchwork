@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result-record/2.0",
+  "title": "Accepted Agent Result Record v2",
+  "description": "Closed RFC-0015 replay projection. Schema validation alone does not verify a Chronicle prefix or grant scientific acceptance authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "program_id", "task_capsule_sigil", "host_identity_sigil", "capability_binding", "snapshot_binding", "job_binding", "execution_specification_binding", "job_outcome_binding", "terminal_event_sigil", "selected_attempt_id", "assurance_claim_sigil", "canonical_reference_binding", "terminal_source_binding", "outputs", "provenance", "status", "agent_result_sigil", "accepted_at", "acceptance_receipt"],
+  "properties": {
+    "schema_version": {"const": "agent-result-record/2.0"},
+    "task_id": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/task_id"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/program_id"},
+    "task_capsule_sigil": {"$ref": "#/$defs/sigil"},
+    "host_identity_sigil": {"$ref": "#/$defs/sigil"},
+    "capability_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/capability_binding"},
+    "snapshot_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/snapshot_binding"},
+    "job_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/job_binding"},
+    "execution_specification_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/execution_specification_binding"},
+    "job_outcome_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/job_outcome_binding"},
+    "terminal_event_sigil": {"$ref": "#/$defs/sigil"},
+    "selected_attempt_id": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/selected_attempt_id"},
+    "assurance_claim_sigil": {"$ref": "#/$defs/sigil"},
+    "canonical_reference_binding": {"$ref": "#/$defs/canonicalReferenceBinding"},
+    "terminal_source_binding": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/terminal_source_binding"},
+    "outputs": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/properties/outputs"},
+    "provenance": {"$ref": "https://benchwork.dev/schemas/agent-result/2.0#/$defs/provenance"},
+    "status": {"const": "COMPLETED"},
+    "agent_result_sigil": {"$ref": "#/$defs/sigil"},
+    "accepted_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "acceptance_receipt": {"$ref": "#/$defs/receiptId"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "receiptId": {"type": "string", "pattern": "^RC-[A-Z0-9]+$", "minLength": 4, "maxLength": 128},
+    "canonicalReferenceBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reference_intent_id", "reference_intent_record_sigil", "transition_request_id", "transition_request_sigil", "acceptance_storage_binding", "reference_set_id", "reference_set_sigil"],
+      "properties": {
+        "reference_intent_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-intent/1.0#/$defs/intentId"},
+        "reference_intent_record_sigil": {"$ref": "#/$defs/sigil"},
+        "transition_request_id": {"$ref": "https://benchwork.dev/schemas/agent-result-acceptance-transition-request/1.0#/$defs/transitionRequestId"},
+        "transition_request_sigil": {"$ref": "#/$defs/sigil"},
+        "acceptance_storage_binding": {"$ref": "https://benchwork.dev/schemas/agent-result-acceptance-authorization/1.0#/$defs/acceptanceStorageBinding"},
+        "reference_set_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-intent/1.0#/$defs/referenceSetId"},
+        "reference_set_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}

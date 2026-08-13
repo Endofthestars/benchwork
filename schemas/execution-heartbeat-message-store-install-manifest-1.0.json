@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-heartbeat-message-store-install-manifest/1.0",
+  "title": "Execution Heartbeat Message Store Install Manifest v1",
+  "description": "Closed RFC-0012 immutable Heartbeat message-store package manifest. This contract-only record binds one record identity to exact stored-byte facts; it does not select a path, write or fsync files, rename a candidate, acquire a lock, prove durable or committed visibility, validate a record branch, append an Event, or establish authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "install_manifest_id",
+    "record_kind",
+    "record_id",
+    "record_sigil",
+    "stored_size_bytes",
+    "stored_bytes_sigil",
+    "storage_profile",
+    "install_manifest_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-heartbeat-message-store-install-manifest/1.0"},
+    "install_manifest_id": {"$ref": "#/$defs/installManifestId"},
+    "record_kind": {"$ref": "#/$defs/recordKind"},
+    "record_id": {"type": "string"},
+    "record_sigil": {"$ref": "#/$defs/sigil"},
+    "stored_size_bytes": {"$ref": "#/$defs/u63"},
+    "stored_bytes_sigil": {"$ref": "#/$defs/sigil"},
+    "storage_profile": {"const": "DESCRIPTOR_RELATIVE_ATOMIC_DIRECTORY_V1"},
+    "install_manifest_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"record_kind": {"const": "CANONICAL_MESSAGE"}}, "required": ["record_kind"]},
+      "then": {"properties": {"record_id": {"$ref": "#/$defs/canonicalMessageRecordId"}}}
+    },
+    {
+      "if": {"properties": {"record_kind": {"const": "AUTHENTICATED_INGRESS"}}, "required": ["record_kind"]},
+      "then": {"properties": {"record_id": {"$ref": "#/$defs/authenticatedIngressRecordId"}}}
+    },
+    {
+      "if": {"properties": {"record_kind": {"const": "RAW_FRAME"}}, "required": ["record_kind"]},
+      "then": {"properties": {"record_id": {"$ref": "#/$defs/rawFrameRecordId"}}}
+    },
+    {
+      "if": {"properties": {"record_kind": {"const": "COLLISION_EVIDENCE"}}, "required": ["record_kind"]},
+      "then": {"properties": {"record_id": {"$ref": "#/$defs/collisionEvidenceId"}}}
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "recordKind": {
+      "enum": ["CANONICAL_MESSAGE", "AUTHENTICATED_INGRESS", "RAW_FRAME", "COLLISION_EVIDENCE"]
+    },
+    "installManifestId": {
+      "type": "string",
+      "pattern": "^HMI-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "canonicalMessageRecordId": {
+      "type": "string",
+      "pattern": "^HCM-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "authenticatedIngressRecordId": {
+      "type": "string",
+      "pattern": "^HAI-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "rawFrameRecordId": {
+      "type": "string",
+      "pattern": "^HFR-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "collisionEvidenceId": {
+      "type": "string",
+      "pattern": "^HCE-[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+      "minLength": 30,
+      "maxLength": 30
+    }
+  }
+}
+

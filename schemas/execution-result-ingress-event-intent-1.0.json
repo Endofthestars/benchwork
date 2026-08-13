@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-result-ingress-event-intent/1.0",
+  "title": "Execution Result Ingress Event Intent v1",
+  "description": "Closed RFC-0012 O2 immutable Result-ingress Event candidate intent. Contract validation does not append or reserve a Journal Event, validate live ingress authority, win a CAS, or accept a Result scientifically.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ingress_event_intent_id", "result_ingress_receipt_binding", "event_candidate", "created_at", "intent_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-result-ingress-event-intent/1.0"},
+    "ingress_event_intent_id": {"$ref": "#/$defs/ingress_event_intent_id"},
+    "result_ingress_receipt_binding": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0#/$defs/result_ingress_receipt_binding"},
+    "event_candidate": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0"},
+    "created_at": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "intent_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  },
+  "$defs": {
+    "ingress_event_intent_id": {
+      "type": "string",
+      "pattern": "^OII-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    }
+  }
+}
+

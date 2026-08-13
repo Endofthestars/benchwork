@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-heartbeat-forensic-package-reservation-index-row/1.0",
+  "title": "Execution Heartbeat Forensic Package Reservation Index Row v1",
+  "description": "Closed RFC-0012 H8 deterministic source-to-forensic-package reservation row. Structural validity and supplied marker/source equality do not prove a committed collision gate, candidate-inventory authority, reservation package durability, filesystem visibility, forensic package installation, Journal replay, State closure, or execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "forensic_reservation_id",
+    "collision_gate_marker_id",
+    "collision_gate_marker_sigil",
+    "source_candidate_id",
+    "source_candidate_inventory_entry_sigil",
+    "forensic_package_id",
+    "reservation_state",
+    "reserved_at",
+    "forensic_reservation_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-heartbeat-forensic-package-reservation-index-row/1.0"},
+    "forensic_reservation_id": {"$ref": "#/$defs/forensicReservationId"},
+    "collision_gate_marker_id": {"$ref": "#/$defs/collisionGateMarkerId"},
+    "collision_gate_marker_sigil": {"$ref": "#/$defs/sigil"},
+    "source_candidate_id": {"$ref": "#/$defs/sourceCandidateId"},
+    "source_candidate_inventory_entry_sigil": {"$ref": "#/$defs/sigil"},
+    "forensic_package_id": {"$ref": "#/$defs/forensicPackageId"},
+    "reservation_state": {"const": "RESERVED"},
+    "reserved_at": {"$ref": "#/$defs/timestamp"},
+    "forensic_reservation_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "forensicReservationId": {
+      "type": "string",
+      "pattern": "^HPR-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "collisionGateMarkerId": {
+      "type": "string",
+      "pattern": "^HCG-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "sourceCandidateId": {
+      "type": "string",
+      "pattern": "^HOC-[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+      "minLength": 30,
+      "maxLength": 30
+    },
+    "forensicPackageId": {
+      "type": "string",
+      "pattern": "^HFP-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    }
+  }
+}
+

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-observation-raw-evidence/1.0",
+  "title": "Execution Observation Raw Evidence v1",
+  "description": "Closed RFC-0012 O4-O10 raw Observation Evidence record. Contract-only validation does not read a Blob, execute a decoder, verify a proof, resolve an external registry, append an Event, or grant operational, assurance, or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "raw_evidence_id", "observation_evidence_id", "kind", "owner_binding", "result_observation_binding", "result_ingress_receipt_binding", "role_identity", "raw_payload", "decoder_binding", "evidence_profile_binding", "issuer_authentication_binding", "decoded_observation", "collected_at", "created_at", "record_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-observation-raw-evidence/1.0"},
+    "raw_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/observationRawEvidenceId"},
+    "observation_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_evidence_id"},
+    "kind": {"enum": ["PRODUCER", "VERIFIER"]},
+    "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_owner_binding"},
+    "result_observation_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/result_observation_binding"},
+    "result_ingress_receipt_binding": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0#/$defs/result_ingress_receipt_binding"},
+    "role_identity": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/evidenceRoleIdentity"},
+    "raw_payload": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/rawPayloadBinding"},
+    "decoder_binding": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/decoderBinding"},
+    "evidence_profile_binding": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/evidenceProfileBinding"},
+    "issuer_authentication_binding": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/issuerAuthenticationBinding"},
+    "decoded_observation": {"$ref": "#/$defs/decodedObservation"},
+    "collected_at": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/timestamp"},
+    "created_at": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/timestamp"},
+    "record_sigil": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/sigil"}
+  },
+  "oneOf": [
+    {"properties": {"kind": {"const": "PRODUCER"}, "role_identity": {"properties": {"role_kind": {"const": "WORKER_SESSION"}}}, "decoded_observation": {"$ref": "#/$defs/producerComplete"}}},
+    {"properties": {"kind": {"const": "VERIFIER"}, "role_identity": {"properties": {"role_kind": {"enum": ["EXECUTOR_SUPERVISOR", "ENFORCEMENT_BACKEND", "HOST_VERIFIER", "INDEPENDENT_BACKEND_VERIFIER"]}}}, "decoded_observation": {"$ref": "#/$defs/verifierComplete"}}},
+    {"properties": {"kind": {"const": "VERIFIER"}, "role_identity": {"properties": {"role_kind": {"enum": ["EXECUTOR_SUPERVISOR", "ENFORCEMENT_BACKEND", "HOST_VERIFIER", "INDEPENDENT_BACKEND_VERIFIER"]}}}, "decoded_observation": {"$ref": "#/$defs/verifierUnavailable"}}}
+  ],
+  "$defs": {
+    "decodedObservation": {"oneOf": [{"$ref": "#/$defs/producerComplete"}, {"$ref": "#/$defs/verifierComplete"}, {"$ref": "#/$defs/verifierUnavailable"}]},
+    "producerComplete": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "owner_binding", "result_ingress_receipt_binding", "runtime_observation", "termination_observation", "collection_context_sigil"],
+      "properties": {"kind": {"const": "PRODUCER_COMPLETE"}, "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_owner_binding"}, "result_ingress_receipt_binding": {"$ref": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0#/$defs/result_ingress_receipt_binding"}, "runtime_observation": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/runtime_observation"}, "termination_observation": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/termination_observation"}, "collection_context_sigil": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/sigil"}}
+    },
+    "verifierComplete": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "owner_binding", "runtime_observation", "termination_observation", "authenticated_source", "collection_context_sigil"],
+      "properties": {"kind": {"const": "VERIFIER_COMPLETE"}, "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_owner_binding"}, "runtime_observation": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/runtime_observation"}, "termination_observation": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/termination_observation"}, "authenticated_source": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/authenticated_observation_source"}, "collection_context_sigil": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/sigil"}}
+    },
+    "verifierUnavailable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "owner_binding", "authenticated_source", "unavailable_fields", "reason_bindings", "collection_context_sigil"],
+      "properties": {"kind": {"const": "VERIFIER_UNAVAILABLE"}, "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_owner_binding"}, "authenticated_source": {"anyOf": [{"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/authenticated_observation_source"}, {"type": "null"}]}, "unavailable_fields": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_field"}}, "reason_bindings": {"type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_reason"}}, "collection_context_sigil": {"$ref": "https://benchwork.dev/schemas/execution-evidence-issuer-authentication/1.0#/$defs/sigil"}}
+    }
+  }
+}
+

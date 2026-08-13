@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0",
+  "title": "Execution Control Evidence Set v1",
+  "description": "Closed RFC-0012 ten-dimension Control Evidence closure. This contract-only record binds exact evidence references to one Attempt; it does not resolve durable authority, execute evidence predicates, terminalize an Attempt, or establish assurance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "control_evidence_set_id",
+    "job_id",
+    "attempt_id",
+    "attempt_binding_sigil",
+    "control_evidence_refs",
+    "control_evidence_set_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-control-evidence-set/1.0"},
+    "control_evidence_set_id": {"$ref": "#/$defs/controlEvidenceSetId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"},
+    "control_evidence_refs": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/controlEvidenceRef"}
+    },
+    "control_evidence_set_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"}
+  },
+  "$defs": {
+    "controlEvidenceSetId": {
+      "type": "string",
+      "pattern": "^CES-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "controlEvidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["control_dimension", "control_evidence_id", "control_evidence_sigil"],
+      "properties": {
+        "control_dimension": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlDimension"},
+        "control_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlEvidenceId"},
+        "control_evidence_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"}
+      }
+    },
+    "controlEvidenceSetBinding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "PENDING"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "control_evidence_set_id", "control_evidence_set_sigil"], "properties": {"kind": {"const": "FROZEN"}, "control_evidence_set_id": {"$ref": "#/$defs/controlEvidenceSetId"}, "control_evidence_set_sigil": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/sigil"}}}
+      ]
+    }
+  }
+}

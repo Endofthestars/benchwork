@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/agent-result-acceptance-authorization/1.0",
+  "title": "Agent Result Acceptance Authorization v1",
+  "description": "Closed RFC-0015 Agent Result acceptance authorization preimage. Contract-only validation does not authenticate a live invocation, derive the raw acceptance key/request Sigils, execute Ward predicates, resolve approval/Outcome/Storage/Chronicle records, authorize acceptance, or create an Event or Receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "transition_request_id",
+    "event_type",
+    "expected_chronicle_head",
+    "authority_subject",
+    "ward_pass",
+    "approval",
+    "acceptance_policy",
+    "acceptance_request_sigil",
+    "idempotency_key_sigil",
+    "reference_sets",
+    "managed_blob_sigils",
+    "acceptance_storage_binding",
+    "actor",
+    "host_invocation",
+    "chronicle_actor",
+    "requested_at",
+    "authorization_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "agent-result-acceptance-authorization/1.0"},
+    "transition_request_id": {"$ref": "#/$defs/transitionRequestId"},
+    "event_type": {"const": "agent-result.accepted"},
+    "expected_chronicle_head": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/chronicleHeadRef"},
+    "authority_subject": {"$ref": "#/$defs/authoritySubject"},
+    "ward_pass": {"$ref": "#/$defs/wardPass"},
+    "approval": {"$ref": "#/$defs/approvalEvidence"},
+    "acceptance_policy": {"$ref": "https://benchwork.dev/schemas/agent-result-acceptance-policy/1.0"},
+    "acceptance_request_sigil": {"$ref": "#/$defs/sigil"},
+    "idempotency_key_sigil": {"$ref": "#/$defs/sigil"},
+    "reference_sets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "https://benchwork.dev/schemas/artifact-storage-reference-intent/1.0#/$defs/referenceSetRef"}
+    },
+    "managed_blob_sigils": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sigil"}
+    },
+    "acceptance_storage_binding": {"$ref": "#/$defs/acceptanceStorageBinding"},
+    "actor": {"$ref": "https://benchwork.dev/schemas/execution-cancel-request/1.0#/$defs/actor_binding"},
+    "host_invocation": {"$ref": "https://benchwork.dev/schemas/execution-cancel-request/1.0#/$defs/host_invocation_binding"},
+    "chronicle_actor": {"$ref": "https://benchwork.dev/schemas/actor/1.0"},
+    "requested_at": {"$ref": "#/$defs/timestamp"},
+    "authorization_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "opaque": {
+      "type": "string",
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "not": {"pattern": "[\\r\\n]"},
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "transitionRequestId": {
+      "type": "string",
+      "pattern": "^ATR-[A-F0-9]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "outcomeId": {
+      "type": "string",
+      "pattern": "^OJ-[A-F0-9]{64}$",
+      "minLength": 67,
+      "maxLength": 67
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^CE-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {"pattern": "[\\r\\n]"},
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^RC-[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "not": {"pattern": "[\\r\\n]"},
+      "minLength": 4,
+      "maxLength": 128
+    },
+    "jobBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "job_binding_sigil"],
+      "properties": {
+        "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+        "job_binding_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "taskBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "task_capsule_sigil"],
+      "properties": {
+        "task_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/taskId"},
+        "task_capsule_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "capabilityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "contract_version", "capability_contract_sigil"],
+      "properties": {
+        "capability_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/capabilityId"},
+        "contract_version": {"const": "2.0"},
+        "capability_contract_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "circleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["circle_id", "circle_sigil"],
+      "properties": {
+        "circle_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/circleId"},
+        "circle_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "specificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specification_id", "specification_sigil"],
+      "properties": {
+        "specification_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/specificationId"},
+        "specification_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "jobOutcomeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome_id", "outcome_sigil"],
+      "properties": {
+        "outcome_id": {"$ref": "#/$defs/outcomeId"},
+        "outcome_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authoritySubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_binding",
+        "task_binding",
+        "program_id",
+        "capability_binding",
+        "snapshot_binding",
+        "circle_binding",
+        "execution_specification_binding",
+        "job_binding",
+        "job_outcome_binding",
+        "agent_result_sigil"
+      ],
+      "properties": {
+        "registry_binding": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/registryBinding"},
+        "task_binding": {"$ref": "#/$defs/taskBinding"},
+        "program_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/programId"},
+        "capability_binding": {"$ref": "#/$defs/capabilityBinding"},
+        "snapshot_binding": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/snapshotBinding"},
+        "circle_binding": {"$ref": "#/$defs/circleBinding"},
+        "execution_specification_binding": {"$ref": "#/$defs/specificationBinding"},
+        "job_binding": {"$ref": "#/$defs/jobBinding"},
+        "job_outcome_binding": {"$ref": "#/$defs/jobOutcomeBinding"},
+        "agent_result_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "wardPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "ward_decision_id",
+        "ward_decision_sigil",
+        "resolved_permission_set_sigil",
+        "evaluated_chronicle_head",
+        "evaluated_at"
+      ],
+      "properties": {
+        "status": {"const": "PASS"},
+        "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+        "ward_decision_sigil": {"$ref": "#/$defs/sigil"},
+        "resolved_permission_set_sigil": {"$ref": "#/$defs/sigil"},
+        "evaluated_chronicle_head": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/chronicleHeadRef"},
+        "evaluated_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "approvalNotRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ward_decision_id", "ward_decision_sigil"],
+      "properties": {
+        "kind": {"const": "NOT_REQUIRED"},
+        "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+        "ward_decision_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "approvalRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "ward_decision_id",
+        "ward_decision_sigil",
+        "approval_policy_id",
+        "approval_policy_version",
+        "approval_policy_sigil",
+        "approval_subject_id",
+        "approval_subject_sigil",
+        "approval_event_id",
+        "approval_event_body_sigil",
+        "approval_receipt_id",
+        "approval_receipt_sigil"
+      ],
+      "properties": {
+        "kind": {"const": "REQUIRED"},
+        "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+        "ward_decision_sigil": {"$ref": "#/$defs/sigil"},
+        "approval_policy_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/approvalPolicyId"},
+        "approval_policy_version": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/version"},
+        "approval_policy_sigil": {"$ref": "#/$defs/sigil"},
+        "approval_subject_id": {"$ref": "https://benchwork.dev/schemas/execution-approval-subject/1.0#/$defs/approvalSubjectId"},
+        "approval_subject_sigil": {"$ref": "#/$defs/sigil"},
+        "approval_event_id": {"$ref": "#/$defs/eventId"},
+        "approval_event_body_sigil": {"$ref": "#/$defs/sigil"},
+        "approval_receipt_id": {"$ref": "#/$defs/receiptId"},
+        "approval_receipt_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "approvalEvidence": {
+      "oneOf": [
+        {"$ref": "#/$defs/approvalNotRequired"},
+        {"$ref": "#/$defs/approvalRequired"}
+      ]
+    },
+    "acceptanceBlobValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blob_sigil",
+        "size_bytes",
+        "replica_id",
+        "backend_id",
+        "backend_generation",
+        "availability_event",
+        "integrity_evidence_sigil",
+        "quarantine_status"
+      ],
+      "properties": {
+        "blob_sigil": {"$ref": "#/$defs/sigil"},
+        "size_bytes": {"$ref": "#/$defs/u63"},
+        "replica_id": {"$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/replicaId"},
+        "backend_id": {"$ref": "#/$defs/opaque"},
+        "backend_generation": {"$ref": "#/$defs/opaque"},
+        "availability_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+        "integrity_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "quarantine_status": {"const": "CLEAR"}
+      }
+    },
+    "acceptanceStorageBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage_event",
+        "storage_state_sigil",
+        "validated_blob_sigils",
+        "validation_evidence",
+        "validation_evidence_set_sigil"
+      ],
+      "properties": {
+        "storage_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+        "storage_state_sigil": {"$ref": "#/$defs/sigil"},
+        "validated_blob_sigils": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sigil"}
+        },
+        "validation_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/acceptanceBlobValidation"}
+        },
+        "validation_evidence_set_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}
+

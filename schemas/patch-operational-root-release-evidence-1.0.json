@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/patch-operational-root-release-evidence/1.0",
+  "title": "Patch Operational Root Release Evidence v1",
+  "description": "Closed RFC-0014 release-evidence wire contract. Contract-only validation does not replay Promotion or Storage journals and grants no hold-release authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_evidence_id",
+    "operational_journal_id",
+    "operational_root_id",
+    "operational_root_sigil",
+    "operational_root_plan",
+    "hold_id",
+    "reference_set",
+    "hold_set_event",
+    "activation_event",
+    "inactivation_event",
+    "release_condition",
+    "terminal_authority",
+    "canonical_completion",
+    "guard_completion",
+    "promotion_prefix",
+    "storage_prefix",
+    "policy",
+    "trusted_clock",
+    "retention_completion",
+    "intent_absence",
+    "record_sigil"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "patch-operational-root-release-evidence/1.0"
+    },
+    "release_evidence_id": {
+      "$ref": "#/$defs/prel"
+    },
+    "operational_journal_id": {
+      "$ref": "#/$defs/pj"
+    },
+    "operational_root_id": {
+      "$ref": "#/$defs/proot"
+    },
+    "operational_root_sigil": {
+      "$ref": "#/$defs/sigil"
+    },
+    "operational_root_plan": {
+      "$ref": "#/$defs/storageControlRef"
+    },
+    "hold_id": {
+      "$ref": "#/$defs/sh"
+    },
+    "reference_set": {
+      "$ref": "#/$defs/referenceSetRef"
+    },
+    "hold_set_event": {
+      "$ref": "#/$defs/storageEventRef"
+    },
+    "activation_event": {
+      "$ref": "#/$defs/promotionEventRef"
+    },
+    "inactivation_event": {
+      "$ref": "#/$defs/promotionEventRef"
+    },
+    "release_condition": {
+      "$ref": "#/$defs/releaseCondition"
+    },
+    "terminal_authority": {
+      "$ref": "#/$defs/storageControlRef"
+    },
+    "canonical_completion": {
+      "$ref": "#/$defs/canonicalCompletion"
+    },
+    "guard_completion": {
+      "$ref": "#/$defs/guardCompletion"
+    },
+    "promotion_prefix": {
+      "$ref": "#/$defs/journalPrefix"
+    },
+    "storage_prefix": {
+      "$ref": "#/$defs/storagePrefixRef"
+    },
+    "policy": {
+      "$ref": "#/$defs/releasePolicyBinding"
+    },
+    "trusted_clock": {
+      "$ref": "#/$defs/storageClockRef"
+    },
+    "retention_completion": {
+      "$ref": "#/$defs/retentionCompletion"
+    },
+    "intent_absence": {
+      "$ref": "#/$defs/intentAbsence"
+    },
+    "record_sigil": {
+      "$ref": "#/$defs/sigil"
+    }
+  },
+  "$defs": {
+    "sigil": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/sigil"
+    },
+    "timestamp": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/timestamp"
+    },
+    "u63": {
+      "$ref": "https://benchwork.dev/schemas/artifact-storage-reference-intent/1.0#/$defs/u63"
+    },
+    "pj": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/pj"
+    },
+    "proot": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/proot"
+    },
+    "sh": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/sh"
+    },
+    "prel": {
+      "type": "string",
+      "pattern": "^PREL-[0-9a-f]{32}$",
+      "minLength": 37,
+      "maxLength": 37
+    },
+    "storageControlRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-operational-root-plan/1.0#/$defs/control_record"
+    },
+    "referenceSetRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-operational-root-plan/1.0#/$defs/reference_set"
+    },
+    "storageEventRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-operational-root-plan/1.0#/$defs/storage_event"
+    },
+    "promotionEventRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/promotionEventRef"
+    },
+    "storagePrefixRef": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/storagePrefixRef"
+    },
+    "storageClockRef": {
+      "$ref": "https://benchwork.dev/schemas/artifact-materialization/1.0#/$defs/clockRef"
+    },
+    "journalPrefix": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-inspect-request/1.0#/$defs/journal_prefix"
+    },
+    "receipt": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/receipt"
+    },
+    "referenceIntentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference_intent_id",
+        "record_sigil"
+      ],
+      "properties": {
+        "reference_intent_id": {
+          "$ref": "https://benchwork.dev/schemas/artifact-storage-reference-intent/1.0#/$defs/intentId"
+        },
+        "record_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "releaseCondition": {
+      "enum": [
+        "NON_PARTIAL_OUTCOME_OBSERVED",
+        "RESOLVED_RECOVERY_OBSERVED",
+        "ABANDONED_WITH_DISPOSITION",
+        "JOURNAL_RECOVERY_COMPLETED"
+      ]
+    },
+    "abandonedRootDisposition": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-recovery-record/1.0#/$defs/rootDisposition"
+    },
+    "terminalGuardCompletion": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-recovery-record/1.0#/$defs/terminalGuard"
+    },
+    "abandonmentDispositionAuthority": {
+      "$ref": "https://benchwork.dev/schemas/patch-promotion-recovery-record/1.0#/$defs/disposition"
+    },
+    "noGuardAllocated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "owner_kind",
+        "owner_attempt_id",
+        "attempt_terminal_event",
+        "allocation_absence_proof_sigil"
+      ],
+      "properties": {
+        "kind": {
+          "const": "NO_GUARD_ALLOCATED"
+        },
+        "owner_kind": {
+          "enum": [
+            "PROMOTION",
+            "RECOVERY"
+          ]
+        },
+        "owner_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[\\r\\n]"
+          }
+        },
+        "attempt_terminal_event": {
+          "$ref": "#/$defs/promotionEventRef"
+        },
+        "allocation_absence_proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "notApplicableJournalSuffixGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "tail_recovery_id",
+        "completion_event"
+      ],
+      "properties": {
+        "kind": {
+          "const": "NOT_APPLICABLE_JOURNAL_SUFFIX"
+        },
+        "tail_recovery_id": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/ptri"
+        },
+        "completion_event": {
+          "$ref": "#/$defs/promotionEventRef"
+        }
+      }
+    },
+    "guardCompletion": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/terminalGuardCompletion"
+        },
+        {
+          "$ref": "#/$defs/noGuardAllocated"
+        },
+        {
+          "$ref": "#/$defs/notApplicableJournalSuffixGuard"
+        }
+      ]
+    },
+    "canonicalCommitted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "receipt",
+        "reference_intent",
+        "commit_event"
+      ],
+      "properties": {
+        "kind": {
+          "const": "COMMITTED_CANONICAL_RECORD"
+        },
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "reference_intent": {
+          "$ref": "#/$defs/referenceIntentRef"
+        },
+        "commit_event": {
+          "$ref": "#/$defs/storageEventRef"
+        }
+      }
+    },
+    "canonicalNotApplicable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "NOT_APPLICABLE_JOURNAL_SUFFIX"
+        }
+      }
+    },
+    "canonicalCompletion": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/canonicalCommitted"
+        },
+        {
+          "$ref": "#/$defs/canonicalNotApplicable"
+        }
+      ]
+    },
+    "releasePolicyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_sigil",
+        "deletion_grace_seconds",
+        "retain_until"
+      ],
+      "properties": {
+        "policy_id": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/sp"
+        },
+        "policy_sigil": {
+          "$ref": "#/$defs/sigil"
+        },
+        "deletion_grace_seconds": {
+          "$ref": "#/$defs/u63"
+        },
+        "retain_until": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "retentionCompletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inactivation_recorded_at",
+        "grace_due_at",
+        "release_not_before",
+        "trusted_lower_bound",
+        "proof_sigil"
+      ],
+      "properties": {
+        "inactivation_recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "grace_due_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "release_not_before": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "trusted_lower_bound": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "attemptIntentAbsence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "owner_kind",
+        "owner_attempt_id",
+        "promotion_open_intent_ids",
+        "storage_open_reference_intent_ids",
+        "absence_proof_sigil"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ATTEMPT_OPERATIONAL_INTENTS_ABSENT"
+        },
+        "owner_kind": {
+          "enum": [
+            "PROMOTION",
+            "RECOVERY"
+          ]
+        },
+        "owner_attempt_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[\\r\\n]"
+          }
+        },
+        "promotion_open_intent_ids": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "storage_open_reference_intent_ids": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "absence_proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "tailIntentAbsence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "tail_recovery_id",
+        "promotion_open_intent_ids",
+        "storage_open_reference_intent_ids",
+        "absence_proof_sigil"
+      ],
+      "properties": {
+        "kind": {
+          "const": "TAIL_RECOVERY_INTENTS_ABSENT"
+        },
+        "tail_recovery_id": {
+          "$ref": "https://benchwork.dev/schemas/patch-promotion-journal-event/1.0#/$defs/ptri"
+        },
+        "promotion_open_intent_ids": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "storage_open_reference_intent_ids": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "absence_proof_sigil": {
+          "$ref": "#/$defs/sigil"
+        }
+      }
+    },
+    "intentAbsence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/attemptIntentAbsence"
+        },
+        {
+          "$ref": "#/$defs/tailIntentAbsence"
+        }
+      ]
+    }
+  }
+}
+
+

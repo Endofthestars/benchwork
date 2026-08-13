@@ -1,0 +1,616 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-job-outcome/1.0",
+  "title": "Execution Job Outcome v1",
+  "description": "Closed RFC-0015 contract-only terminal Job Outcome wire. Structural validation does not derive a terminal prefix, resolve Result or Storage authority, evaluate acceptance eligibility, or confer execution or scientific authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "outcome_id",
+    "job_id",
+    "job_binding_sigil",
+    "job_terminal",
+    "task_binding",
+    "program_id",
+    "capability_binding",
+    "snapshot_binding",
+    "circle_binding",
+    "approval_binding",
+    "execution_specification_binding",
+    "attempt_summaries",
+    "selected_attempt_binding",
+    "result_binding",
+    "completion_anchor_binding",
+    "first_stop_or_fence_binding",
+    "lease_terminal_binding",
+    "authority_binding",
+    "final_fence_binding",
+    "runtime_outcome",
+    "terminal_source_binding",
+    "terminal_source_observation",
+    "assurance_context_binding",
+    "attempt_assurance_binding",
+    "job_assurance_binding",
+    "control_evidence_set_binding",
+    "quarantine_binding_set_binding",
+    "terminalization_storage_manifest_binding",
+    "output_root_protection",
+    "budget_binding",
+    "outputs",
+    "storage_observation_binding",
+    "logs",
+    "resource_evidence",
+    "acceptance_eligible",
+    "ineligibility_reasons",
+    "derivation_profile",
+    "terminal_recorded_at",
+    "outcome_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-job-outcome/1.0"},
+    "outcome_id": {"$ref": "#/$defs/outcomeId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "job_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "job_terminal": {"$ref": "#/$defs/jobTerminal"},
+    "task_binding": {"$ref": "#/$defs/taskBinding"},
+    "program_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/programId"},
+    "capability_binding": {"$ref": "#/$defs/capabilityBinding"},
+    "snapshot_binding": {"$ref": "#/$defs/snapshotBinding"},
+    "circle_binding": {"$ref": "#/$defs/circleBinding"},
+    "approval_binding": {"$ref": "#/$defs/approvalBinding"},
+    "execution_specification_binding": {"$ref": "#/$defs/specificationBinding"},
+    "attempt_summaries": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/attempt_summary"}
+    },
+    "selected_attempt_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/selected_attempt_binding"},
+    "result_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/result_binding"},
+    "completion_anchor_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/completion_anchor_binding"},
+    "first_stop_or_fence_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/first_stop_or_fence_binding"},
+    "lease_terminal_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/lease_terminal_binding"},
+    "authority_binding": {"$ref": "#/$defs/authority_binding"},
+    "final_fence_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/final_fence_binding"},
+    "runtime_outcome": {"$ref": "#/$defs/runtimeOutcome"},
+    "terminal_source_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/terminal_source_binding"},
+    "terminal_source_observation": {"$ref": "#/$defs/terminalSourceObservation"},
+    "assurance_context_binding": {"$ref": "#/$defs/assurance_context_binding"},
+    "attempt_assurance_binding": {"$ref": "#/$defs/terminalAttemptAssuranceBinding"},
+    "job_assurance_binding": {"$ref": "#/$defs/terminalJobAssuranceBinding"},
+    "control_evidence_set_binding": {"$ref": "#/$defs/terminalControlEvidenceSetBinding"},
+    "quarantine_binding_set_binding": {"$ref": "#/$defs/terminalQuarantineBindingSetBinding"},
+    "terminalization_storage_manifest_binding": {"$ref": "#/$defs/outcomeStorageManifestBinding"},
+    "output_root_protection": {"$ref": "#/$defs/outcomeRootProtection"},
+    "budget_binding": {"$ref": "#/$defs/budgetBinding"},
+    "outputs": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/attempt_outputs_none_member"},
+          {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/attempt_output_member"}
+        ]
+      },
+      "allOf": [
+        {
+          "if": {"contains": {"properties": {"kind": {"const": "ATTEMPT_OUTPUTS_NONE"}}, "required": ["kind"]}},
+          "then": {"maxItems": 1}
+        }
+      ]
+    },
+    "storage_observation_binding": {"$ref": "#/$defs/outcomeStorageObservationBinding"},
+    "logs": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/log_stream_member"}
+    },
+    "resource_evidence": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/resource_evidence_none_member"},
+          {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/resource_evidence_member"}
+        ]
+      },
+      "allOf": [
+        {
+          "if": {"contains": {"properties": {"kind": {"const": "RESOURCE_EVIDENCE_NONE"}}, "required": ["kind"]}},
+          "then": {"maxItems": 1}
+        }
+      ]
+    },
+    "acceptance_eligible": {"type": "boolean"},
+    "ineligibility_reasons": {
+      "type": "array",
+      "maxItems": 27,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ineligibilityReason"}
+    },
+    "derivation_profile": {"$ref": "#/$defs/derivationProfile"},
+    "terminal_recorded_at": {"$ref": "#/$defs/timestamp"},
+    "outcome_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"selected_attempt_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]}},
+        "required": ["selected_attempt_binding"]
+      },
+      "then": {
+        "properties": {
+          "attempt_summaries": {"maxItems": 0},
+          "result_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]},
+          "completion_anchor_binding": {"properties": {"kind": {"const": "NOT_ESTABLISHED"}}, "required": ["kind"]},
+          "lease_terminal_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]},
+          "authority_binding": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]},
+          "final_fence_binding": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]},
+          "runtime_outcome": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]},
+          "terminal_source_observation": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]},
+          "assurance_context_binding": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]},
+          "attempt_assurance_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]},
+          "job_assurance_binding": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "control_evidence_set_binding": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "quarantine_binding_set_binding": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "terminalization_storage_manifest_binding": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "output_root_protection": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "outputs": {"maxItems": 0},
+          "storage_observation_binding": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]},
+          "logs": {"maxItems": 0},
+          "resource_evidence": {"maxItems": 0},
+          "budget_binding": {
+            "properties": {
+              "selected_attempt_settlement": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]}
+            },
+            "required": ["selected_attempt_settlement"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "attempt_summaries": {"minItems": 1},
+          "authority_binding": {"not": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]}},
+          "final_fence_binding": {"not": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]}},
+          "runtime_outcome": {"properties": {"kind": {"const": "ATTEMPT"}}, "required": ["kind"]},
+          "terminal_source_observation": {"not": {"properties": {"kind": {"const": "NO_ATTEMPT"}}, "required": ["kind"]}},
+          "assurance_context_binding": {"properties": {"kind": {"const": "ATTEMPT"}}, "required": ["kind"]},
+          "attempt_assurance_binding": {"not": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]}},
+          "job_assurance_binding": {"not": {"properties": {"kind": {"const": "NOT_APPLICABLE"}}, "required": ["kind"]}},
+          "control_evidence_set_binding": {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]},
+          "quarantine_binding_set_binding": {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]},
+          "terminalization_storage_manifest_binding": {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]},
+          "output_root_protection": {"properties": {"kind": {"enum": ["NO_HOLD", "HELD"]}}, "required": ["kind"]},
+          "outputs": {"minItems": 1},
+          "storage_observation_binding": {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]},
+          "logs": {"minItems": 3},
+          "resource_evidence": {"minItems": 1},
+          "budget_binding": {
+            "properties": {
+              "selected_attempt_settlement": {"properties": {"kind": {"const": "SETTLED"}}, "required": ["kind"]}
+            },
+            "required": ["selected_attempt_settlement"]
+          },
+          "selected_attempt_binding": {
+            "properties": {
+              "storage_observation_binding": {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]}
+            },
+            "required": ["storage_observation_binding"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"authority_binding": {"properties": {"kind": {"const": "ASSIGNED_NO_LEASE"}}, "required": ["kind"]}},
+        "required": ["authority_binding"]
+      },
+      "then": {
+        "properties": {
+          "selected_attempt_binding": {
+            "properties": {
+              "kind": {"const": "SELECTED"},
+              "worker_session_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]}
+            },
+            "required": ["kind", "worker_session_binding"]
+          },
+          "lease_terminal_binding": {"properties": {"kind": {"const": "NONE"}}, "required": ["kind"]},
+          "final_fence_binding": {"properties": {"kind": {"const": "ASSIGNED_NO_LEASE"}}, "required": ["kind"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"authority_binding": {"properties": {"kind": {"const": "LEASED"}}, "required": ["kind"]}},
+        "required": ["authority_binding"]
+      },
+      "then": {
+        "properties": {
+          "selected_attempt_binding": {
+            "properties": {
+              "kind": {"const": "SELECTED"},
+              "worker_session_binding": {"properties": {"kind": {"const": "BOUND"}}, "required": ["kind"]}
+            },
+            "required": ["kind", "worker_session_binding"]
+          },
+          "lease_terminal_binding": {"properties": {"kind": {"const": "TERMINAL"}}, "required": ["kind"]},
+          "final_fence_binding": {"properties": {"kind": {"const": "TOMBSTONE"}}, "required": ["kind"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"acceptance_eligible": {"const": true}}, "required": ["acceptance_eligible"]},
+      "then": {"properties": {"ineligibility_reasons": {"maxItems": 0}}},
+      "else": {"properties": {"ineligibility_reasons": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71},
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    },
+    "outcomeId": {"type": "string", "pattern": "^OJ-[0-9A-F]{64}$", "minLength": 67, "maxLength": 67},
+    "jobTerminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_revision", "state", "transition_cause", "event_id", "event_sequence", "event_sigil"],
+      "properties": {
+        "job_revision": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/u64"},
+        "state": {"enum": ["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "POLICY_VIOLATION"]},
+        "transition_cause": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/transition_cause"},
+        "event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"},
+        "event_sequence": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/positive_u63"},
+        "event_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "taskBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "task_capsule_sigil"],
+      "properties": {
+        "task_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/taskId"},
+        "task_capsule_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "capabilityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "contract_version", "capability_contract_sigil"],
+      "properties": {
+        "capability_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/capabilityId"},
+        "contract_version": {"const": "2.0"},
+        "capability_contract_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "snapshotBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "snapshot_sigil"],
+      "properties": {
+        "snapshot_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/snapshotId"},
+        "snapshot_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "circleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["circle_id", "circle_sigil"],
+      "properties": {
+        "circle_id": {"$ref": "https://benchwork.dev/schemas/task-capsule/2.0#/$defs/circleId"},
+        "circle_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "specificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specification_id", "specification_sigil"],
+      "properties": {
+        "specification_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/specificationId"},
+        "specification_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "approvalBinding": {"oneOf": [{"$ref": "#/$defs/approvalNotRequired"}, {"$ref": "#/$defs/approvalRequired"}]},
+    "approvalNotRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ward_decision_id", "ward_decision_sigil"],
+      "properties": {
+        "kind": {"const": "NOT_REQUIRED"},
+        "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+        "ward_decision_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "approvalRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ward_decision_id", "ward_decision_sigil", "approval_receipt_id", "approval_receipt_sigil"],
+      "properties": {
+        "kind": {"const": "REQUIRED"},
+        "ward_decision_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/wardDecisionId"},
+        "ward_decision_sigil": {"$ref": "#/$defs/sigil"},
+        "approval_receipt_id": {"$ref": "https://benchwork.dev/schemas/execution-specification/1.0#/$defs/receiptId"},
+        "approval_receipt_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "authority_binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "NO_ATTEMPT"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "allocation_executor_instance_id", "allocation_executor_epoch", "allocation_executor_build_sigil", "job_id", "attempt_id", "fencing_generation"],
+          "properties": {
+            "kind": {"const": "ASSIGNED_NO_LEASE"},
+            "allocation_executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"},
+            "allocation_executor_epoch": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/u64"},
+            "allocation_executor_build_sigil": {"$ref": "#/$defs/sigil"},
+            "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+            "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+            "fencing_generation": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/u64"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "executor_instance_id", "executor_epoch", "executor_build_sigil", "public_fence_tuple"],
+          "properties": {
+            "kind": {"const": "LEASED"},
+            "executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"},
+            "executor_epoch": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/u64"},
+            "executor_build_sigil": {"$ref": "#/$defs/sigil"},
+            "public_fence_tuple": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"}
+          }
+        }
+      ]
+    },
+    "assurance_context_binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "requested_level", "profile_version", "profile_sigil", "conformance_suite_id", "conformance_suite_sigil"],
+          "properties": {
+            "kind": {"const": "NO_ATTEMPT"},
+            "requested_level": {"enum": ["SANCTUM-A0", "SANCTUM-A1", "SANCTUM-A2"]},
+            "profile_version": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-profile/1.0#/$defs/version"},
+            "profile_sigil": {"$ref": "#/$defs/sigil"},
+            "conformance_suite_id": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-profile/1.0#/$defs/suiteId"},
+            "conformance_suite_sigil": {"$ref": "#/$defs/sigil"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "requested_level", "profile_version", "profile_sigil", "conformance_suite_id", "conformance_suite_sigil", "backend_identity", "backend_configuration_sigil", "host_identity_sigil"],
+          "properties": {
+            "kind": {"const": "ATTEMPT"},
+            "requested_level": {"enum": ["SANCTUM-A0", "SANCTUM-A1", "SANCTUM-A2"]},
+            "profile_version": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-profile/1.0#/$defs/version"},
+            "profile_sigil": {"$ref": "#/$defs/sigil"},
+            "conformance_suite_id": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-profile/1.0#/$defs/suiteId"},
+            "conformance_suite_sigil": {"$ref": "#/$defs/sigil"},
+            "backend_identity": {"$ref": "https://benchwork.dev/schemas/sanctum-assurance-claim/1.0#/$defs/token"},
+            "backend_configuration_sigil": {"$ref": "#/$defs/sigil"},
+            "host_identity_sigil": {"$ref": "#/$defs/sigil"}
+          }
+        }
+      ]
+    },
+    "worker_session_binding": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/worker_session_binding"},
+    "runtimeOutcome": {"oneOf": [{"$ref": "#/$defs/noAttemptRuntimeOutcome"}, {"$ref": "#/$defs/attemptRuntimeOutcome"}]},
+    "noAttemptRuntimeOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "computation_status", "worker_status", "process_termination_status", "handle_revocation_status", "cleanup_status", "mutable_resource_isolation_status", "output_publication_status", "quarantine_status", "termination_evidence_sigil", "handle_disposition_evidence_sigil", "cleanup_summary_sigil", "quarantine_evidence_sigil", "log_closure_sigil", "output_closure_sigil", "accounting_capture_event_id", "accounting_capture_event_sigil"],
+      "properties": {
+        "kind": {"const": "NO_ATTEMPT"},
+        "computation_status": {"const": "NOT_STARTED"},
+        "worker_status": {"const": "NOT_REPORTED"},
+        "process_termination_status": {"const": "NOT_STARTED"},
+        "handle_revocation_status": {"const": "NOT_APPLICABLE"},
+        "cleanup_status": {"const": "NOT_APPLICABLE"},
+        "mutable_resource_isolation_status": {"const": "NOT_APPLICABLE"},
+        "output_publication_status": {"const": "NOT_APPLICABLE"},
+        "quarantine_status": {"const": "NOT_REQUIRED"},
+        "termination_evidence_sigil": {"type": "null"},
+        "handle_disposition_evidence_sigil": {"type": "null"},
+        "cleanup_summary_sigil": {"type": "null"},
+        "quarantine_evidence_sigil": {"type": "null"},
+        "log_closure_sigil": {"type": "null"},
+        "output_closure_sigil": {"type": "null"},
+        "accounting_capture_event_id": {"type": "null"},
+        "accounting_capture_event_sigil": {"type": "null"}
+      }
+    },
+    "attemptRuntimeOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "computation_status", "worker_status", "process_termination_status", "handle_revocation_status", "cleanup_status", "mutable_resource_isolation_status", "output_publication_status", "quarantine_status", "termination_evidence_sigil", "handle_disposition_evidence_sigil", "cleanup_summary_sigil", "quarantine_evidence_sigil", "log_closure_sigil", "output_closure_sigil", "accounting_capture_event_id", "accounting_capture_event_sigil"],
+      "properties": {
+        "kind": {"const": "ATTEMPT"},
+        "computation_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/computation_status"},
+        "worker_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/worker_status"},
+        "process_termination_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/process_termination_status"},
+        "handle_revocation_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/handle_revocation_status"},
+        "cleanup_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/cleanup_status"},
+        "mutable_resource_isolation_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/mutable_resource_isolation_status"},
+        "output_publication_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/output_publication_status"},
+        "quarantine_status": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/quarantine_status"},
+        "termination_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "handle_disposition_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "cleanup_summary_sigil": {"$ref": "#/$defs/sigil"},
+        "quarantine_evidence_sigil": {"$ref": "#/$defs/sigil"},
+        "log_closure_sigil": {"$ref": "#/$defs/sigil"},
+        "output_closure_sigil": {"$ref": "#/$defs/sigil"},
+        "accounting_capture_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"},
+        "accounting_capture_event_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "terminalAttemptAssuranceBinding": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/attempt_assurance_binding"},
+            {"not": {"properties": {"kind": {"const": "PENDING"}}, "required": ["kind"]}}
+          ]
+        }
+      ]
+    },
+    "terminalJobAssuranceBinding": {
+      "allOf": [
+        {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/job_assurance_binding"},
+        {"not": {"properties": {"kind": {"const": "PENDING"}}, "required": ["kind"]}}
+      ]
+    },
+    "notApplicableBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {"kind": {"const": "NOT_APPLICABLE"}}
+    },
+    "terminalControlEvidenceSetBinding": {
+      "oneOf": [
+        {"$ref": "#/$defs/notApplicableBinding"},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-control-evidence-set/1.0#/$defs/controlEvidenceSetBinding"},
+            {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]}
+          ]
+        }
+      ]
+    },
+    "terminalQuarantineBindingSetBinding": {
+      "oneOf": [
+        {"$ref": "#/$defs/notApplicableBinding"},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-quarantine-binding-set/1.0#/$defs/quarantineBindingSetBinding"},
+            {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]}
+          ]
+        }
+      ]
+    },
+    "outcomeStorageManifestBinding": {
+      "oneOf": [
+        {"$ref": "#/$defs/notApplicableBinding"},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/terminalization_storage_manifest_binding"},
+            {"properties": {"kind": {"const": "FROZEN"}}, "required": ["kind"]}
+          ]
+        }
+      ]
+    },
+    "outcomeRootProtection": {
+      "oneOf": [
+        {"$ref": "#/$defs/notApplicableBinding"},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/output_root_protection"},
+            {
+              "properties": {
+                "kind": {"enum": ["NO_HOLD", "HELD"]},
+                "terminalization_storage_manifest_binding": {
+                  "properties": {"kind": {"const": "FROZEN"}},
+                  "required": ["kind"]
+                }
+              },
+              "required": ["kind", "terminalization_storage_manifest_binding"]
+            }
+          ]
+        }
+      ]
+    },
+    "outcomeStorageObservationBinding": {
+      "allOf": [
+        {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/storage_observation_binding"},
+        {"properties": {"kind": {"enum": ["NOT_APPLICABLE", "FROZEN"]}}, "required": ["kind"]}
+      ]
+    },
+    "selectedSettlement": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NONE"}}},
+        {
+          "allOf": [
+            {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/budget_settlement_binding"},
+            {"properties": {"kind": {"const": "SETTLED"}}, "required": ["kind"]}
+          ]
+        }
+      ]
+    },
+    "budgetBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_budget_ledger", "selected_attempt_settlement"],
+      "properties": {
+        "job_budget_ledger": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/budget_ledger"},
+        "selected_attempt_settlement": {"$ref": "#/$defs/selectedSettlement"}
+      }
+    },
+    "terminalSourceObservation": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "NO_ATTEMPT"}}},
+        {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/terminal_source_not_applicable_member"},
+        {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/terminal_source_none_member"},
+        {"$ref": "https://benchwork.dev/schemas/execution-output-storage-observation-set/1.0#/$defs/terminal_source_member"}
+      ]
+    },
+    "ineligibilityReason": {
+      "enum": [
+        "JOB_NOT_SUCCEEDED",
+        "ATTEMPT_ABSENT",
+        "ATTEMPT_NOT_SUCCEEDED",
+        "RESULT_REQUIREMENT_UNMET",
+        "COMPLETION_NOT_ESTABLISHED",
+        "AUTHORITY_LOST_BEFORE_COMPLETION",
+        "ATTEMPT_AUTHORIZATION_INVALID",
+        "WORKER_SESSION_EVIDENCE_MISSING",
+        "LEASE_TERMINAL_EVIDENCE_MISSING",
+        "FINAL_FENCE_EVIDENCE_MISSING",
+        "BUDGET_UNSETTLED",
+        "BUDGET_EXCEEDED",
+        "ACCOUNTING_UNVERIFIED",
+        "TERMINATION_UNVERIFIED",
+        "HANDLE_REVOCATION_UNVERIFIED",
+        "CLEANUP_UNVERIFIED",
+        "MUTABLE_RESOURCE_UNSAFE",
+        "OUTPUT_INVALID",
+        "OUTPUT_UNAVAILABLE",
+        "OUTPUT_QUARANTINED",
+        "TERMINAL_SOURCE_INVALID",
+        "TERMINAL_SOURCE_QUARANTINED",
+        "ASSURANCE_UNMET",
+        "ASSURANCE_UNVERIFIABLE",
+        "CONTROL_EVIDENCE_INVALID",
+        "STORAGE_OBSERVATION_INVALID",
+        "INTEGRITY_FAILURE"
+      ]
+    },
+    "derivationProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "profile_version", "algorithm_sigil", "outcome_schema_sigil", "imported_schema_set_sigil"],
+      "properties": {
+        "profile_id": {"const": "execution-job-outcome-v1"},
+        "profile_version": {"const": "1.0"},
+        "algorithm_sigil": {"$ref": "#/$defs/sigil"},
+        "outcome_schema_sigil": {"$ref": "#/$defs/sigil"},
+        "imported_schema_set_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}

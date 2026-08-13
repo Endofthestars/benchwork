@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-quarantine-binding-set/1.0",
+  "title": "Execution Quarantine Binding Set v1",
+  "description": "Closed RFC-0012 contract-only mapping from one Attempt's frozen output ESM subjects to RFC-0013 Quarantine projections. Shape and locally provable integrity only; ESM resolution, Storage replay, Event-type resolution, retained-byte authentication, durable allocation, and runtime authority remain external and fail closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "quarantine_binding_set_id",
+    "job_id",
+    "attempt_id",
+    "attempt_binding_sigil",
+    "quarantine_plan_sigil",
+    "terminalization_storage_manifest_binding",
+    "storage_event",
+    "storage_state_sigil",
+    "bindings",
+    "quarantine_binding_set_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-quarantine-binding-set/1.0"},
+    "quarantine_binding_set_id": {"$ref": "#/$defs/quarantineBindingSetId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "quarantine_plan_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "terminalization_storage_manifest_binding": {"$ref": "#/$defs/frozenStorageManifestBinding"},
+    "storage_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+    "storage_state_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "bindings": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/binding"}
+    },
+    "quarantine_binding_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+  },
+  "$defs": {
+    "quarantineBindingSetId": {
+      "type": "string",
+      "pattern": "^QBS-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "storageManifestId": {
+      "type": "string",
+      "pattern": "^ESM-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "frozenStorageManifestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "storage_root_manifest_id", "storage_root_manifest_sigil"],
+      "properties": {
+        "kind": {"const": "FROZEN"},
+        "storage_root_manifest_id": {"$ref": "#/$defs/storageManifestId"},
+        "storage_root_manifest_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage_subject_id",
+        "manifest_entry_sigil",
+        "subject",
+        "storage_origin",
+        "quarantine_ref",
+        "disposition",
+        "quarantine_binding_sigil"
+      ],
+      "properties": {
+        "storage_subject_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "manifest_entry_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "subject": {"$ref": "#/$defs/subject"},
+        "storage_origin": {"$ref": "#/$defs/quarantineStorageOrigin"},
+        "quarantine_ref": {"$ref": "#/$defs/quarantineRef"},
+        "disposition": {"enum": ["RETAINED", "TERMINAL_NEGATIVE"]},
+        "quarantine_binding_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"quarantine_ref": {"properties": {"state": {"const": "HELD"}}}}, "required": ["quarantine_ref"]},
+          "then": {"properties": {"disposition": {"const": "RETAINED"}}}
+        },
+        {
+          "if": {"properties": {"quarantine_ref": {"properties": {"state": {"enum": ["FAILED", "DISPOSED"]}}}}, "required": ["quarantine_ref"]},
+          "then": {"properties": {"disposition": {"const": "TERMINAL_NEGATIVE"}}}
+        }
+      ]
+    },
+    "subject": {
+      "oneOf": [
+        {"$ref": "#/$defs/attemptOutputSubject"},
+        {"$ref": "#/$defs/logStreamSubject"},
+        {"$ref": "#/$defs/resourceEvidenceSubject"},
+        {"$ref": "#/$defs/terminalSourceSubject"}
+      ]
+    },
+    "attemptOutputSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "logical_name", "schema_id", "schema_sigil", "staging_reference_sigil", "byte_size", "blob_sigil"],
+      "properties": {
+        "kind": {"const": "ATTEMPT_OUTPUT"},
+        "logical_name": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/logicalName"},
+        "schema_id": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/schemaId"},
+        "schema_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "staging_reference_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+        "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "logStreamSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stream", "log_stream_id", "stream_set_sigil", "byte_size", "blob_sigil"],
+      "properties": {
+        "kind": {"const": "LOG_STREAM"},
+        "stream": {"enum": ["STDOUT", "STDERR", "STRUCTURED"]},
+        "log_stream_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/logStreamId"},
+        "stream_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+        "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "resourceEvidenceSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "control_evidence_id", "control_evidence_sigil", "control_dimension", "phase", "phase_evidence_entry_sigil", "byte_size", "blob_sigil"],
+      "properties": {
+        "kind": {"const": "RESOURCE_EVIDENCE"},
+        "control_evidence_id": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlEvidenceId"},
+        "control_evidence_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "control_dimension": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/controlDimension"},
+        "phase": {"$ref": "https://benchwork.dev/schemas/execution-control-evidence/1.0#/$defs/phase"},
+        "phase_evidence_entry_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "byte_size": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+        "blob_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+      }
+    },
+    "terminalSourceSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "disposition", "terminal_source_identity", "terminal_source_sigil", "storage_blob", "retention_policy_sigil", "file_count", "byte_count"],
+      "properties": {
+        "kind": {"const": "TERMINAL_SOURCE"},
+        "disposition": {"enum": ["VERIFIED", "QUARANTINED"]},
+        "terminal_source_identity": {"$ref": "https://benchwork.dev/schemas/benchwork-source-tree/1.0#/$defs/sourceTreeId"},
+        "terminal_source_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "storage_blob": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/blobRef"},
+        "retention_policy_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "file_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "byte_count": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"}
+      }
+    },
+    "quarantineStorageOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "transfer", "provenance_id", "provenance_sigil", "quarantine_id", "quarantine_origin_event"],
+      "properties": {
+        "kind": {"const": "QUARANTINE"},
+        "transfer": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferRef"},
+        "provenance_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"},
+        "provenance_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "quarantine_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/quarantineId"},
+        "quarantine_origin_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"}
+      }
+    },
+    "quarantineRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quarantine_id", "owner_kind", "owner_id", "quarantine_record_sigil", "origin_event", "observation_event", "state", "source_object", "destination_object", "source_cleanup", "reason"],
+      "properties": {
+        "quarantine_id": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantine/properties/quarantine_id"},
+        "owner_kind": {"const": "TRANSFER_ATTEMPT"},
+        "owner_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/transferAttemptId"},
+        "quarantine_record_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+        "origin_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+        "observation_event": {"$ref": "https://benchwork.dev/schemas/artifact-storage-journal-event/1.0#/$defs/eventRef"},
+        "state": {"enum": ["HELD", "DISPOSAL_FAILED", "DISPOSED", "FAILED"]},
+        "source_object": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantine/properties/source_object"},
+        "destination_object": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantine/properties/destination_object"},
+        "source_cleanup": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantine/properties/source_cleanup"},
+        "reason": {"$ref": "https://benchwork.dev/schemas/artifact-storage-state/1.0#/$defs/quarantine/properties/reason"}
+      }
+    },
+    "quarantineBindingSetBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "PENDING"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "quarantine_binding_set_id", "quarantine_binding_set_sigil"],
+          "properties": {
+            "kind": {"const": "FROZEN"},
+            "quarantine_binding_set_id": {"$ref": "#/$defs/quarantineBindingSetId"},
+            "quarantine_binding_set_sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"}
+          }
+        }
+      ]
+    }
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/patch-promotion-journal-head/1.0",
+  "title": "Patch Promotion Journal Head v1",
+  "description": "Closed RFC-0014 patch-promotion-journal-head/1.0 contract-only cache record. Validation does not read frames, replay state, or establish atomic replacement.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "journal_id", "coordinator_epoch", "event_count", "last_sequence", "last_event_sigil", "committed_offset", "frames_file_sigil_prefix", "projected_state_sigil", "head_generation", "head_sigil"],
+  "properties": {
+    "schema_version": {"const": "patch-promotion-journal-head/1.0"}, "journal_id": {"$ref": "#/$defs/pj"}, "coordinator_epoch": {"$ref": "#/$defs/u64"}, "event_count": {"$ref": "#/$defs/u64"}, "last_sequence": {"$ref": "#/$defs/u64"}, "last_event_sigil": {"anyOf": [{"$ref": "#/$defs/sigil"}, {"type": "null"}]}, "committed_offset": {"$ref": "#/$defs/u64"}, "frames_file_sigil_prefix": {"$ref": "#/$defs/sigil"}, "projected_state_sigil": {"$ref": "#/$defs/sigil"}, "head_generation": {"$ref": "#/$defs/u64"}, "head_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {"sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71}, "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615}, "pj": {"type": "string", "pattern": "^PJ-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128}}
+}
+

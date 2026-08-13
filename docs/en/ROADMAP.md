@@ -38,6 +38,10 @@ scientific lineage, and a governed extension ecosystem.
   an accepted RFC, migration guidance, and replay or contract coverage.
 - Phase 3's RFC gate is open. No current release claims executor-enforced
   isolation, remote jobs, GPU scheduling, or a production Artifact store.
+- The approved OD22–OD25 closure decisions are incorporated in RFC-0012,
+  RFC-0013, and RFC-0015. They close specified contract and selector choices
+  only; reducer/replay/append, durable resolver, live execution, Result
+  acceptance, and scientific authority remain fail-closed.
 
 See the [Phase 2 acceptance matrix](PHASE2_ACCEPTANCE.md),
 [Compatibility Policy](COMPATIBILITY.md), and

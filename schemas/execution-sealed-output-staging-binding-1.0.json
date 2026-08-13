@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-sealed-output-staging-binding/1.0",
+  "title": "Execution Sealed Output Staging Binding v1",
+  "description": "Closed RFC-0012 immutable sealed-output staging binding. This contract validates shape and locally derivable identity/equality only; it does not prove writer revocation, sealed bytes, immutable-generation reads, hash/length truth, durable installation, replay, Journal append, or Result admission authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sealed_staging_binding_id",
+    "job_id",
+    "attempt_id",
+    "attempt_binding_sigil",
+    "lease_id",
+    "lease_binding_sigil",
+    "worker_id",
+    "worker_session_id",
+    "worker_session_binding_sigil",
+    "executor_epoch",
+    "fence_tuple",
+    "preallocation_event_id",
+    "preallocation_event_sigil",
+    "preallocation_binding_sigil",
+    "storage_subject_id",
+    "output_handle_id",
+    "transfer_id",
+    "transfer_attempt_id",
+    "authorized_maximum_bytes",
+    "byte_size",
+    "blob_sigil",
+    "sealed_generation_binding",
+    "writer_revocation_evidence_binding",
+    "sealed_at",
+    "binding_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-sealed-output-staging-binding/1.0"},
+    "sealed_staging_binding_id": {"$ref": "#/$defs/sealedStagingBindingId"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "attempt_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "lease_id": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "lease_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "worker_id": {"$ref": "https://benchwork.dev/schemas/execution-worker/1.0#/$defs/workerId"},
+    "worker_session_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "worker_session_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "executor_epoch": {"$ref": "#/$defs/u64"},
+    "fence_tuple": {"$ref": "https://benchwork.dev/schemas/execution-state/1.0#/$defs/public_fence_tuple"},
+    "preallocation_event_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/event_id"},
+    "preallocation_event_sigil": {"$ref": "#/$defs/sigil"},
+    "preallocation_binding_sigil": {"$ref": "#/$defs/sigil"},
+    "storage_subject_id": {"$ref": "#/$defs/sigil"},
+    "output_handle_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"},
+    "transfer_id": {"$ref": "https://benchwork.dev/schemas/artifact-transfer-attempt/1.0#/$defs/transferId"},
+    "transfer_attempt_id": {"$ref": "https://benchwork.dev/schemas/artifact-transfer-attempt/1.0#/$defs/transferAttemptId"},
+    "authorized_maximum_bytes": {"$ref": "#/$defs/positiveU63"},
+    "byte_size": {"$ref": "#/$defs/u63"},
+    "blob_sigil": {"$ref": "#/$defs/sigil"},
+    "sealed_generation_binding": {"$ref": "#/$defs/sealedGenerationBinding"},
+    "writer_revocation_evidence_binding": {"$ref": "#/$defs/writerRevocationEvidenceBinding"},
+    "sealed_at": {"$ref": "#/$defs/timestamp"},
+    "binding_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sealedStagingBindingId": {"type": "string", "pattern": "^SSB-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "writerRevocationEvidenceId": {"type": "string", "pattern": "^OWR-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "u63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/u63"},
+    "positiveU63": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/positiveU63"},
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "sealedGenerationBinding": {
+      "oneOf": [
+        {"$ref": "#/$defs/backendGeneration"},
+        {"$ref": "#/$defs/opaqueSealedGeneration"}
+      ]
+    },
+    "backendGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "backend_id", "backend_profile_sigil", "object_identity_sigil", "generation"],
+      "properties": {
+        "kind": {"const": "BACKEND_GENERATION"},
+        "backend_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"},
+        "backend_profile_sigil": {"$ref": "#/$defs/sigil"},
+        "object_identity_sigil": {"$ref": "#/$defs/sigil"},
+        "generation": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"}
+      }
+    },
+    "opaqueSealedGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "backend_id", "backend_profile_sigil", "object_identity_sigil", "sealed_generation_sigil"],
+      "properties": {
+        "kind": {"const": "OPAQUE_SEALED_GENERATION"},
+        "backend_id": {"$ref": "https://benchwork.dev/schemas/artifact-provenance/1.0#/$defs/opaque"},
+        "backend_profile_sigil": {"$ref": "#/$defs/sigil"},
+        "object_identity_sigil": {"$ref": "#/$defs/sigil"},
+        "sealed_generation_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "writerRevocationEvidenceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revocation_evidence_id", "revocation_evidence_sigil"],
+      "properties": {
+        "revocation_evidence_id": {"$ref": "#/$defs/writerRevocationEvidenceId"},
+        "revocation_evidence_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    }
+  }
+}
+

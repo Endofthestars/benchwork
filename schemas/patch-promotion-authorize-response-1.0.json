@@ -1,0 +1,8 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema", "$id":"https://benchwork.dev/schemas/patch-promotion-authorize-response/1.0", "title":"Patch Promotion Authorize Response v1", "description":"Closed RFC-0014 patch-promotion-authorize-response/1.0 response. It never contains a raw confirmation token.", "type":"object", "additionalProperties":false,
+  "required":["schema_version","decision","record","receipt","response_sigil"],
+  "properties":{"schema_version":{"const":"patch-promotion-authorize-response/1.0"},"decision":{"enum":["AUTHORIZE","REJECT"]},"record":{"oneOf":[{"$ref":"#/$defs/authorization"},{"$ref":"#/$defs/rejection"}]},"receipt":{"$ref":"https://benchwork.dev/schemas/patch-promotion-recovery-attempt/1.0#/$defs/receipt"},"response_sigil":{"$ref":"#/$defs/sigil"}},
+  "allOf":[{"if":{"properties":{"decision":{"const":"AUTHORIZE"}}},"then":{"properties":{"record":{"$ref":"#/$defs/authorization"}}}},{"if":{"properties":{"decision":{"const":"REJECT"}}},"then":{"properties":{"record":{"$ref":"#/$defs/rejection"}}}}],
+  "$defs":{"sigil":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$","minLength":71,"maxLength":71},"authorization":{"type":"object","additionalProperties":false,"required":["kind","authorization"],"properties":{"kind":{"const":"AUTHORIZE"},"authorization":{"$ref":"https://benchwork.dev/schemas/patch-promotion-authorization/1.0"}}},"rejection":{"type":"object","additionalProperties":false,"required":["kind","rejection"],"properties":{"kind":{"const":"REJECT"},"rejection":{"$ref":"https://benchwork.dev/schemas/patch-promotion-rejection/1.0"}}}}
+}
+

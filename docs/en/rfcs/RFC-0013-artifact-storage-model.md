@@ -492,7 +492,7 @@ status, clock status and anchor, current epoch, applied event count, last event
 Sigil, and these sorted closed projection
 collections:
 `recoveries`, `blobs`, `replicas`, `transfer_requests`, `transfer_attempts`,
-`materializations`, `quarantines`, `provenance`, `retention_policies`,
+`materializations`, `quarantines`, `provenance`, `provenance_policies`, `retention_policies`,
 `holds`, `reference_sets`, `legacy_v1_protections`, `gc_plans`,
 `canonical_reference_intents`, `dispositions`, `quota_reservations`,
 `open_intents`, and `incidents`. It also contains derived availability and
@@ -892,6 +892,7 @@ top-level field sets are:
 | `artifact-transfer/1.0` | `schema_version`, `transfer_id`, `direction`, `purpose`, `source`, `destination`, `expected_blob_sigil`, `bounds`, `backend`, `authorization_sigil`, `idempotency_key_sigil`, `execution`, `verification_method`, `provenance_policy_id`, `retention_policy_ids`, `created_at`, `record_sigil` |
 | `artifact-transfer-attempt/1.0` | `schema_version`, `transfer_attempt_id`, `transfer_id`, `attempt_number`, `state`, `staging_state`, `reservation`, `staging_object`, `commit_intent`, `residual_staging_cleanup`, `computed_blob_sigil`, `computed_size_bytes`, `selected_replica_id`, `quarantine_id`, `terminal_reason`, `started_at`, `terminal_at`, `revision`, `record_sigil` |
 | `artifact-provenance/1.0` | `schema_version`, `provenance_id`, `relation`, `blob`, `source`, `destination`, `actor_id`, `authorization_sigil`, `execution`, `backend`, `transfer`, `verification_sigils`, `transformation`, `times`, `terminal_reason`, `record_sigil` |
+| `artifact-provenance-policy/1.0` | `schema_version`, `provenance_policy_id`, `policy_version`, `scope`, `allowed_directions`, `allowed_purposes`, `allowed_source_kinds`, `allowed_destination_kinds`, `allowed_relations`, `execution_requirement`, `allowed_verification_methods`, `minimum_verification_evidence`, `transformation_mode`, `required_retention_policy_ids`, `authorization_sigil`, `registered_at`, `record_sigil` |
 | `artifact-materialization/1.0` | `schema_version`, `materialization_id`, `source_blob_sigil`, `source_replica_id`, `source_verification_sigil`, `destination_class`, `destination_sigil`, `task_id`, `attempt_id`, `access_mode`, `bounds`, `reservation`, `destination_staging_object`, `commit_intent`, `residual_staging_cleanup`, `state`, `verification`, `cleanup`, `created_at`, `terminal_at`, `revision`, `record_sigil` |
 | `artifact-storage-backend/1.0` | `schema_version`, `backend_id`, `adapter_id`, `adapter_version`, `protocol_version`, `adapter_sigil`, `configuration_sigil`, `namespace_sigil`, `isolation`, `limits`, `consistency`, `durability`, `verification_methods`, `range_resume`, `conditional_operations`, `deletion_capabilities`, `credential_class`, `fencing`, `conformance`, `record_sigil` |
 | `artifact-retention-policy/1.0` | `schema_version`, `policy_id`, `scope`, `minimum_replica_count`, `required_backends`, `required_failure_domains`, `maximum_integrity_age_seconds`, `deletion_grace_seconds`, `retain_until`, `automatic_gc_allowed`, `authorization_sigil`, `registered_at`, `record_sigil` |
@@ -902,7 +903,7 @@ top-level field sets are:
 | `artifact-storage-disposition/1.0` | `schema_version`, `disposition_id`, `target_kind`, `target_id`, `target_generation`, `expected_blob_sigil`, `expected_size_or_bound`, `reason_code`, `actor_id`, `policy_sigil`, `approval_evidence_sigil`, `authorization_sigil`, `authorized_at`, `expires_at`, `idempotency_key_sigil`, `record_sigil` |
 | `artifact-storage-journal-event/1.0` | `schema_version`, `journal_id`, `event_id`, `sequence`, `event_type`, `coordinator_id`, `epoch`, `recorded_at`, `observed_at`, `entity_revisions`, `causation_event_id`, `idempotency_key_sigil`, `quota_effects`, `payload`, `previous_event_sigil`, `event_sigil` |
 | `artifact-storage-journal-head/1.0` | `schema_version`, `journal_id`, `storage_format_version`, `event_count`, `last_sequence`, `last_event_sigil`, `committed_byte_length`, `current_epoch`, `state_sigil`, `updated_at` |
-| `artifact-storage-state/1.0` | `schema_version`, `journal_id`, `storage_format_version`, `project_id`, `backend_profile_id`, `backend_profile_sigil`, `conformance_profile_id`, `conformance_suite_sigil`, `store_status`, `active_recovery_id`, `recovery_origin_status`, `clock_status`, `clock_anchor`, `current_epoch`, `applied_event_count`, `last_event_sigil`, `recoveries`, `blobs`, `replicas`, `transfer_requests`, `transfer_attempts`, `materializations`, `quarantines`, `provenance`, `retention_policies`, `holds`, `reference_sets`, `legacy_v1_protections`, `gc_plans`, `canonical_reference_intents`, `dispositions`, `quota_reservations`, `open_intents`, `incidents`, `availability_counters`, `quota_counters`, `state_sigil` |
+| `artifact-storage-state/1.0` | `schema_version`, `journal_id`, `storage_format_version`, `project_id`, `backend_profile_id`, `backend_profile_sigil`, `conformance_profile_id`, `conformance_suite_sigil`, `store_status`, `active_recovery_id`, `recovery_origin_status`, `clock_status`, `clock_anchor`, `current_epoch`, `applied_event_count`, `last_event_sigil`, `recoveries`, `blobs`, `replicas`, `transfer_requests`, `transfer_attempts`, `materializations`, `quarantines`, `provenance`, `provenance_policies`, `retention_policies`, `holds`, `reference_sets`, `legacy_v1_protections`, `gc_plans`, `canonical_reference_intents`, `dispositions`, `quota_reservations`, `open_intents`, `incidents`, `availability_counters`, `quota_counters`, `state_sigil` |
 | `artifact-storage-tail-evidence/1.0` | `schema_version`, `evidence_id`, `recovery_id`, `journal_id`, `kind`, `frame_start`, `observed_size`, `observed_bytes_sigil`, `previous_evidence_record_sigil`, `created_at`, `record_sigil` |
 | `artifact-storage-recovery-marker/1.0` | `schema_version`, `recovery_id`, `journal_id`, `prior_head_sigil`, `old_committed_byte_length`, `last_complete_byte_length`, `discarded_suffix_size`, `discarded_suffix_sigil`, `evidence_record_sigil`, `phase`, `recovery_event_id`, `recovery_event_sigil`, `recovery_event_seed_record_sigil`, `recovery_frame_start`, `recovery_frame_size`, `recovery_frame_sigil`, `prepared_frame_evidence_record_sigil`, `retry_count`, `latest_retry_evidence_record_sigil`, `created_at`, `updated_at`, `record_sigil` |
 | `artifact-storage-doctor-report/1.0` | `schema_version`, `report_id`, `mode`, `project_id`, `storage_journal_id`, `journal_head_sigil`, `chronicle_head_sigil`, `storage_format_version`, `backend_profile_id`, `backend_profile_sigil`, `conformance_profile_id`, `conformance_suite_sigil`, `coordinator_epoch`, `journal_verification`, `state_verification`, `backend_inventory`, `replica_checks`, `legacy_checks`, `quarantine_checks`, `quota_checks`, `reference_checks`, `open_intent_checks`, `bounds`, `incomplete_reasons`, `overall_status`, `started_at`, `completed_at`, `report_sigil` |
@@ -1228,6 +1229,7 @@ State collections are not generic maps. Their item shapes are exactly:
 | `materializations` | `record: artifact-materialization/1.0`, `last_event_sigil: Sigil` |
 | `quarantines` | `quarantine_id: SQ-ID`, `owner_kind: TRANSFER_ATTEMPT\|MATERIALIZATION`, `owner_id: Opaque`, `state: INTENT_RECORDED\|HELD\|INSPECTING\|DISPOSING\|DISPOSED\|DISPOSAL_FAILED\|FAILED`, `source_object: BackendObjectRef\|null`, `destination_object: BackendObjectRef\|null`, `source_cleanup: ResidualStagingCleanup`, `reservation: ReservationRef`, `reason: Reason`, `revision: PositiveU63`, `last_event_sigil: Sigil`, `record_sigil: Sigil`; `owner_id` is `SA-ID` or `SM-ID` exactly as selected by `owner_kind` |
 | `provenance` | `provenance_id: Opaque`, `record_sigil: Sigil`, `revision: 1`, `last_event_sigil: Sigil` |
+| `provenance_policies` | `provenance_policy_id: SPP-ID`, `record_sigil: Sigil`, `revision: 1`, `last_event_sigil: Sigil` |
 | `retention_policies` | `policy_id: SP-ID`, `record_sigil: Sigil`, `revision: 1`, `last_event_sigil: Sigil` |
 | `holds` | `hold_id: SH-ID`, `target_kind: BLOB\|REPLICA\|REFERENCE_SET`, `target_id: Opaque`, `policy_id: SP-ID`, `state: ACTIVE\|RELEASED`, `set_authorization_sigil: Sigil`, `release_authorization_sigil: Sigil\|null`, `revision: PositiveU63`, `last_event_sigil: Sigil` |
 | `reference_sets` | `reference_set_id: RS-ID`, `reference_set_sigil: Sigil`, `source_identity: Opaque`, `revision: 1`, `last_event_sigil: Sigil` |
@@ -3943,6 +3945,191 @@ inputs and an Attempt-scoped bounded output handle cross the Circle.
 Storage authorization does not authorize external disclosure. An export to a
 remote or external party requires the exact destination and disclosure policy
 to be approved under the applicable Review or future transport contract.
+
+## Approved 2026-08-06 Result Authority Closure AC1 v0.1
+
+The user approved AC1 through AC4 as one synchronized cross-RFC decision
+bundle. This RFC owns AC1's namespace replacement-index root, row, protected
+Head, legal-delta comparison, and sole visibility boundary. RFC-0012 owns
+AC2–AC4's OWR subject, authority, and evidence-substrate rules. Neither side
+is independently sufficient authority.
+
+### AC1 — namespace replacement-index root
+
+RFC-0013 owns three new closed contracts:
+`artifact-storage-execution-namespace-index-row/1.0` and
+`artifact-storage-execution-namespace-index/1.0`, plus the protected
+`artifact-storage-execution-namespace-index-head/1.0`. They are storage-private
+control records. They are not Worker inputs, Result fields, Journal Events, or
+standalone leaf visibility paths.
+
+### AC1.1 closed row
+
+The row has exactly these required members:
+
+```text
+schema_version
+reservation
+activation
+abort
+consumption_intent
+consumption
+row_sigil
+```
+
+`schema_version` is constant
+`artifact-storage-execution-namespace-index-row/1.0`. `reservation` is one
+complete `artifact-storage-execution-namespace-reservation/1.0` object. The
+other four members are either null or one complete object from the matching
+activation, abort, consumption-intent, or consumption leaf contract. The only
+legal null/presence branches are:
+
+| Derived state | activation | abort | consumption_intent | consumption |
+| --- | --- | --- | --- | --- |
+| `PENDING_EVENT` | null | null | null | null |
+| `ACTIVE` | object | null | null | null |
+| `ABORTED` | null | object | null | null |
+| `CONSUMING` | object | null | object | null |
+| `CONSUMED` | object | null | object | object |
+
+Every present leaf resolves byte-for-byte to the row reservation through the
+already canonical owner/equality matrix. A row contains no independent status,
+timestamp, mutable projection, path, or backend locator. Its self-Sigil is:
+
+```text
+row_sigil = Sigil([
+  "artifact-storage-execution-namespace-index-row/1.0",
+  reservation,
+  activation,
+  abort,
+  consumption_intent,
+  consumption
+])
+```
+
+### AC1.2 closed root and order
+
+The root has exactly:
+
+```text
+schema_version
+anchor_profile_sigil
+index_generation
+previous_index_sigil
+rows
+index_sigil
+```
+
+`schema_version` is constant
+`artifact-storage-execution-namespace-index/1.0`. `index_generation` is U64.
+`anchor_profile_sigil` selects the installed monotonic-anchor protection and
+resolver profile and is byte-equal in every generation. `previous_index_sigil`
+is Sigil or null. `rows` contains 0..4,096 members and
+is strictly increasing by the unsigned-ASCII bytes of
+`reservation.namespace_reservation_id`. No second order or map-key
+serialization is permitted. A full index applies durable fail-closed
+backpressure: no new reservation is admitted. Deletion, wraparound, or an
+implementation-selected larger bound is forbidden; any future compaction or
+checkpoint format requires a separately approved protocol.
+
+Across all rows, each of the following is independently unique: reservation
+key Sigil, reservation ID, `(job_id, attempt_id, output_handle_id)`, ST-ID,
+SA-ID, consumption-intent ID, and prepared Storage Event ID. Every present
+activation, abort, intent, or consumption leaf is also unique by its own
+ordinary self-Sigil and its canonical owner slot. A duplicate under any one
+class is invalid even when another class differs.
+
+The unique empty initial root has `index_generation: 0`,
+`previous_index_sigil: null`, and `rows: []`. Every successor has checked
+`index_generation = prior.index_generation + 1`, rejects U64 overflow, and has
+`previous_index_sigil = prior.index_sigil`. Its self-Sigil is:
+
+```text
+index_sigil = Sigil([
+  "artifact-storage-execution-namespace-index/1.0",
+  anchor_profile_sigil,
+  index_generation,
+  previous_index_sigil,
+  rows
+])
+```
+
+### AC1.3 protected Head, replacement comparison, and visibility
+
+The independently protected Head has exactly:
+
+```text
+schema_version
+anchor_profile_sigil
+index_generation
+index_sigil
+previous_head_sigil
+anchored_at
+head_sigil
+```
+
+The Schema constant is
+`artifact-storage-execution-namespace-index-head/1.0`. The initial Head names
+the exact generation-zero root and has `previous_head_sigil: null`. Every
+successor has checked Head and index generation equal to prior generation plus
+one, has `anchor_profile_sigil` equal to the root and prior Head, names the
+exact installed root Sigil, and has
+`previous_head_sigil = prior.head_sigil`. `head_sigil` is
+`Sigil(["artifact-storage-execution-namespace-index-head/1.0",
+anchor_profile_sigil, index_generation, index_sigil, previous_head_sigil,
+anchored_at])`.
+
+The Head is installed in the configured trusted monotonic anchor store,
+separate from the replaceable index object. That store is append-only,
+single-writer under the namespace lock, rejects generation rollback or a
+second unequal successor, and resolves its current Head without accepting a
+caller path or Head candidate. A self-Sigil or predecessor chain in the
+replaceable root is not an anti-rollback substitute.
+
+A non-retry replacement performs exactly one legal delta:
+
+- insert one new `PENDING_EVENT` row; or
+- change one row `PENDING_EVENT -> ACTIVE` or
+  `PENDING_EVENT -> ABORTED`; or
+- change one row `ACTIVE -> CONSUMING`; or
+- change one row `CONSUMING -> CONSUMED`.
+
+Every earlier leaf remains byte-for-byte unchanged. Rows cannot be deleted,
+reordered, reassigned, compacted, or rewritten. An exact retry returns the
+already installed root and does not increment the generation. Equal generation
+with unequal bytes, a skipped generation, the wrong predecessor Sigil, an
+illegal branch, a changed historical leaf, or a unique-key conflict is
+`INTEGRITY_FAILURE`, not last-writer-wins repair.
+
+Before replacement, the writer requires the trusted current Head to name the
+reopened prior root. It then file-syncs the candidate, atomically replaces the
+one configured descriptor-relative canonical index object, directory-syncs
+it, reopens and validates it, and advances the monotonic Head to that exact
+root before releasing authority. Protocol visibility is the conjunction of
+the durable reopened root and its protected Head. A private transaction file,
+standalone leaf, directory listing, prefix match, unanchored newer root,
+current/latest caller lookup, or in-memory row is never authoritative.
+
+A crash with the exact generation `n+1` root durable while the Head remains at
+`n` gates allocators; recovery under the same lock may advance only when the
+new root names the anchored root as predecessor and is its one legal delta. A
+Head ahead of the root, a root more than one generation ahead, a root older
+than the Head, or any unequal bytes is rollback/integrity failure. Failure to
+prove any step retains the evidence and gates both allocators.
+
+AC1 selects the wire, checked compare, and visibility boundary. It does not
+implement the lock, filesystem transaction, allocator, append, replay, or
+crash-repair procedures already required by RFC-0013.
+
+
+Conformance additionally requires the AC1 root/row/Head Schemas, strict
+literal-byte loader, checked comparator, durable replacement and allocator
+integration, lock-order tests, crash cuts, replay, recovery, and independent
+cross-RFC review. Until all reciprocal RFC-0012 prerequisites also resolve,
+both namespace allocators and Result admission fail closed. A valid leaf,
+root self-Sigil, or unanchored replacement never establishes visibility.
+
+
 
 ## Compatibility and migration
 

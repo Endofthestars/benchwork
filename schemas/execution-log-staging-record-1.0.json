@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-log-staging-record/1.0",
+  "title": "Execution Log Staging Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "staging_record_id",
+    "journal_id",
+    "job_id",
+    "attempt_id",
+    "log_stream_id",
+    "stream",
+    "sequence",
+    "byte_length",
+    "blob_sigil",
+    "spool_object_generation",
+    "stored_at",
+    "staging_record_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-log-staging-record/1.0"},
+    "staging_record_id": {"$ref": "#/$defs/stagingRecordId"},
+    "journal_id": {"$ref": "https://benchwork.dev/schemas/execution-journal-event/1.0#/$defs/journal_id"},
+    "job_id": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/jobId"},
+    "attempt_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/attemptId"},
+    "log_stream_id": {"$ref": "https://benchwork.dev/schemas/execution-attempt/1.0#/$defs/logStreamId"},
+    "stream": {"enum": ["STDOUT", "STDERR", "STRUCTURED"]},
+    "sequence": {"$ref": "#/$defs/u63"},
+    "byte_length": {"$ref": "#/$defs/positiveU63"},
+    "blob_sigil": {"$ref": "#/$defs/sigil"},
+    "spool_object_generation": {"$ref": "#/$defs/positiveU63"},
+    "stored_at": {"$ref": "#/$defs/timestamp"},
+    "staging_record_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "stagingRecordId": {
+      "type": "string",
+      "pattern": "^LSR-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "sigil": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "u63": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "positiveU63": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    }
+  }
+}
+

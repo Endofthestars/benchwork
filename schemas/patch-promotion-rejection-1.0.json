@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/patch-promotion-rejection/1.0",
+  "title": "Patch Promotion Rejection v1",
+  "description": "Closed RFC-0014 patch-promotion-rejection/1.0 contract-only record. Validation is local and does not resolve a Preview, Proposal, authenticated actor, Host, clock, request, or Receipt.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "rejection_id", "decision", "preview", "proposal", "actor", "host", "reason", "decision_at", "clock_policy_sigil", "clock_evidence_sigil", "request_sigil", "idempotency_key_sigil", "rejection_sigil"],
+  "properties": {
+    "schema_version": {"const": "patch-promotion-rejection/1.0"}, "rejection_id": {"$ref": "#/$defs/prej"}, "decision": {"const": "REJECT"}, "preview": {"$ref": "#/$defs/prvRef"}, "proposal": {"$ref": "#/$defs/ppRef"}, "actor": {"$ref": "#/$defs/actor"}, "host": {"$ref": "#/$defs/host"}, "reason": {"$ref": "#/$defs/text4096"}, "decision_at": {"$ref": "#/$defs/timestamp"}, "clock_policy_sigil": {"$ref": "#/$defs/sigil"}, "clock_evidence_sigil": {"$ref": "#/$defs/sigil"}, "request_sigil": {"$ref": "#/$defs/sigil"}, "idempotency_key_sigil": {"$ref": "#/$defs/sigil"}, "rejection_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71}, "text128": {"type": "string", "minLength": 0, "maxLength": 128, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$", "not": {"pattern": "[\\r\\n]"}}, "text4096": {"type": "string", "minLength": 0, "maxLength": 4096, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$", "not": {"pattern": "[\\r\\n]"}}, "timestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,6})?Z$", "minLength": 20, "maxLength": 27},
+    "prej": {"type": "string", "pattern": "^PREJ-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 6, "maxLength": 128}, "prv": {"type": "string", "pattern": "^PRV-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 5, "maxLength": 128}, "pp": {"type": "string", "pattern": "^PP-[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "[\\r\\n]"}, "minLength": 4, "maxLength": 128},
+    "prvRef": {"type": "object", "additionalProperties": false, "required": ["id", "sigil"], "properties": {"id": {"$ref": "#/$defs/prv"}, "sigil": {"$ref": "#/$defs/sigil"}}}, "ppRef": {"type": "object", "additionalProperties": false, "required": ["id", "sigil"], "properties": {"id": {"$ref": "#/$defs/pp"}, "sigil": {"$ref": "#/$defs/sigil"}}},
+    "actor": {"type": "object", "additionalProperties": false, "required": ["actor_id", "actor_kind", "authentication_context_sigil"], "properties": {"actor_id": {"$ref": "#/$defs/text128"}, "actor_kind": {"enum": ["HUMAN", "SERVICE"]}, "authentication_context_sigil": {"$ref": "#/$defs/sigil"}}}, "host": {"type": "object", "additionalProperties": false, "required": ["host_id", "host_instance_sigil", "platform_sigil", "interactive_session_sigil"], "properties": {"host_id": {"$ref": "#/$defs/text128"}, "host_instance_sigil": {"$ref": "#/$defs/sigil"}, "platform_sigil": {"$ref": "#/$defs/sigil"}, "interactive_session_sigil": {"$ref": "#/$defs/sigil"}}}
+  }
+}
+

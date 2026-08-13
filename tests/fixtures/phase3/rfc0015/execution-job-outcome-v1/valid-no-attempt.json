@@ -1,0 +1,206 @@
+{
+  "schema_version": "execution-job-outcome/1.0",
+  "outcome_id": "OJ-D7AFDAE5DDE0D4F74D68AA4ACDBA07FB14FAAD4C9B96C3DB5536992BB62B3015",
+  "job_id": "JB-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "job_binding_sigil": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "job_terminal": {
+    "job_revision": 3,
+    "state": "FAILED",
+    "transition_cause": {
+      "code": "PREFLIGHT_REJECTED",
+      "trigger_kind": "PRIOR_EVENT",
+      "trigger_event_id": "JE-PREFLIGHTREJECTED",
+      "effective_sequence": 1,
+      "evidence_sigil": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "event_id": "JE-JOBFAILED",
+    "event_sequence": 3,
+    "event_sigil": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "task_binding": {
+    "task_id": "TK-TASK",
+    "task_capsule_sigil": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "program_id": "RP-PROGRAM",
+  "capability_binding": {
+    "capability_id": "bench.core.echo",
+    "contract_version": "2.0",
+    "capability_contract_sigil": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "snapshot_binding": {
+    "snapshot_id": "SS-SNAPSHOT",
+    "snapshot_sigil": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "circle_binding": {
+    "circle_id": "CI-CIRCLE",
+    "circle_sigil": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "approval_binding": {
+    "kind": "NOT_REQUIRED",
+    "ward_decision_id": "WD-DECISION",
+    "ward_decision_sigil": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "execution_specification_binding": {
+    "specification_id": "ES-01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "specification_sigil": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "attempt_summaries": [],
+  "selected_attempt_binding": {
+    "kind": "NONE"
+  },
+  "result_binding": {
+    "kind": "NONE"
+  },
+  "completion_anchor_binding": {
+    "kind": "NOT_ESTABLISHED"
+  },
+  "first_stop_or_fence_binding": {
+    "kind": "PRESENT",
+    "event_id": "JE-PREFLIGHTREJECTED",
+    "event_type": "job.failed",
+    "event_sigil": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "effective_sequence": 1
+  },
+  "lease_terminal_binding": {
+    "kind": "NONE"
+  },
+  "authority_binding": {
+    "kind": "NO_ATTEMPT"
+  },
+  "final_fence_binding": {
+    "kind": "NO_ATTEMPT",
+    "final_fence_floor": 0
+  },
+  "runtime_outcome": {
+    "kind": "NO_ATTEMPT",
+    "computation_status": "NOT_STARTED",
+    "worker_status": "NOT_REPORTED",
+    "process_termination_status": "NOT_STARTED",
+    "handle_revocation_status": "NOT_APPLICABLE",
+    "cleanup_status": "NOT_APPLICABLE",
+    "mutable_resource_isolation_status": "NOT_APPLICABLE",
+    "output_publication_status": "NOT_APPLICABLE",
+    "quarantine_status": "NOT_REQUIRED",
+    "termination_evidence_sigil": null,
+    "handle_disposition_evidence_sigil": null,
+    "cleanup_summary_sigil": null,
+    "quarantine_evidence_sigil": null,
+    "log_closure_sigil": null,
+    "output_closure_sigil": null,
+    "accounting_capture_event_id": null,
+    "accounting_capture_event_sigil": null
+  },
+  "terminal_source_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "terminal_source_observation": {
+    "kind": "NO_ATTEMPT"
+  },
+  "assurance_context_binding": {
+    "kind": "NO_ATTEMPT",
+    "requested_level": "SANCTUM-A1",
+    "profile_version": "1.0",
+    "profile_sigil": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "conformance_suite_id": "CS-DEFAULT",
+    "conformance_suite_sigil": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "attempt_assurance_binding": {
+    "kind": "NONE"
+  },
+  "job_assurance_binding": {
+    "kind": "NOT_APPLICABLE",
+    "evaluation_event_id": "JE-JOBASSURANCE",
+    "evaluation_event_sigil": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "evaluation_sequence": 2,
+    "reason": "NO_ATTEMPT_ALLOCATED",
+    "evidence_set_sigil": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+  },
+  "control_evidence_set_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "quarantine_binding_set_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "terminalization_storage_manifest_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "output_root_protection": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "budget_binding": {
+    "job_budget_ledger": {
+      "attempts": {
+        "limit": 1,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "cpu_time_seconds": {
+        "limit": 60,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "storage_bytes_written": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "output_bytes": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "log_bytes": {
+        "limit": 1024,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "process_starts": {
+        "limit": 1,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "AVAILABLE"
+      },
+      "network_egress_bytes": {
+        "limit": 0,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "EXHAUSTED"
+      },
+      "network_requests": {
+        "limit": 0,
+        "reserved": 0,
+        "consumed": 0,
+        "exhaustion_status": "EXHAUSTED"
+      },
+      "budget_ledger_sigil": "sha256:fc667a4191a312220c9c7c5bdc483df4fcb08e09d7a453ddde6c5bcd4e032dab"
+    },
+    "selected_attempt_settlement": {
+      "kind": "NONE"
+    }
+  },
+  "outputs": [],
+  "storage_observation_binding": {
+    "kind": "NOT_APPLICABLE"
+  },
+  "logs": [],
+  "resource_evidence": [],
+  "acceptance_eligible": false,
+  "ineligibility_reasons": [
+    "JOB_NOT_SUCCEEDED",
+    "ATTEMPT_ABSENT"
+  ],
+  "derivation_profile": {
+    "profile_id": "execution-job-outcome-v1",
+    "profile_version": "1.0",
+    "algorithm_sigil": "sha256:2bec4db5be71e36d9b5019b30e1d58a4990d2cc3ae6a8f0c124311195aca964f",
+    "outcome_schema_sigil": "sha256:6dd9b5ca722395466355680484d763d6a2451f222d9d944235ef227bd93d41e0",
+    "imported_schema_set_sigil": "sha256:ec755709a3fc028dc6fecc6b1bc6d85454742756a410207ab4c4c59b48bb07ea"
+  },
+  "terminal_recorded_at": "2026-08-06T00:00:03Z",
+  "outcome_sigil": "sha256:e74f4d8ce1c43b6037c458f3f523484f50108d1cc7b966b3c7719e8c9bbaa3e1"
+}

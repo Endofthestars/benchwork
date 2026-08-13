@@ -1,7 +1,9 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from typing import cast
+from unittest.mock import patch
 
 from benchwork.athanor import Athanor, AthanorError, content_sigil
 from benchwork.execution import ExecutionService, LocalBlobStore
@@ -56,12 +58,90 @@ class LocalBlobStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "integrity failure"):
             self.store.read_bytes(record["blob_sigil"])
 
+    def test_storage_fails_closed_when_directory_sync_fails(self) -> None:
+        with patch("benchwork.execution._fsync_directory", side_effect=AthanorError("directory sync failed")):
+            with self.assertRaisesRegex(AthanorError, "directory sync failed"):
+                self.store.initialize()
+
     def test_storage_rejects_incompatible_format(self) -> None:
         self.store.initialize()
         format_path = Path(self.directory.name) / ".benchwork" / "storage" / "format.json"
         format_path.write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(AthanorError, "format is incompatible"):
             self.store.initialize()
+
+    def test_storage_rejects_colliding_managed_paths(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        storage.mkdir(parents=True)
+        (storage / "blobs").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "path is not a directory: blobs"):
+            self.store.initialize()
+
+    def test_storage_rejects_colliding_root_and_lock_paths(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        storage.parent.mkdir(parents=True)
+        storage.write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "managed storage path is not a directory"):
+            self.store.initialize()
+
+        storage.unlink()
+        storage.mkdir()
+        (storage / "locks").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "managed storage lock path is not a directory"):
+            self.store.initialize()
+
+    def test_storage_rejects_symlinked_managed_root(self) -> None:
+        storage = Path(self.directory.name) / ".benchwork" / "storage"
+        target = Path(self.directory.name) / "outside-storage"
+        target.mkdir()
+        storage.parent.mkdir(parents=True)
+        storage.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(AthanorError, "managed storage path is not a directory"):
+            self.store.initialize()
+
+    def test_deduplication_rejects_resealed_or_conflicting_blob_metadata(self) -> None:
+        first = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "records"
+            / f"blob-{first['blob_sigil'].removeprefix('sha256:')}.json"
+        )
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["media_type"] = "application/json"
+        record["record_sigil"] = content_sigil({
+            key: value for key, value in record.items() if key != "record_sigil"
+        })
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        with self.assertRaisesRegex(AthanorError, "record conflict or integrity failure"):
+            self.store.import_bytes(b"phase-three", media_type="text/plain")
+
+    def test_readback_requires_a_matching_immutable_blob_record(self) -> None:
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "records"
+            / f"blob-{record['blob_sigil'].removeprefix('sha256:')}.json"
+        )
+        record_path.unlink()
+        with self.assertRaisesRegex(AthanorError, "record is unavailable or invalid"):
+            self.store.read_bytes(record["blob_sigil"])
+
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        record_path.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "Blob record is invalid"):
+            self.store.read_bytes(record["blob_sigil"])
+
+    def test_readback_rejects_a_symlinked_blob_path(self) -> None:
+        record = self.store.import_bytes(b"phase-three", media_type="text/plain")
+        blob_path = (
+            Path(self.directory.name) / ".benchwork" / "storage" / "blobs"
+            / record["blob_sigil"].removeprefix("sha256:")
+        )
+        target = Path(self.directory.name) / "outside-blob"
+        target.write_bytes(b"phase-three")
+        blob_path.unlink()
+        blob_path.symlink_to(target)
+        with self.assertRaisesRegex(AthanorError, "Blob is unavailable"):
+            self.store.read_bytes(record["blob_sigil"])
 
 
 class ExecutionServiceTest(unittest.TestCase):
@@ -88,6 +168,34 @@ class ExecutionServiceTest(unittest.TestCase):
         outcome = self.service.get_outcome(first["job"]["job_id"])
         self.assertEqual(outcome["terminal_state"], "CANCELLED")
         self.assertFalse(outcome["eligible_for_acceptance"])
+
+    def test_restart_recovers_idempotency_cancellation_and_terminal_outcome(self) -> None:
+        first = self.service.start(_specification(), "start-001")
+        job = first["job"]
+
+        restarted = ExecutionService(Path(self.directory.name))
+        replayed_start = restarted.start(_specification(), "start-001")
+        self.assertEqual(replayed_start["job"], job)
+        self.assertEqual(restarted.observe(job["job_id"])["job"], job)
+
+        cancelled = restarted.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        final_job = cancelled["job"]
+        self.assertEqual(final_job["state"], "CANCELLED")
+
+        recovered = ExecutionService(Path(self.directory.name))
+        outcome = recovered.get_outcome(job["job_id"])
+        self.assertEqual(outcome["terminal_state"], "CANCELLED")
+        self.assertEqual(outcome["terminal_event_sigil"], final_job["terminal_event_sigil"])
+        self.assertEqual(
+            recovered.cancel(
+                job["job_id"], job["job_binding_sigil"], final_job["revision"],
+                "cancel-001", "operator requested cancellation",
+            )["job"],
+            final_job,
+        )
 
     def test_changed_request_under_same_task_key_is_a_conflict(self) -> None:
         self.service.start(_specification(), "start-001")
@@ -134,11 +242,287 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "not terminalizable|cancelled"):
             self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
 
+    def test_changed_cancellation_under_same_key_is_a_conflict(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        terminal = self.service.observe(job["job_id"])["job"]
+        with self.assertRaisesRegex(AthanorError, "cancellation idempotency conflict"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], terminal["revision"],
+                "cancel-001", "different cancellation reason",
+            )
+
+    def test_expired_local_job_retains_negative_outcome_and_rejects_late_delivery(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
+        expired = self.service.record_terminal(
+            job["job_id"], "LEASE_EXPIRED", "local lease deadline elapsed",
+        )
+        self.assertEqual(expired["job"]["state"], "LEASE_EXPIRED")
+        outcome = self.service.get_outcome(job["job_id"])
+        self.assertEqual(outcome["terminal_state"], "LEASE_EXPIRED")
+        self.assertFalse(outcome["eligible_for_acceptance"])
+        with self.assertRaisesRegex(AthanorError, "not terminalizable"):
+            self.service.record_terminal(job["job_id"], "SUCCEEDED", "late worker result")
+
+    def test_duplicate_terminal_delivery_is_rejected_without_rewriting_history(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
+        terminal = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        event_count = len(self.service.observe(job["job_id"])["events"])
+
+        with self.assertRaisesRegex(AthanorError, "not terminalizable"):
+            self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+
+        observation = self.service.observe(job["job_id"])
+        self.assertEqual(observation["job"], terminal["job"])
+        self.assertEqual(len(observation["events"]), event_count)
+
+    def test_worker_terminal_requires_durable_queue_and_survives_restart(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        with self.assertRaisesRegex(AthanorError, "must be queued"):
+            self.service.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
+
+        queued = self.service.queue(job["job_id"])["job"]
+        restarted = ExecutionService(Path(self.directory.name))
+        self.assertEqual(restarted.observe(job["job_id"])["job"], queued)
+        terminal = restarted.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
+        self.assertEqual(terminal["job"]["state"], "SUCCEEDED")
+
     def test_tampered_journal_fails_closed(self) -> None:
         observation = self.service.start(_specification(), "start-001")
         journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
         journal.write_text(journal.read_text(encoding="utf-8").replace("job.submitted", "job.queued"), encoding="utf-8")
         with self.assertRaisesRegex(AthanorError, "Sigil|journal"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_wrong_journal_identity_and_duplicate_epoch_fail_closed(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+        events[1]["journal_id"] = "EJ-OTHER"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "identity is invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["journal_id"] = events[0]["journal_id"]
+        events[1]["event_type"] = "executor.epoch-started"
+        events[1]["payload"] = events[0]["payload"]
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "duplicate executor epoch"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_unknown_or_duplicate_event_identity_fails_in_loader(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+        events[1]["event_type"] = "job.unknown"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "Event type is invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["event_type"] = "job.submitted"
+        events[1]["event_id"] = events[0]["event_id"]
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "duplicate Event identity"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_noncanonical_event_scalars_fail_in_loader(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["sequence"] = True
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "scalar fields are invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["sequence"] = 2
+        events[1]["recorded_at"] = "2026-08-06T00:00:00+00:00"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "recorded_at is invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["recorded_at"] = events[0]["recorded_at"]
+        events[1]["event_id"] = "JE-NOT-CANONICAL"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "scalar fields are invalid"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_decreasing_event_time_fails_in_loader(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[1]["recorded_at"] = "1970-01-01T00:00:00Z"
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "time is decreasing"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_resealed_event_payloads_cannot_break_local_replay_bindings(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+        events[1]["payload"]["job_binding_sigil"] = "sha256:" + "2" * 64
+        events[1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "submission binding"):
+            self.service.observe(observation["job"]["job_id"])
+
+        journal.unlink()
+        observation = self.service.start(_specification(), "start-002")
+        job = observation["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[2]["payload"]["expected_job_revision"] = 99
+        for index in range(2, len(events)):
+            if index > 2:
+                events[index]["previous_event_sigil"] = events[index - 1]["event_sigil"]
+            events[index]["event_sigil"] = content_sigil({
+                key: value for key, value in events[index].items() if key != "event_sigil"
+            })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "invalid execution Job cancellation"):
+            self.service.observe(job["job_id"])
+
+    def test_resealed_local_payload_scalars_reject_bool_and_unhashable_values(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        job = observation["job"]
+        self.service.cancel(
+            job["job_id"], job["job_binding_sigil"], job["revision"],
+            "cancel-001", "operator requested cancellation",
+        )
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[2]["payload"]["expected_job_revision"] = True
+        for index in range(2, len(events)):
+            if index > 2:
+                events[index]["previous_event_sigil"] = events[index - 1]["event_sigil"]
+            events[index]["event_sigil"] = content_sigil({
+                key: value for key, value in events[index].items() if key != "event_sigil"
+            })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "cancellation payload is invalid"):
+            self.service.observe(job["job_id"])
+
+        journal.unlink()
+        observation = self.service.start(_specification(), "start-002")
+        job = observation["job"]
+        self.service.queue(job["job_id"])
+        self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+        events[-1]["payload"]["state"] = []
+        events[-1]["event_sigil"] = content_sigil({
+            key: value for key, value in events[-1].items() if key != "event_sigil"
+        })
+        journal.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "terminal payload is invalid"):
+            self.service.observe(job["job_id"])
+
+    def test_local_persistence_rejects_duplicate_keys_and_nonfinite_numbers(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        raw = journal.read_text(encoding="utf-8")
+        duplicated = raw.replace(
+            '"task_id":"TK-001"', '"task_id":"TK-001","task_id":"TK-TWO"', 1,
+        )
+        journal.write_text(duplicated, encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "duplicate JSON key: task_id"):
+            self.service.observe(observation["job"]["job_id"])
+
+        journal.write_text(raw.replace('"payload":{', '"payload":{"ignored":NaN,', 1), encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "non-finite JSON number"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_local_journal_rejects_invalid_utf8_on_recovery(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.write_bytes(b"\xff\xfe")
+        with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_local_journal_rejects_a_directory_at_its_file_path(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.unlink()
+        journal.mkdir()
+        with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_local_journal_rejects_a_symlink_at_its_file_path(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        target = Path(self.directory.name) / "outside-journal.jsonl"
+        target.write_bytes(journal.read_bytes())
+        journal.unlink()
+        journal.symlink_to(target)
+        with self.assertRaisesRegex(AthanorError, "journal is unreadable"):
+            self.service.observe(observation["job"]["job_id"])
+
+    def test_execution_initialize_rejects_malformed_managed_paths(self) -> None:
+        execution = Path(self.directory.name) / ".benchwork" / "execution"
+        execution.parent.mkdir(parents=True)
+        execution.write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "execution storage path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
+        execution.unlink()
+        execution.mkdir()
+        (execution / "locks").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(AthanorError, "execution lock path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
+    def test_execution_initialize_rejects_symlinked_managed_root(self) -> None:
+        execution = Path(self.directory.name) / ".benchwork" / "execution"
+        target = Path(self.directory.name) / "outside-execution"
+        target.mkdir()
+        execution.parent.mkdir(parents=True)
+        execution.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(AthanorError, "execution storage path is not a directory"):
+            self.service.start(_specification(), "start-001")
+
+    def test_local_journal_rejects_an_unterminated_tail_on_recovery(self) -> None:
+        observation = self.service.start(_specification(), "start-001")
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        journal.write_bytes(journal.read_bytes().rstrip(b"\n"))
+        with self.assertRaisesRegex(AthanorError, "incomplete tail"):
             self.service.observe(observation["job"]["job_id"])
 
     def test_read_of_unknown_job_does_not_initialize_execution_state(self) -> None:
@@ -166,10 +550,20 @@ class ExecutionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AthanorError, "idempotency key"):
             self.service.start(_specification(), "\x00")
 
+        extra = _specification()
+        extra["backend_configuration"] = {"command": "must-not-be-accepted"}
+        extra["specification_sigil"] = content_sigil(
+            {key: value for key, value in extra.items() if key != "specification_sigil"}
+        )
+        with self.assertRaisesRegex(AthanorError, "specification is incomplete"):
+            self.service.start(extra, "start-001")
+
     def test_observation_and_cancel_validation_fail_closed(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
         with self.assertRaisesRegex(AthanorError, "observation limit"):
             self.service.observe(job["job_id"], limit=0)
+        with self.assertRaisesRegex(AthanorError, "observation limit"):
+            self.service.observe(job["job_id"], limit=True)
         with self.assertRaisesRegex(AthanorError, "cursor is invalid"):
             self.service.observe(job["job_id"], cursor={})
         with self.assertRaisesRegex(AthanorError, "Job ID is invalid"):
@@ -180,9 +574,18 @@ class ExecutionServiceTest(unittest.TestCase):
             self.service.cancel(
                 job["job_id"], job["job_binding_sigil"], job["revision"] + 1, "cancel-001", "reason"
             )
+        with self.assertRaisesRegex(AthanorError, "cancellation revision"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], True, "cancel-001", "reason"
+            )
+        with self.assertRaisesRegex(AthanorError, "cancellation idempotency key"):
+            self.service.cancel(
+                job["job_id"], job["job_binding_sigil"], job["revision"], "\x00", "reason"
+            )
 
     def test_completed_job_records_terminal_cancellation_observation(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
+        self.service.queue(job["job_id"])
         completed = self.service.record_terminal(job["job_id"], "SUCCEEDED", "worker completed")
         terminal = completed["job"]
         observed = self.service.cancel(
@@ -197,9 +600,9 @@ class ExecutionServiceTest(unittest.TestCase):
 
     def test_queued_job_can_terminalize_and_invalid_journal_json_is_rejected(self) -> None:
         job = self.service.start(_specification(), "start-001")["job"]
-        self.service._append_unlocked("job.queued", {"job_id": job["job_id"]})
-        queued = self.service.observe(job["job_id"])["job"]
+        queued = self.service.queue(job["job_id"])["job"]
         self.assertEqual(queued["state"], "QUEUED")
+        self.assertEqual(self.service.queue(job["job_id"])["job"], queued)
         failed = self.service.record_terminal(job["job_id"], "FAILED", "worker failed")
         self.assertEqual(failed["job"]["state"], "FAILED")
 
@@ -207,6 +610,15 @@ class ExecutionServiceTest(unittest.TestCase):
         journal.write_text("{not-json}\n", encoding="utf-8")
         with self.assertRaisesRegex(AthanorError, "invalid JSON"):
             self.service.observe(job["job_id"])
+
+    def test_invalid_internal_transition_is_rejected_before_journal_publication(self) -> None:
+        job = self.service.start(_specification(), "start-001")["job"]
+        journal = Path(self.directory.name) / ".benchwork" / "execution" / "journal.jsonl"
+        before = journal.read_bytes()
+        with self.assertRaisesRegex(AthanorError, "queue transition"):
+            self.service._append_unlocked("job.queued", {"job_id": "JB-" + "A" * 64})
+        self.assertEqual(journal.read_bytes(), before)
+        self.assertEqual(self.service.observe(job["job_id"])["job"], job)
 
     def test_host_neutral_runtime_returns_stable_execution_errors(self) -> None:
         Athanor(Path(self.directory.name)).initialize()
@@ -219,6 +631,21 @@ class ExecutionServiceTest(unittest.TestCase):
         not_ready = tools.benchwork_get_job_result(started["data"]["job"]["job_id"])
         self.assertFalse(not_ready["ok"])
         self.assertEqual(not_ready["error"]["code"], "EXECUTION_NOT_READY")
+        service = ExecutionService(Path(self.directory.name))
+        job = started["data"]["job"]
+        service.queue(job["job_id"])
+        service.record_terminal(job["job_id"], "FAILED", "worker failed")
+        stale_revision = tools.benchwork_cancel_job(
+            job["job_id"],
+            job["job_binding_sigil"],
+            job["revision"],
+            "cancel-after-terminal",
+            "late cancellation",
+        )
+        self.assertFalse(stale_revision["ok"])
+        self.assertEqual(stale_revision["error"]["code"], "EXECUTION_CONFLICT")
+
+        started = tools.benchwork_start_job(_specification(specification_id="ES-002"), "start-002")
         cancelled = tools.benchwork_cancel_job(
             started["data"]["job"]["job_id"],
             started["data"]["job"]["job_binding_sigil"],

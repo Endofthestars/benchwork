@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/mcp-tool-registry/2.0",
+  "title": "Benchwork MCP Tool Registry v2 Contract Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "api_version",
+    "stability",
+    "input_schema_source",
+    "response_schema",
+    "tools"
+  ],
+  "properties": {
+    "schema_version": {"const": "mcp-tool-registry/2.0"},
+    "api_version": {"const": "0.4"},
+    "stability": {"const": "alpha"},
+    "input_schema_source": {"const": "tools/list.inputSchema"},
+    "response_schema": {"const": "mcp-tool-result/1.0"},
+    "tools": {
+      "type": "array",
+      "minItems": 47,
+      "maxItems": 47,
+      "uniqueItems": true,
+      "prefixItems": [
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/v1Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"},
+        {"$ref": "#/$defs/phase3Tool"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "v1Tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "category",
+        "permission",
+        "risk",
+        "approval",
+        "canonical_effect"
+      ],
+      "properties": {
+        "name": {"type": "string", "pattern": "^benchwork_[a-z0-9_]+$"},
+        "category": {"enum": ["read", "task", "canonical", "experiment"]},
+        "permission": {"enum": ["read", "propose", "commit", "execute"]},
+        "risk": {"enum": ["low", "medium", "high"]},
+        "approval": {
+          "enum": [
+            "none",
+            "ward",
+            "human_confirmation",
+            "disclosure_gate",
+            "conditional_disclosure"
+          ]
+        },
+        "canonical_effect": {
+          "enum": ["none", "task_event", "canonical_event", "analysis_artifact"]
+        }
+      }
+    },
+    "phase3Tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "category",
+        "permission",
+        "risk",
+        "approval",
+        "canonical_effect",
+        "request_schema",
+        "success_data_schema"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "benchwork_start_job",
+            "benchwork_observe_job",
+            "benchwork_cancel_job",
+            "benchwork_get_job_result",
+            "benchwork_accept_job_result",
+            "benchwork_prepare_patch_promotion",
+            "benchwork_inspect_patch_promotion",
+            "benchwork_authorize_patch_promotion",
+            "benchwork_record_patch_promotion_outcome"
+          ]
+        },
+        "category": {"enum": ["execution", "patch"]},
+        "permission": {"enum": ["read", "propose", "commit", "execute"]},
+        "risk": {"enum": ["low", "medium", "high"]},
+        "approval": {
+          "enum": [
+            "none",
+            "ward",
+            "human_confirmation",
+            "execution_policy",
+            "execution_control",
+            "patch_authorization"
+          ]
+        },
+        "canonical_effect": {
+          "enum": ["none", "task_event", "canonical_event", "operational_event"]
+        },
+        "request_schema": {
+          "enum": [
+            "execution-start-request/1.0",
+            "execution-observe-request/1.0",
+            "execution-cancel-request/1.0",
+            "execution-get-result-request/1.0",
+            "execution-accept-result-request/1.0",
+            "patch-promotion-prepare-request/1.0",
+            "patch-promotion-inspect-request/1.0",
+            "patch-promotion-authorize-request/1.0",
+            "patch-promotion-outcome-request/1.0"
+          ]
+        },
+        "success_data_schema": {
+          "enum": [
+            "execution-observation/1.0",
+            "execution-job-outcome/1.0",
+            "agent-result-record/2.0",
+            "patch-promotion-prepare-response/1.0",
+            "patch-promotion-inspect-response/1.0",
+            "patch-promotion-authorize-response/1.0",
+            "patch-promotion-outcome-response/1.0"
+          ]
+        }
+      }
+    }
+  }
+}
+

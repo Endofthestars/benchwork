@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-result-ingress-receipt/1.0",
+  "title": "Execution Result Ingress Receipt v1",
+  "description": "Closed immutable RFC-0012 O2 ingress receipt. Structural and deterministic validation grants no Result acceptance or Journal append authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ingress_receipt_id", "owner_binding", "result_sigil", "result_observation_binding", "received_at", "control_channel_identity_sigil", "credential_verification", "receiver_identity", "created_at", "ingress_receipt_sigil"],
+  "properties": {
+    "schema_version": {"const": "execution-result-ingress-receipt/1.0"},
+    "ingress_receipt_id": {"$ref": "#/$defs/ingress_receipt_id"},
+    "owner_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/observation_owner_binding"},
+    "result_sigil": {"$ref": "#/$defs/sigil"},
+    "result_observation_binding": {"$ref": "https://benchwork.dev/schemas/execution-observation-evidence/1.0#/$defs/result_observation_binding"},
+    "received_at": {"$ref": "#/$defs/timestamp"},
+    "control_channel_identity_sigil": {"$ref": "#/$defs/sigil"},
+    "credential_verification": {"$ref": "#/$defs/credential_verification"},
+    "receiver_identity": {"$ref": "#/$defs/receiver_identity"},
+    "created_at": {"$ref": "#/$defs/timestamp"},
+    "ingress_receipt_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "timestamp": {"$ref": "https://benchwork.dev/schemas/execution-job/1.0#/$defs/timestamp"},
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "protocol_identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$", "minLength": 1, "maxLength": 128},
+    "ingress_receipt_id": {"type": "string", "pattern": "^OIR-[0-9A-F]{64}$", "minLength": 68, "maxLength": 68},
+    "result_ingress_receipt_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ingress_receipt_id", "ingress_receipt_sigil"],
+      "properties": {"ingress_receipt_id": {"$ref": "#/$defs/ingress_receipt_id"}, "ingress_receipt_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "credential_verification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "lease_credential_digest", "verification_profile_sigil", "verified_at", "verification_sigil"],
+      "properties": {"kind": {"const": "VERIFIED"}, "lease_credential_digest": {"$ref": "#/$defs/sigil"}, "verification_profile_sigil": {"$ref": "#/$defs/sigil"}, "verified_at": {"$ref": "#/$defs/timestamp"}, "verification_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "receiver_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executor_instance_id", "executor_epoch", "implementation_sigil"],
+      "properties": {"executor_instance_id": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/executorInstanceId"}, "executor_epoch": {"$ref": "#/$defs/u64"}, "implementation_sigil": {"$ref": "#/$defs/sigil"}}
+    },
+    "result_ingress_credential_verification_profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile_id", "profile_version", "receiver_implementation_sigil", "control_channel_profile_sigil", "lease_credential_class", "credential_digest_algorithm", "verification_algorithm_id", "verification_implementation_sigil", "profile_sigil"],
+      "properties": {"profile_id": {"$ref": "#/$defs/protocol_identifier"}, "profile_version": {"$ref": "#/$defs/protocol_identifier"}, "receiver_implementation_sigil": {"$ref": "#/$defs/sigil"}, "control_channel_profile_sigil": {"$ref": "#/$defs/sigil"}, "lease_credential_class": {"$ref": "#/$defs/protocol_identifier"}, "credential_digest_algorithm": {"const": "SHA-256"}, "verification_algorithm_id": {"$ref": "#/$defs/protocol_identifier"}, "verification_implementation_sigil": {"$ref": "#/$defs/sigil"}, "profile_sigil": {"$ref": "#/$defs/sigil"}}
+    }
+  }
+}
+

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/execution-heartbeat-disposition-index-row/1.0",
+  "title": "Execution Heartbeat Disposition Index Row v1",
+  "description": "Closed RFC-0012 H8 durable Heartbeat disposition lookup row. Structural validity and supplied immutable-record equality do not prove committed package visibility, a canonical Journal Event, replayed State, protected transport, historical disposition authority, or live Heartbeat admission.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "disposition_row_id",
+    "owner_kind",
+    "owner_id",
+    "message_kind",
+    "disposition_message_sigil",
+    "identity_binding",
+    "outcome",
+    "disposition_event_id",
+    "disposition_event_sigil",
+    "disposition_row_sigil"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-heartbeat-disposition-index-row/1.0"},
+    "disposition_row_id": {"$ref": "#/$defs/dispositionRowId"},
+    "owner_kind": {"enum": ["WORKER_SESSION", "LEASE"]},
+    "owner_id": {"type": "string"},
+    "message_kind": {"enum": ["WORKER_SESSION_HEARTBEAT", "LEASE_HEARTBEAT"]},
+    "disposition_message_sigil": {"$ref": "#/$defs/sigil"},
+    "identity_binding": {"$ref": "#/$defs/identityBinding"},
+    "outcome": {"enum": ["ACCEPTED", "REJECTED"]},
+    "disposition_event_id": {"$ref": "#/$defs/eventId"},
+    "disposition_event_sigil": {"$ref": "#/$defs/sigil"},
+    "disposition_row_sigil": {"$ref": "#/$defs/sigil"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"owner_kind": {"const": "WORKER_SESSION"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/workerSessionId"},
+          "message_kind": {"const": "WORKER_SESSION_HEARTBEAT"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"owner_kind": {"const": "LEASE"}}, "required": ["owner_kind"]},
+      "then": {
+        "properties": {
+          "owner_id": {"$ref": "#/$defs/leaseId"},
+          "message_kind": {"const": "LEASE_HEARTBEAT"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sigil": {"$ref": "https://benchwork.dev/schemas/capability-contract/2.0#/$defs/sigil"},
+    "workerSessionId": {"$ref": "https://benchwork.dev/schemas/execution-worker-session/1.0#/$defs/workerSessionId"},
+    "leaseId": {"$ref": "https://benchwork.dev/schemas/execution-lease/1.0#/$defs/leaseId"},
+    "eventId": {"$ref": "https://benchwork.dev/schemas/execution-journal-head/1.0#/$defs/eventId"},
+    "canonicalMessageRecordId": {"$ref": "https://benchwork.dev/schemas/execution-heartbeat-canonical-message/1.0#/$defs/canonicalMessageRecordId"},
+    "rawFrameRecordId": {"$ref": "https://benchwork.dev/schemas/execution-heartbeat-raw-frame/1.0#/$defs/rawFrameRecordId"},
+    "installManifestId": {"$ref": "https://benchwork.dev/schemas/execution-heartbeat-message-store-install-manifest/1.0#/$defs/installManifestId"},
+    "dispositionRowId": {
+      "type": "string",
+      "pattern": "^HDP-[0-9A-F]{64}$",
+      "minLength": 68,
+      "maxLength": 68
+    },
+    "canonicalMessageBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_message_record_id",
+        "canonical_message_record_sigil",
+        "message_canonical_bytes_sigil",
+        "install_manifest_id",
+        "install_manifest_sigil"
+      ],
+      "properties": {
+        "canonical_message_record_id": {"$ref": "#/$defs/canonicalMessageRecordId"},
+        "canonical_message_record_sigil": {"$ref": "#/$defs/sigil"},
+        "message_canonical_bytes_sigil": {"$ref": "#/$defs/sigil"},
+        "install_manifest_id": {"$ref": "#/$defs/installManifestId"},
+        "install_manifest_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "rawFrameBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_frame_record_id",
+        "raw_frame_record_sigil",
+        "received_bytes_sigil",
+        "install_manifest_id",
+        "install_manifest_sigil"
+      ],
+      "properties": {
+        "raw_frame_record_id": {"$ref": "#/$defs/rawFrameRecordId"},
+        "raw_frame_record_sigil": {"$ref": "#/$defs/sigil"},
+        "received_bytes_sigil": {"$ref": "#/$defs/sigil"},
+        "install_manifest_id": {"$ref": "#/$defs/installManifestId"},
+        "install_manifest_sigil": {"$ref": "#/$defs/sigil"}
+      }
+    },
+    "identityBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "canonical_message_binding"],
+          "properties": {
+            "kind": {"const": "CANONICAL_MESSAGE"},
+            "canonical_message_binding": {"$ref": "#/$defs/canonicalMessageBinding"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "raw_frame_binding"],
+          "properties": {
+            "kind": {"const": "RAW_FRAME"},
+            "raw_frame_binding": {"$ref": "#/$defs/rawFrameBinding"}
+          }
+        }
+      ]
+    }
+  }
+}
+

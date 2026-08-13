@@ -15,6 +15,10 @@ versioned schemas plus explicit migration notes for compatibility.
   installer state, Host diagnostics, repair, rollback, and uninstall.
 - Added checksummed release assets, SBOM/provenance generation, installer CI,
   GitHub Pages publication, and installation documentation.
+- Added the bounded Phase 3 contract-only local slice: published Execution,
+  Storage, Outcome, assurance, and Patch Promotion validation/replay contracts
+  with authority-bearing paths fail closed pending verified external facts and
+  RFC acceptance.
 
 See [release notes](docs/en/releases/0.3.0rc2.md).
 
