@@ -8,8 +8,9 @@ Benchwork 将科研活动转化为明确、可审查的状态。智能体和工�
 提案，但只有确定性的 Athanor 内核能够接受规范状态迁移。获准事件写入本地
 追加式 Chronicle，并通过链式 SHA-256 Sigil 与 Receipt 留下记录。
 
-> 项目状态：`0.3.0rc1` 候选版本。Phase 2 已冻结 Codex Plugin-first
-> Instrumentarium，同时保留宿主中立的科研契约；稳定命名仍为 provisional。
+> 项目状态：`0.3.0rc2` 候选版本。Phase 2 已冻结 Codex Plugin-first
+> Instrumentarium；Phase 3 增加了范围受限、默认 fail-closed 的本地合同纵切，
+> 规范权威与 RFC 接受仍是外部前置条件。
 
 ## 为什么需要 Benchwork
 
