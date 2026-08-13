@@ -1,0 +1,8 @@
+{
+  "channel": "rc",
+  "manifest_sha256": "33b64a1e0135d1c290d41493eee184e8b0faa9e98167a2f11869b50c2284bd7a",
+  "manifest_size": 2401,
+  "manifest_url": "https://benchwork.dev/releases/0.3.0rc2/release-manifest.json",
+  "schema_version": "benchwork-release-channel/1.0",
+  "version": "0.3.0rc2"
+}
