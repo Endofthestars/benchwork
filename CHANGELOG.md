@@ -3,6 +3,15 @@
 All notable changes are recorded here. Benchwork remains a prerelease and uses
 versioned schemas plus explicit migration notes for compatibility.
 
+## 0.3.0rc3 — Repository release verification
+
+- Fixed the release installer to retain the canonical wheel filename required
+  by `uv` and `pipx` during install, repair, and rollback.
+- Split repository release verification from PyPI publication: GitHub Pages and
+  immutable-installer smoke tests now run without a package-index publish.
+
+See [release notes](docs/en/releases/0.3.0rc3.md).
+
 ## 0.3.0rc2 — The Invitation
 
 - Fixed `benchwork_open_task` minting every Task Capsule for the `codex` Host.
