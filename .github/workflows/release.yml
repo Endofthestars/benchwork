@@ -196,7 +196,7 @@ jobs:
             git switch --force-create gh-pages origin/gh-pages
           else
             git switch --orphan gh-pages
-            git rm -rf .
+            git rm -rf . --ignore-unmatch
           fi
           mkdir -p "releases/${version}" channels
           cp "${assets}/install.sh" install.sh
