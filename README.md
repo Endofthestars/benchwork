@@ -409,7 +409,7 @@ examples/          Minimal research artifacts
 Run the test suite:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m pytest -q
 ```
 
 Changes to canonical transitions should include tests for replay, schema
