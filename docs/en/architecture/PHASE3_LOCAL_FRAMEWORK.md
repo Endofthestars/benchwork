@@ -7,11 +7,12 @@ canonical: true
 
 Status: **experimental scaffold, not Phase 3 acceptance**.
 
-The first Phase 3 slice defines operational execution state without executing
-commands. `LocalSanctumRuntime` is an in-memory conformance aid that manages
-versioned `execution-job/1.0` and `execution-lease/1.0` records. It can issue a
-bounded `worker-result/1.0` Proposal, but it cannot create a scientific Run,
-Artifact, Assessment, or Decision. Only a separately authorised Athanor
+`LocalSanctumRuntime` is an in-memory conformance aid that models a bounded
+Job/Lease lifecycle without executing commands. It uses the independent
+`sanctum-local-*/0.1` records, not the RFC-0012 `execution-*/1.0` contracts or
+the production-facing local-execution contracts. It can issue a bounded
+`sanctum-local-worker-result/0.1` Proposal, but it cannot create a scientific
+Run, Artifact, Assessment, or Decision. Only a separately authorised Athanor
 transition may do that.
 
 ## Implemented framework boundary
@@ -20,8 +21,8 @@ transition may do that.
 - A Job has a fenced, expiring Lease and a monotonic local lifecycle.
 - Expired Leases fail closed; stale completion is rejected.
 - Worker outputs are schema-bounded Proposals.
-- `patch-proposal/1.0` records a patch's base and validation evidence; it does
-  not apply or promote the patch.
+- `sanctum-local-patch-proposal/0.1` records a patch's base and validation
+  evidence; it does not apply or promote the patch.
 
 ## Explicitly deferred
 

@@ -15,9 +15,9 @@ class LocalSanctumRuntimeTest(unittest.TestCase):
 
     def test_local_lifecycle_yields_a_result_proposal_not_a_run(self) -> None:
         job = self.runtime.submit("JB-001", SIGIL, SIGIL, now=self.now)
-        validate_instance("execution-job-1.0.json", job)
+        validate_instance("sanctum-local-job-0.1.json", job)
         lease = self.runtime.claim("JB-001", "LS-001", "WK-001", 30, now=self.now)
-        validate_instance("execution-lease-1.0.json", lease)
+        validate_instance("sanctum-local-lease-0.1.json", lease)
         self.runtime.start("JB-001", "LS-001", now=self.now)
         result = self.runtime.finish(
             "JB-001",
@@ -27,7 +27,7 @@ class LocalSanctumRuntimeTest(unittest.TestCase):
             [{"schema": "code-modification-result/1.0", "uri": "proposal.json", "blob_sigil": SIGIL}],
             now=self.now + timedelta(seconds=1),
         )
-        validate_instance("worker-result-1.0.json", result)
+        validate_instance("sanctum-local-worker-result-0.1.json", result)
         self.assertEqual(self.runtime.job("JB-001")["status"], "COMPLETED")
         self.assertNotIn("run_id", result)
 

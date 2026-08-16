@@ -75,7 +75,7 @@ class _Lease:
 
     def record(self) -> dict[str, Any]:
         return {
-            "schema_version": "execution-lease/1.0",
+            "schema_version": "sanctum-local-lease/0.1",
             "lease_id": self.lease_id,
             "job_id": self.job_id,
             "worker_id": self.worker_id,
@@ -99,7 +99,7 @@ class _Job:
 
     def record(self) -> dict[str, Any]:
         return {
-            "schema_version": "execution-job/1.0",
+            "schema_version": "sanctum-local-job/0.1",
             "job_id": self.job_id,
             "task_capsule_sigil": self.task_capsule_sigil,
             "circle_sigil": self.circle_sigil,
@@ -230,7 +230,7 @@ class LocalSanctumRuntime:
         job.status = status
         lease.status = LeaseState.RELEASED
         job.result = {
-            "schema_version": "worker-result/1.0",
+            "schema_version": "sanctum-local-worker-result/0.1",
             "job_id": job_id,
             "attempt": job.attempt,
             "worker_id": lease.worker_id,

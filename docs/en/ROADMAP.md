@@ -199,6 +199,10 @@ Task Capsule
 Remote Workers, cluster scheduling, automatic Provider invocation, and broad
 GPU support are non-goals for `0.4`.
 
+`LocalSanctumRuntime` is an additional in-memory conformance aid for a bounded
+Job/Lease lifecycle. Its `sanctum-local-*/0.1` records do not replace the
+RFC-0012 execution contracts or grant canonical scientific authority.
+
 ### Exit gate
 
 All five RFCs, executable Schemas and examples, threat-model review,
