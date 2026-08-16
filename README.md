@@ -69,6 +69,12 @@ for repository and execution work, while the Benchwork plugin's MCP server
 controls canonical research state. Alpha Grimoire installation remains local
 and data-only; publisher signatures and remote distribution remain future work.
 
+Phase 3 includes published execution contracts and an additional experimental
+in-memory Job/Lease conformance aid. The aid does not execute processes or
+containers, schedule remote or GPU work, provide production Artifact Storage,
+or promote patches automatically. See the
+[Phase 3 local framework](docs/en/architecture/PHASE3_LOCAL_FRAMEWORK.md).
+
 ## Integrity model
 
 Benchwork fails closed when it detects an invalid schema, broken event chain,

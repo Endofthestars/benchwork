@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchwork.dev/schemas/sanctum-local-patch-proposal/0.1",
+  "title": "Sanctum Local Patch Proposal",
+  "description": "An untrusted proposal from the experimental in-memory Sanctum conformance aid. Applying or promoting a patch requires separate explicit human authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "proposal_id", "job_id", "base_sigil", "patch_sigil", "summary", "changed_files", "validation", "created_at"],
+  "properties": {
+    "schema_version": {"const": "sanctum-local-patch-proposal/0.1"},
+    "proposal_id": {"type": "string", "pattern": "^PP-[A-Za-z0-9][A-Za-z0-9_-]*$"},
+    "job_id": {"type": "string", "pattern": "^JB-"},
+    "base_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+    "patch_sigil": {"$ref": "https://benchwork.dev/schemas/common-definitions/1.0#/$defs/sigil"},
+    "summary": {"type": "string", "minLength": 1},
+    "changed_files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "validation": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

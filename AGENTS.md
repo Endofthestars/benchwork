@@ -3,6 +3,7 @@
 - Never edit `.benchwork/` state files directly.
 - Use Benchwork MCP tools for canonical research changes.
 - Use native Codex tools for repository inspection, patches, shell, Git, and review.
+- Request network permission before using `gh` commands that access the GitHub API or other remote resources; local-only `git` inspection does not require it.
 - Keep review local by default. Do not disclose a diff or source to an external reviewer without explicit approval for the exact Review Request.
 - Run the smallest relevant tests after code changes.
 - Run `/review` or an equivalent independent review before completing a core change.

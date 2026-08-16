@@ -51,6 +51,7 @@ English is the canonical source for all Benchwork documentation.
 - [Command Surface and Agent Handoff](architecture/COMMAND_SURFACE.md)
 - [Open Grimoire](architecture/OPEN_GRIMOIRE.md)
 - [Integrity Repair](architecture/INTEGRITY_REPAIR.md)
+- [Phase 3 local framework](architecture/PHASE3_LOCAL_FRAMEWORK.md)
 
 ## Project
 
