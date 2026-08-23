@@ -17,7 +17,9 @@ from ..athanor import Athanor, AthanorError, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..errors import CommandError, ProjectContextError, classify_error
 from ..grimoire import rite_definition_sigil
+from ..guidance import next_step, program_summary
 from ..hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
+from ..local_runner import LocalExperimentRunner
 from ..project import ProjectContext, discover_project_root
 from ..rites import RiteRegistry
 from ..tasks import TaskService
@@ -75,6 +77,9 @@ def _parser() -> argparse.ArgumentParser:
     uninstall_alias.add_argument("--purge", action="store_true")
     subparsers.add_parser("root", help="show the discovered Benchwork project root")
     subparsers.add_parser("status", help="show rebuilt canonical state")
+    subparsers.add_parser("overview", help="show the active Program and its progress")
+    next_command = subparsers.add_parser("next", help="show one bounded next action")
+    next_command.add_argument("--program")
     mcp = subparsers.add_parser("mcp", help="serve the Benchwork scientific control plane")
     mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
     mcp_commands.add_parser("serve", help="serve Model Context Protocol over STDIO")
@@ -446,6 +451,23 @@ def _parser() -> argparse.ArgumentParser:
     run_record.add_argument("--seed", type=int)
     run_record.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
     run_record.add_argument("--artifact", action="append", default=[], metavar="URI|SHA256")
+    run_local = run_commands.add_parser(
+        "local",
+        help="execute one trusted-local command and record its Run",
+    )
+    run_local.add_argument("run_id")
+    run_local.add_argument("--experiment", required=True)
+    run_local.add_argument("--cwd", type=Path, default=Path("."))
+    run_local.add_argument("--timeout", type=int, default=1800)
+    run_local.add_argument("--phase", choices=("PILOT", "FORMAL"), default="FORMAL")
+    run_local.add_argument("--arm")
+    run_local.add_argument("--seed", type=int)
+    run_local.add_argument("--metric", action="append", default=[], metavar="NAME=VALUE")
+    run_local.add_argument("--metrics-file", type=Path)
+    run_local.add_argument("--output", action="append", type=Path, default=[])
+    run_local.add_argument("--exclude", action="store_true")
+    run_local.add_argument("--exclusion-reason")
+    run_local.add_argument("argv", nargs="+", metavar="COMMAND_ARG")
 
     analyze = subparsers.add_parser("analyze", help="compute a deterministic Alembic Result Bundle")
     analyze.add_argument("--program", required=True)
@@ -883,8 +905,9 @@ def main(
                 args.objective,
                 {"statement": args.objective},
             )
+            context.use_program(program_id)
             _print_receipt(
-                f"Research Program {program_id} started",
+                f"Research Program {program_id} started and selected",
                 receipt.receipt_id,
                 receipt.sigil,
             )
@@ -1195,6 +1218,35 @@ def main(
                 registry,
                 capsules,
             )
+        elif args.command == "run" and args.run_command == "local":
+            metrics: dict[str, float] = {}
+            for value in args.metric:
+                try:
+                    name, raw_number = value.split("=", 1)
+                    if name in metrics:
+                        raise AthanorError(f"duplicate metric: {name}")
+                    metrics[name] = float(raw_number)
+                except ValueError as error:
+                    raise AthanorError("metric must use NAME=NUMBER") from error
+            command = list(args.argv)
+            if command and command[0] == "--":
+                command.pop(0)
+            result = LocalExperimentRunner(root).execute(
+                run_id=args.run_id,
+                experiment_id=args.experiment,
+                command=command,
+                working_directory=args.cwd,
+                timeout_seconds=args.timeout,
+                phase=args.phase,
+                arm=args.arm,
+                seed=args.seed,
+                inline_metrics=metrics,
+                metrics_file=args.metrics_file,
+                output_files=args.output,
+                exclude=args.exclude,
+                exclusion_reason=args.exclusion_reason,
+            )
+            print(json.dumps(result, indent=2))
         elif args.command == "run":
             metrics: dict[str, float] = {}
             for value in args.metric:
@@ -1457,6 +1509,11 @@ def main(
                     raise AthanorError(f"unknown object or Receipt: {args.identifier}")
                 match = content_sigil(object_record)
             print(match)
+        elif args.command == "next":
+            selected = args.program or context.active_program()
+            print(json.dumps(next_step(athanor.replay(), selected), indent=2))
+        elif args.command == "overview":
+            print(json.dumps(program_summary(athanor.replay(), context.active_program()), indent=2))
         elif args.command == "status":
             print(json.dumps(athanor.replay(), indent=2))
         elif args.command == "doctor":

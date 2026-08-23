@@ -120,6 +120,39 @@ runtime validation.
 
 ## Quick start
 
+### First usable product path
+
+`bwork start` now selects the new Research Program, and `bwork next` derives one
+clear next action from canonical state. After registering the Evidence,
+Hypothesis, and Protocol below and moving an Experiment to `PILOT_RUNNING`, a
+local experiment can be executed and recorded directly:
+
+```bash
+bwork next
+
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
+bwork run local RUN-001 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --arm treatment \
+  --metrics-file results.json \
+  --output results.json \
+  -- python experiment.py
+
+bwork overview
+```
+
+`run local` does not invoke a shell. It supports a project-contained working
+directory, a timeout, stdout and stderr capture, metric JSON, and content
+digests for declared outputs. Failed commands, timeouts, invalid metrics, and
+missing declared outputs remain failed Runs. This is an initial executor for a
+trusted local project; it does not claim container, network, or credential
+isolation.
+
+### Complete canonical workflow
+
 Run these commands from a directory where Benchwork may create a local
 `.benchwork/` state directory:
 

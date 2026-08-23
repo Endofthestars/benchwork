@@ -89,6 +89,36 @@ python3 -m pip install -e .
 
 ## 快速开始
 
+### 初步可用产品路径
+
+`bwork start` 现在会自动选择新建的 Research Program，`bwork next` 会从规范状态
+给出一个明确的下一步。在完成下方 Evidence、Hypothesis 和 Protocol 注册，并将
+Experiment 推进到 `PILOT_RUNNING` 后，可以直接执行一个本地实验并记录 Run：
+
+```bash
+bwork next
+
+bwork experiment transition EX-001 implemented
+bwork experiment transition EX-001 pilot-started
+
+bwork run local RUN-001 \
+  --experiment EX-001 \
+  --phase PILOT \
+  --arm treatment \
+  --metrics-file results.json \
+  --output results.json \
+  -- python experiment.py
+
+bwork overview
+```
+
+`run local` 不通过 Shell 解释命令，支持项目内工作目录、最长运行时间、stdout、
+stderr、指标 JSON 和输出文件摘要。命令失败、超时、指标无效或声明输出缺失时，
+失败 Run 仍会保留。它是面向受信任本地项目的初步执行器，不提供容器、网络或
+凭据隔离保证。
+
+### 完整规范流程
+
 在允许 Benchwork 创建本地 `.benchwork/` 状态目录的位置执行：
 
 ```bash

@@ -15,6 +15,7 @@ from ..athanor import Athanor, AthanorError, _exclusive_lock, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..doctor import deep_doctor
 from ..hosts import HOSTS
+from ..guidance import next_step
 from ..execution import ExecutionService
 from ..project import ProjectContext, discover_project_root
 from ..schema_validation import _schema_directory, validate_instance
@@ -313,51 +314,8 @@ class BenchworkTools:
         state: dict[str, Any],
         program_id: str | None,
     ) -> list[str]:
-        if program_id is None:
-            return ["Create or select an active Research Program"]
-        program = state["programs"].get(program_id)
-        if program is None:
-            return ["Select an existing Research Program"]
-        critical = [
-            issue["issue_id"]
-            for issue in state["issues"].values()
-            if issue["program_id"] == program_id
-            and issue["status"] == "OPEN"
-            and issue["severity"] == "CRITICAL"
-        ]
-        if critical:
-            return [f"Resolve CRITICAL Issues: {', '.join(sorted(critical))}"]
-        if not program["evidence"]:
-            return ["Investigate and record inspected Evidence"]
-        if program["research_question"] is None:
-            return ["Frame Hypotheses, then preview the Research Question Seal"]
-        protocols = [
-            protocol
-            for protocol in state["protocols"].values()
-            if protocol["program_id"] == program_id
-        ]
-        if not protocols:
-            return ["Draft a Protocol"]
-        if any(protocol["status"] == "DRAFT" for protocol in protocols):
-            return ["Review and preview the Protocol Seal"]
-        if not any(
-            experiment["program_id"] == program_id
-            for experiment in state["experiments"].values()
-        ):
-            return ["Start a Working and create the registered Experiment"]
-        if not any(
-            bundle["program_id"] == program_id
-            for bundle in state["result_bundles"].values()
-        ):
-            return ["Register all Runs, then invoke Alembic analysis"]
-        if not any(
-            assessment["program_id"] == program_id
-            for assessment in state["assessments"].values()
-        ):
-            return ["Interpret the Result Bundle and record an Assessment"]
-        if not program["decisions"]:
-            return ["Preview a scientific Decision for human confirmation"]
-        return ["Continue from unresolved Issues and the latest sealed Decision"]
+        step = next_step(state, program_id)
+        return [f"{step['reason']} Next command: {step['command']}"]
 
     def benchwork_next_actions(self, program_id: str | None = None) -> dict[str, Any]:
         """Return deterministic next-action guidance from canonical state."""
