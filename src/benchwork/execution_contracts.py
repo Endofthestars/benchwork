@@ -12,7 +12,7 @@ import json
 import math
 import unicodedata
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, NoReturn
 
 from .athanor import AthanorError, canonical_json, content_sigil
@@ -269,6 +269,7 @@ _EXECUTION_REQUEST_SCHEMAS_V1 = {
 }
 _IDEMPOTENCY_RANK = {value: rank for rank, value in enumerate(IDEMPOTENCY_OPERATION_KINDS_V1)}
 _MISSING = object()
+_U63_MAX = (1 << 63) - 1
 
 
 def _fail(message: str) -> NoReturn:
@@ -339,6 +340,73 @@ def _without(value: dict[str, Any], member: str) -> dict[str, Any]:
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _format_time(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def derive_execution_retry_eligible_due_at_v1(
+    *,
+    terminal_recorded_at: str,
+    backoff_kind: str,
+    backoff_base_seconds: int,
+    backoff_cap_seconds: int,
+    backoff_ordinal: int,
+) -> str:
+    """Derive RFC-0012 retry timing without authorizing a retry.
+
+    The caller remains responsible for proving that each argument comes from
+    the pinned Execution Specification and preserved terminal Event.  This
+    pure helper deliberately performs no policy lookup, state transition, or
+    Journal append.
+    """
+    if not isinstance(terminal_recorded_at, str):
+        _fail("Retry terminal recorded_at must be a canonical timestamp")
+    try:
+        terminal_time = _parse_time(terminal_recorded_at)
+    except ValueError as error:
+        raise AthanorError("Retry terminal recorded_at must be a canonical timestamp") from error
+    if terminal_time.tzinfo is None or _format_time(terminal_time) != terminal_recorded_at:
+        _fail("Retry terminal recorded_at must be a canonical timestamp")
+    if backoff_kind not in {"NONE", "FIXED", "EXPONENTIAL"}:
+        _fail("Retry backoff kind is invalid")
+    for label, value, minimum in (
+        ("backoff base", backoff_base_seconds, 0),
+        ("backoff cap", backoff_cap_seconds, 0),
+        ("backoff ordinal", backoff_ordinal, 1),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < minimum
+            or value > _U63_MAX
+        ):
+            _fail(f"Retry {label} is outside the unsigned 63-bit range")
+    if backoff_kind == "NONE":
+        if backoff_base_seconds != 0 or backoff_cap_seconds != 0:
+            _fail("Retry NONE backoff requires zero base and cap")
+        delay_seconds = 0
+    elif backoff_kind == "FIXED":
+        if backoff_base_seconds == 0 or backoff_cap_seconds == 0:
+            _fail("Retry FIXED backoff requires positive base and cap")
+        delay_seconds = backoff_base_seconds
+    elif backoff_base_seconds == 0 or backoff_cap_seconds == 0:
+        delay_seconds = 0
+    elif backoff_base_seconds >= backoff_cap_seconds:
+        delay_seconds = backoff_cap_seconds
+    else:
+        exponent = backoff_ordinal - 1
+        largest_unclamped_exponent = (backoff_cap_seconds // backoff_base_seconds).bit_length() - 1
+        delay_seconds = (
+            backoff_cap_seconds
+            if exponent > largest_unclamped_exponent
+            else backoff_base_seconds << exponent
+        )
+    try:
+        return _format_time(terminal_time + timedelta(seconds=delay_seconds))
+    except OverflowError as error:
+        raise AthanorError("Retry eligible due_at is unrepresentable") from error
 
 
 def derive_execution_observation_cursor_sigil_v1(cursor: dict[str, Any]) -> str:
