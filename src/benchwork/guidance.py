@@ -160,62 +160,78 @@ def next_step(state: dict[str, Any], program_id: str | None) -> dict[str, Any]:
             pilot_runs = [run for run in experiment_runs if run.get("phase") == "PILOT"]
             protocol = state["protocols"][active["protocol_id"]]
             analysis_spec = protocol.get("analysis_spec")
-            expected = set(analysis_spec.get("pilot_run_ids", [])) if analysis_spec else set()
-            recorded = {run["run_id"] for run in pilot_runs}
-            missing = sorted(expected - recorded)
-            registered = [state["runs"].get(run_id) for run_id in sorted(expected)]
-            invalid_registered = any(
-                run is not None
-                and (
-                    run["experiment_id"] != active["experiment_id"]
-                    or run["program_id"] != program_id
-                    or run["protocol_id"] != active["protocol_id"]
-                    or run.get("phase") != "PILOT"
-                )
-                for run in registered
-            )
-            required_arms = {
-                arm
-                for comparison in (analysis_spec or {}).get("comparisons", [])
-                if comparison["experiment_id"] == active["experiment_id"]
-                for arm in comparison["arms"]
-            }
-            recorded_arms = {
-                run.get("arm")
-                for run in registered
-                if run is not None and run.get("arm") is not None
-            }
-            missing_arms = sorted(required_arms - recorded_arms)
-            if expected and not missing and not invalid_registered and not missing_arms:
-                action = "COMPLETE_PILOT"
-                reason = "All registered Pilot Runs have been recorded."
-                command = (
-                    f"bwork experiment transition {active['experiment_id']} pilot-completed"
-                )
-            elif expected and not missing and (invalid_registered or missing_arms):
-                action = "REPAIR_PILOT_REGISTRATION"
+            if analysis_spec is None and pilot_runs:
+                action = "REVIEW_UNREGISTERED_PILOT"
                 reason = (
-                    "Registered Pilot Runs do not satisfy the frozen comparison arms: "
-                    + ", ".join(missing_arms)
-                    if missing_arms
-                    else "Registered Pilot Runs do not match the frozen Experiment lineage."
+                    "Pilot Runs are preserved, but the frozen Protocol has no "
+                    "registered analysis specification. Review the capture before choosing "
+                    "a registered follow-up or cancelling the Experiment."
                 )
+                command = "bwork status"
+            elif analysis_spec is None:
+                action = "EXECUTE_PILOT"
+                reason = "The Pilot has no registered Run."
                 command = (
-                    f"bwork issue open <ISSUE-ID> --program {program_id} "
-                    f"--subject {active['experiment_id']} ..."
+                    f"bwork run local <RUN-ID> --experiment {active['experiment_id']} "
+                    "--phase PILOT -- <command>"
                 )
             else:
-                action = "EXECUTE_PILOT"
-                reason = (
-                    f"Registered Pilot Runs are still missing: {', '.join(missing)}."
-                    if missing
-                    else "The Pilot needs a registered Run and analysis specification."
+                expected = set(analysis_spec.get("pilot_run_ids", []))
+                recorded = {run["run_id"] for run in pilot_runs}
+                missing = sorted(expected - recorded)
+                registered = [state["runs"].get(run_id) for run_id in sorted(expected)]
+                invalid_registered = any(
+                    run is not None
+                    and (
+                        run["experiment_id"] != active["experiment_id"]
+                        or run["program_id"] != program_id
+                        or run["protocol_id"] != active["protocol_id"]
+                        or run.get("phase") != "PILOT"
+                    )
+                    for run in registered
                 )
-                run_id = missing[0] if missing else "<RUN-ID>"
-                command = (
-                    f"bwork run local {run_id} --experiment {active['experiment_id']} "
-                    "--phase PILOT --arm <ARM> -- <command>"
-                )
+                required_arms = {
+                    arm
+                    for comparison in analysis_spec.get("comparisons", [])
+                    if comparison["experiment_id"] == active["experiment_id"]
+                    for arm in comparison["arms"]
+                }
+                recorded_arms = {
+                    run.get("arm")
+                    for run in registered
+                    if run is not None and run.get("arm") is not None
+                }
+                missing_arms = sorted(required_arms - recorded_arms)
+                if expected and not missing and not invalid_registered and not missing_arms:
+                    action = "COMPLETE_PILOT"
+                    reason = "All registered Pilot Runs have been recorded."
+                    command = (
+                        f"bwork experiment transition {active['experiment_id']} pilot-completed"
+                    )
+                elif expected and not missing and (invalid_registered or missing_arms):
+                    action = "REPAIR_PILOT_REGISTRATION"
+                    reason = (
+                        "Registered Pilot Runs do not satisfy the frozen comparison arms: "
+                        + ", ".join(missing_arms)
+                        if missing_arms
+                        else "Registered Pilot Runs do not match the frozen Experiment lineage."
+                    )
+                    command = (
+                        f"bwork issue open <ISSUE-ID> --program {program_id} "
+                        f"--subject {active['experiment_id']} ..."
+                    )
+                else:
+                    action = "EXECUTE_PILOT"
+                    reason = (
+                        f"Registered Pilot Runs are still missing: {', '.join(missing)}."
+                        if missing
+                        else "The Pilot analysis specification has no registered Run IDs."
+                    )
+                    run_id = missing[0] if missing else "<RUN-ID>"
+                    command = (
+                        f"bwork run local {run_id} --experiment {active['experiment_id']} "
+                        "--phase PILOT --arm <ARM> -- <command>"
+                    )
         elif active["status"] == "PILOT_COMPLETED":
             action = "START_FORMAL_RUN"
             reason = f"Experiment {active['experiment_id']} completed its Pilot."

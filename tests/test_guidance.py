@@ -15,6 +15,35 @@ class ProductGuidanceTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    def _program_ready_for_protocol(self, slug: str) -> str:
+        program_id, _ = self.athanor.create_program(slug, "Pilot guidance")
+        self.athanor.record_evidence(
+            "EV-001",
+            program_id,
+            {"uri": "note.txt", "sigil": "sha256:" + "0" * 64},
+            "The pilot has a testable signal.",
+            {"source_resolved": True, "content_inspected": True},
+        )
+        self.athanor.create_claim(
+            "CL-001",
+            program_id,
+            "empirical",
+            "The treatment changes the score.",
+            [{"evidence_id": "EV-001", "relation": "SUPPORTS"}],
+        )
+        self.athanor.verify_claim_relation("CL-001", "EV-001")
+        self.athanor.create_hypothesis(
+            "HY-001",
+            program_id,
+            ["CL-001"],
+            "The treatment changes the score.",
+            "Treatment and baseline scores differ.",
+        )
+        self.athanor.seal_research_question(
+            program_id, "Does treatment change the score?"
+        )
+        return program_id
+
     def test_next_starts_or_selects_when_no_program_is_active(self) -> None:
         step = next_step(self.athanor.replay(), None)
         self.assertEqual(step["action"], "START_OR_SELECT_PROGRAM")
@@ -48,30 +77,7 @@ class ProductGuidanceTest(unittest.TestCase):
         self.assertEqual(step["command"], "")
 
     def test_registered_pilot_runs_advance_instead_of_recommending_duplicates(self) -> None:
-        program_id, _ = self.athanor.create_program("pilot-guidance", "Pilot guidance")
-        self.athanor.record_evidence(
-            "EV-001",
-            program_id,
-            {"uri": "note.txt", "sigil": "sha256:" + "0" * 64},
-            "The pilot has a testable signal.",
-            {"source_resolved": True, "content_inspected": True},
-        )
-        self.athanor.create_claim(
-            "CL-001",
-            program_id,
-            "empirical",
-            "The treatment changes the score.",
-            [{"evidence_id": "EV-001", "relation": "SUPPORTS"}],
-        )
-        self.athanor.verify_claim_relation("CL-001", "EV-001")
-        self.athanor.create_hypothesis(
-            "HY-001",
-            program_id,
-            ["CL-001"],
-            "The treatment changes the score.",
-            "Treatment and baseline scores differ.",
-        )
-        self.athanor.seal_research_question(program_id, "Does treatment change the score?")
+        program_id = self._program_ready_for_protocol("pilot-guidance")
         self.athanor.draft_protocol(
             "PT-001",
             program_id,
@@ -123,6 +129,38 @@ class ProductGuidanceTest(unittest.TestCase):
         complete = next_step(self.athanor.replay(), program_id)
         self.assertEqual(complete["action"], "COMPLETE_PILOT")
         self.assertIn("pilot-completed", complete["command"])
+
+    def test_unregistered_pilot_runs_are_reviewed_instead_of_recommended_again(self) -> None:
+        program_id = self._program_ready_for_protocol("capture-guidance")
+        self.athanor.draft_protocol(
+            "PT-001",
+            program_id,
+            "Capture-only pilot",
+            "Preserve every attempted Run for exploratory review.",
+            study_mode="exploratory",
+        )
+        self.athanor.seal_protocol("PT-001")
+        self.athanor.create_experiment(
+            "EX-001", program_id, "PT-001", "Can the workflow preserve a Run?"
+        )
+        self.athanor.transition_experiment("EX-001", "implemented")
+        self.athanor.transition_experiment("EX-001", "pilot-started")
+
+        missing = next_step(self.athanor.replay(), program_id)
+        self.assertEqual(missing["action"], "EXECUTE_PILOT")
+        self.assertNotIn("--arm", missing["command"])
+        self.athanor.record_run(
+            "RUN-CAPTURE",
+            "EX-001",
+            "FAILED",
+            False,
+            phase="PILOT",
+        )
+
+        review = next_step(self.athanor.replay(), program_id)
+        self.assertEqual(review["action"], "REVIEW_UNREGISTERED_PILOT")
+        self.assertIn("Runs are preserved", review["reason"])
+        self.assertNotIn("bwork run local", review["command"])
 
     def test_wrong_registered_pilot_arms_require_repair(self) -> None:
         self.test_registered_pilot_runs_advance_instead_of_recommending_duplicates()
