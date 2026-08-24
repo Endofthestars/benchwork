@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
 import json
 import re
@@ -16,6 +15,7 @@ from .. import __version__
 from ..athanor import Athanor, AthanorError, content_sigil
 from ..circle import CapsuleStore, CapabilityRegistry, Ward
 from ..errors import CommandError, ProjectContextError, classify_error
+from ..file_integrity import file_sigil
 from ..grimoire import rite_definition_sigil
 from ..guidance import next_step, program_summary
 from ..hosts import ClaudeCodeHostAdapter, CodexHostAdapter, HOSTS
@@ -1475,7 +1475,7 @@ def main(
             print(json.dumps(athanor.migrate_chronicle_v10_to_v11(), indent=2))
         elif args.command == "sigil" and args.sigil_command == "verify":
             try:
-                digest = "sha256:" + hashlib.sha256(args.path.read_bytes()).hexdigest()
+                digest = file_sigil(args.path)
             except OSError as error:
                 raise AthanorError(f"cannot read file: {args.path}") from error
             if args.expected is not None and args.expected != digest:

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from benchwork.athanor import Athanor, AthanorError
 from benchwork.cli import _parser, main
@@ -211,7 +212,17 @@ class CliSurfaceTest(unittest.TestCase):
         path = self.root / "artifact.bin"
         path.write_bytes(b"benchwork")
         expected = "sha256:" + hashlib.sha256(b"benchwork").hexdigest()
-        code, output = self._run("sigil", "verify", str(path), "--expected", expected)
+        original_read_bytes = Path.read_bytes
+
+        def guarded_read_bytes(candidate: Path) -> bytes:
+            if candidate.resolve() == path.resolve():
+                raise AssertionError("sigil verify must hash with bounded reads")
+            return original_read_bytes(candidate)
+
+        with patch.object(Path, "read_bytes", guarded_read_bytes):
+            code, output = self._run(
+                "sigil", "verify", str(path), "--expected", expected
+            )
         self.assertEqual(code, 0)
         self.assertEqual(output.strip(), expected)
 

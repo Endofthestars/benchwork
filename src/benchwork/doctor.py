@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable
 
 from .athanor import Athanor, AthanorError, content_sigil
 from .circle import CapsuleStore, CapabilityRegistry
+from .file_integrity import file_sigil
 from .project import ProjectContext
 from .rites import RiteRegistry
 from .schema_validation import validate_instance
@@ -24,10 +24,6 @@ def _project_path(root: Path, uri: str, label: str) -> Path:
     if not path.is_file():
         raise AthanorError(f"{label} is missing: {uri}")
     return path
-
-
-def _blob_sigil(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def deep_doctor(root: Path) -> dict[str, Any]:
@@ -107,7 +103,7 @@ def deep_doctor(root: Path) -> dict[str, Any]:
                 raise AthanorError(f"accepted Agent Result Capsule mismatch: {task_id}")
             for output in record["outputs"]:
                 path = _project_path(root, output["uri"], "Agent Result output")
-                if _blob_sigil(path) != output["blob_sigil"]:
+                if file_sigil(path) != output["blob_sigil"]:
                     raise AthanorError(
                         f"Agent Result output Blob Sigil mismatch: {output['uri']}"
                     )
@@ -130,7 +126,7 @@ def deep_doctor(root: Path) -> dict[str, Any]:
         for artifact in state["artifacts"].values():
             location = artifact["location"]
             path = _project_path(root, location["uri"], "Artifact Blob")
-            if _blob_sigil(path) != location["sigil"]:
+            if file_sigil(path) != location["sigil"]:
                 raise AthanorError(
                     f"Artifact Blob Sigil mismatch: {artifact['artifact_id']}"
                 )

@@ -68,6 +68,31 @@ class DeepDoctorTest(unittest.TestCase):
             "FAIL",
         )
 
+    def test_artifact_registration_and_doctor_do_not_use_read_bytes(self) -> None:
+        artifact = self.root / "large-artifact.bin"
+        payload = b"bounded" * (1024 * 1024)
+        artifact.write_bytes(payload)
+        expected = "sha256:" + hashlib.sha256(payload).hexdigest()
+        original_read_bytes = Path.read_bytes
+
+        def guarded_read_bytes(path: Path) -> bytes:
+            if path.resolve() == artifact.resolve():
+                raise AssertionError("artifact must be hashed with bounded reads")
+            return original_read_bytes(path)
+
+        with patch.object(Path, "read_bytes", guarded_read_bytes):
+            self.athanor.register_artifact(
+                "AR-001",
+                self.program_id,
+                "large-test-artifact",
+                {"uri": artifact.name, "sigil": expected},
+                self.program_id,
+            )
+            report = deep_doctor(self.root)
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["checks"]["artifacts"]["verified_count"], 1)
+
     def test_missing_result_bundle_export_is_reported(self) -> None:
         analysis_spec = {
             "schema_version": "analysis-spec/1.0",

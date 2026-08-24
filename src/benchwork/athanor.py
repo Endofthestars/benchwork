@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 from uuid import uuid4
 
+from .file_integrity import file_sigil
+
 _fcntl: Any = None
 _msvcrt: Any = None
 try:
@@ -3737,12 +3739,11 @@ class Athanor:
             else:
                 raise AthanorError("Artifact location cannot use managed storage namespace")
             try:
-                artifact_blob = artifact_path.read_bytes()
+                actual_sigil = file_sigil(artifact_path)
             except OSError as error:
                 raise AthanorError(
                     f"Artifact location cannot be read: {location['uri']}"
                 ) from error
-            actual_sigil = "sha256:" + hashlib.sha256(artifact_blob).hexdigest()
             if actual_sigil != location["sigil"]:
                 raise AthanorError(
                     f"Artifact location Sigil mismatch: {location['uri']}"

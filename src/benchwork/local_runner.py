@@ -8,7 +8,6 @@ Run.  Remote workers, scheduling, retries, and isolation remain separate work.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import os
@@ -21,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .athanor import Athanor, AthanorError, content_sigil
+from .file_integrity import file_sigil
 
 
 RUN_ID = re.compile(r"^RUN-[A-Z0-9][A-Z0-9_-]*$")
@@ -28,14 +28,6 @@ RUN_ID = re.compile(r"^RUN-[A-Z0-9][A-Z0-9_-]*$")
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _file_sigil(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
 
 
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -265,7 +257,7 @@ class LocalExperimentRunner:
         artifacts = [
             {
                 "uri": str(path.relative_to(self.root)),
-                "sigil": _file_sigil(path),
+                "sigil": file_sigil(path),
             }
             for path in (stdout_path, stderr_path)
         ]
@@ -280,7 +272,7 @@ class LocalExperimentRunner:
             artifacts.append(
                 {
                     "uri": str(consumed_output.relative_to(self.root)),
-                    "sigil": _file_sigil(consumed_output),
+                    "sigil": file_sigil(consumed_output),
                 }
             )
 
@@ -315,7 +307,7 @@ class LocalExperimentRunner:
             *artifacts,
             {
                 "uri": str(record_path.relative_to(self.root)),
-                "sigil": _file_sigil(record_path),
+                "sigil": file_sigil(record_path),
             },
         ]
 
